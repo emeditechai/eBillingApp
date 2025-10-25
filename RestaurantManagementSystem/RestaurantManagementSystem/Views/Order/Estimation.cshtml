@@ -43,84 +43,89 @@
         </div>
     </div>
 
-    <!-- Menu Items Section -->
-    <div class="menu-section mb-4">
-        <div class="menu-header">
-            <h3><i class="fas fa-utensils me-2"></i>Menu Items</h3>
-        </div>
-        <div class="table-responsive">
-            <table id="menuItemsTable" class="table table-hover table-compact mb-0">
-                <thead>
-                    <tr>
-                        <th width="30%">Item Name</th>
-                        <th width="12%">Price</th>
-                        <th width="15%">Category</th>
-                        <th width="15%">SubCategory</th>
-                        <th width="13%">PLU Code</th>
-                        <th width="15%">Quantity</th>
-                    </tr>
-                </thead>
-                <tbody id="menuItemsTableBody">
-                    <tr>
-                        <td colspan="6" class="text-center py-4">
-                            <div class="loading-spinner mx-auto"></div>
-                            <div class="mt-2">Loading menu items...</div>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- Estimation Section -->
-    <div class="estimation-section" style="display: none;">
-        <div class="estimation-header">
-            <h4><i class="fas fa-receipt me-2"></i>Order Estimation</h4>
-            <div class="d-flex align-items-center gap-2">
-                <button id="clearEstimateBtn" class="btn btn-outline-secondary btn-sm">
-                    <i class="fas fa-rotate-left me-1"></i>Reset
-                </button>
-                <button id="printEstimateBtn" class="btn btn-primary btn-sm">
-                    <i class="fas fa-print me-1"></i>Print
-                </button>
+    <!-- Two-column content: left = menu + estimation table, right = totals/summary -->
+    <div class="content-grid">
+        <div class="main-col">
+            <!-- Menu Items Section (left column) -->
+            <div class="menu-section mb-4">
+                <div class="menu-header">
+                    <h3><i class="fas fa-utensils me-2"></i>Menu Items</h3>
+                </div>
+                <div class="table-responsive">
+                    <table id="menuItemsTable" class="table table-hover table-compact mb-0">
+                        <thead>
+                            <tr>
+                                <th width="30%">Item Name</th>
+                                <th width="12%">Price</th>
+                                <th width="15%">Category</th>
+                                <th width="15%">SubCategory</th>
+                                <th width="13%">PLU Code</th>
+                                <th width="15%">Quantity</th>
+                            </tr>
+                        </thead>
+                        <tbody id="menuItemsTableBody">
+                            <tr>
+                                <td colspan="6" class="text-center py-4">
+                                    <div class="loading-spinner mx-auto"></div>
+                                    <div class="mt-2">Loading menu items...</div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
 
-        <div class="row g-3 estimation-body">
-            <div class="col-lg-8">
-                <div class="estimation-summary shadow-sm">
-                    <div class="table-responsive">
-                        <table class="table table-sm table-borderless align-middle mb-0 estimation-table">
-                            <thead>
-                                <tr>
-                                    <th width="45%">Item</th>
-                                    <th width="20%" class="text-end">Unit Price</th>
-                                    <th width="15%" class="text-center">Qty</th>
-                                    <th width="20%" class="text-end">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody id="estimationTableBody"></tbody>
-                        </table>
+            <!-- Estimation Section (left column: shows itemized estimation) -->
+            <div class="estimation-section" style="display: none;">
+                <div class="estimation-header">
+                    <h4><i class="fas fa-receipt me-2"></i>Order Estimation</h4>
+                    <div class="d-flex align-items-center gap-2 actions">
+                        <button id="clearEstimateBtn" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-rotate-left me-1"></i>Reset
+                        </button>
+                        <button id="printEstimateBtn" class="btn btn-primary btn-sm">
+                            <i class="fas fa-print me-1"></i>Print
+                        </button>
+                    </div>
+                </div>
+
+                <div class="estimation-body">
+                    <div class="estimation-summary shadow-sm">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-borderless align-middle mb-0 estimation-table">
+                                <thead>
+                                    <tr>
+                                        <th width="45%">Item</th>
+                                        <th width="20%" class="text-end">Unit Price</th>
+                                        <th width="15%" class="text-center">Qty</th>
+                                        <th width="20%" class="text-end">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="estimationTableBody"></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="col-lg-4">
-                <div class="estimate-totals card shadow-sm">
-                    <div class="card-header py-2 bg-white border-bottom-0">
-                        <h6 class="mb-0 fw-semibold text-primary"><i class="fas fa-balance-scale me-1"></i>Summary</h6>
-                    </div>
-                    <div class="card-body pt-2 pb-3">
-                        <div class="d-flex justify-content-between small mb-1"><span>Subtotal</span><span id="subtotalValue">₹0.00</span></div>
-                        <!-- GST removed from estimation display intentionally -->
-                        <hr class="my-2" />
-                        <div class="d-flex justify-content-between fw-bold"><span>Total</span><span id="grandTotalValue">₹0.00</span></div>
-                    </div>
-                    <div class="card-footer bg-light py-2 text-center">
-                        <small class="text-muted" id="estimateMeta">No items selected</small>
-                    </div>
-                </div>
-                <div class="print-hint small text-muted mt-2">Use Print to generate a clean customer-facing estimate.</div>
-            </div>
         </div>
+
+        <!-- Right column: totals and actions (sticky on large screens) -->
+        <aside class="aside-col">
+            <div class="estimate-totals card shadow-sm">
+                <div class="card-header py-2 bg-white border-bottom-0">
+                    <h6 class="mb-0 fw-semibold text-primary"><i class="fas fa-balance-scale me-1"></i>Summary</h6>
+                </div>
+                <div class="card-body pt-2 pb-3">
+                    <div class="d-flex justify-content-between small mb-1"><span>Subtotal</span><span id="subtotalValue">₹0.00</span></div>
+                    <!-- GST removed from estimation display intentionally -->
+                    <hr class="my-2" />
+                    <div class="d-flex justify-content-between fw-bold"><span>Total</span><span id="grandTotalValue">₹0.00</span></div>
+                </div>
+                <div class="card-footer bg-light py-2 text-center">
+                    <small class="text-muted" id="estimateMeta">No items selected</small>
+                </div>
+            </div>
+            <div class="print-hint small text-muted mt-2">Use Print to generate a clean customer-facing estimate.</div>
+        </aside>
     </div>
 </div>

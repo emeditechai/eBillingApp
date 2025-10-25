@@ -2,6 +2,8 @@
 $(document).ready(function() {
     let menuData = [];
     let allSubCategories = [];
+    // Persist selected quantities across pagination/filtering
+    const selectedQuantities = {}; // keyed by PLU (or name if PLU missing)
     
     // Initialize page
     loadMenuData();
@@ -55,7 +57,11 @@ $(document).ready(function() {
                     
                     // Only include available items
                     if (menuItem.isAvailable) {
-                        menuData.push(menuItem);
+                    menuData.push(menuItem);
+
+                    // initialize selectedQuantities entry for this item if missing
+                    const key = menuItem.plu || menuItem.name;
+                    if (!(key in selectedQuantities)) selectedQuantities[key] = 0;
                         
                         // Collect unique categories and subcategories
                         if (menuItem.subCategory && menuItem.subCategory !== '' && menuItem.subCategory !== '-') {
@@ -89,18 +95,21 @@ $(document).ready(function() {
         }
         
         items.forEach(item => {
-            const subCategoryDisplay = (item.subCategory && item.subCategory !== '' && item.subCategory !== '-') 
-                ? item.subCategory 
+            const subCategoryDisplay = (item.subCategory && item.subCategory !== '' && item.subCategory !== '-')
+                ? item.subCategory
                 : '-';
-                
+
+            const key = item.plu || item.name;
+            const currentQty = selectedQuantities[key] || 0;
+
             tbody.append(`
-                <tr data-price="${item.price}">
+                <tr data-price="${item.price}" data-plu="${item.plu}">
                     <td>${item.name}</td>
                     <td>₹${item.price.toFixed(2)}</td>
                     <td>${item.category}</td>
                     <td>${subCategoryDisplay}</td>
                     <td>${item.plu}</td>
-                    <td><input type="number" class="form-control form-control-sm qty-input" min="0" value="0"></td>
+                    <td><input type="number" data-plu="${item.plu}" class="form-control form-control-sm qty-input" min="0" value="${currentQty}"></td>
                 </tr>
             `);
         });
@@ -175,16 +184,20 @@ $(document).ready(function() {
         const items = [];
         let total = 0;
         
-        $('#menuItemsTable tbody tr').each(function() {
-            const qty = parseInt($(this).find('.qty-input').val()) || 0;
+        // Build estimate from persisted quantities so selections on other pages are included
+        for (const key in selectedQuantities) {
+            const qty = parseInt(selectedQuantities[key]) || 0;
             if (qty > 0) {
-                const name = $(this).find('td:eq(0)').text();
-                const price = parseFloat($(this).data('price')) || 0;
+                // Find the menu item by PLU first, fall back to name match
+                const menuItem = menuData.find(mi => (mi.plu && mi.plu === key) || mi.name === key);
+                if (!menuItem) continue;
+                const name = menuItem.name;
+                const price = parseFloat(menuItem.price) || 0;
                 const subtotal = qty * price;
                 items.push({name, price, qty, subtotal});
                 total += subtotal;
             }
-        });
+        }
         
         renderEstimation(items, total);
     }
@@ -303,8 +316,16 @@ $(document).ready(function() {
     }
     
     function validateQuantity() {
-        const val = parseInt($(this).val());
-        if (isNaN(val) || val < 0) $(this).val(0);
+        const $input = $(this);
+        const val = parseInt($input.val());
+        const normalized = (isNaN(val) || val < 0) ? 0 : val;
+        $input.val(normalized);
+
+        // persist quantity using PLU or name key
+        const key = $input.data('plu') || $input.closest('tr').find('td:eq(0)').text();
+        if (key) {
+            selectedQuantities[key] = normalized;
+        }
     }
     
     function showLoading() {

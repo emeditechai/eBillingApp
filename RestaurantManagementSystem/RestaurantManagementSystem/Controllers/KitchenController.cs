@@ -347,7 +347,7 @@ namespace RestaurantManagementSystem.Controllers
                 }
                 
                 // Get all menu items for assignment
-                using (var command = new Microsoft.Data.SqlClient.SqlCommand("GetAllMenuItems", connection))
+                using (var command = new Microsoft.Data.SqlClient.SqlCommand("sp_GetAllMenuItems", connection))
                 {
                     command.CommandType = CommandType.StoredProcedure;
                     
@@ -384,7 +384,7 @@ namespace RestaurantManagementSystem.Controllers
                     connection.Open();
                     
                     // Get all menu items again to repopulate the form
-                    using (var command = new Microsoft.Data.SqlClient.SqlCommand("GetAllMenuItems", connection))
+                    using (var command = new Microsoft.Data.SqlClient.SqlCommand("sp_GetAllMenuItems", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
                         
@@ -568,7 +568,14 @@ namespace RestaurantManagementSystem.Controllers
                 }
             }
             
-            return stations;
+            // Deduplicate stations by Name (trimmed, case-insensitive) to avoid showing duplicate rows
+            // Keep the station with the most recent UpdatedAt if duplicates exist.
+            var deduped = stations
+                .GroupBy(s => (s.Name ?? string.Empty).Trim().ToLowerInvariant())
+                .Select(g => g.OrderByDescending(s => s.UpdatedAt).First())
+                .ToList();
+
+            return deduped;
         }
         
         private List<KitchenTicket> GetTicketsByStatus(Microsoft.Data.SqlClient.SqlConnection connection, int status, int? stationId)

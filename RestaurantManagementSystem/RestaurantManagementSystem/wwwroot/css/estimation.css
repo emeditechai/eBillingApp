@@ -26,6 +26,14 @@
 .total-row { background-color: #e8f5e8; font-weight: bold; }
 .print-hint { font-size: .65rem; }
 
+/* Ensure columns in the estimation row align to the top so the summary sits at the upper portion */
+.estimation-body { align-items: flex-start; }
+
+/* Make the totals card sticky on larger screens so it remains visible near the top when scrolling */
+@media (min-width: 992px) {
+		.estimate-totals { position: sticky; top: 24px; }
+}
+
 @media print {
 	body { background: #fff; }
 	.navbar, .controls-section, .menu-section, #printEstimateBtn, #clearEstimateBtn, .print-hint { display: none !important; }
@@ -40,3 +48,89 @@
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 .toast-notification { z-index: 9999; }
 @media (max-width: 768px) { .estimation-page { padding: 10px; } .controls-section { padding: 10px; } .table-responsive { font-size: 0.8rem; } }
+/* Estimation page: professional UI refinements */
+:root{
+	--primary:#2563eb; /* blue-600 */
+	--accent:#10b981; /* green-500 */
+	--muted:#6b7280;
+	--card-bg:#ffffff;
+	--surface:#f8fafc;
+}
+.estimation-page{padding:20px;max-width:1300px;margin:0 auto;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;color:#111827}
+.page-header{background:linear-gradient(90deg,var(--primary),#4f46e5);color:#fff;padding:22px;border-radius:12px;margin-bottom:22px;box-shadow:0 6px 18px rgba(15,23,42,0.06);display:flex;align-items:center;gap:16px}
+.page-header h1{margin:0;font-size:1.5rem;font-weight:700}
+.page-header p{margin:0;color:rgba(255,255,255,0.9);font-size:0.95rem}
+.controls-section{background:var(--card-bg);padding:14px;border-radius:10px;box-shadow:0 2px 6px rgba(15,23,42,0.04);margin-bottom:18px;display:flex;align-items:center;gap:12px}
+.controls-section input,#menuItemSearch{min-width:240px}
+.menu-section{background:var(--card-bg);border-radius:10px;box-shadow:0 2px 6px rgba(15,23,42,0.04);overflow:hidden}
+.menu-header{background:transparent;padding:12px 16px;border-bottom:1px solid #eef2f7}
+.menu-header h3{margin:0;color:#0f172a;font-size:1.05rem}
+.form-control-sm{padding:8px 10px;font-size:0.92rem}
+.btn-sm{padding:7px 14px;font-size:0.93rem;border-radius:8px}
+.table-compact{margin-bottom:0}
+.table-compact thead th{padding:12px;font-weight:700;background:#fafafa;font-size:0.95rem;border-bottom:1px solid #eef2f7;color:#0f172a}
+.table-compact td{padding:12px;font-size:0.95rem;vertical-align:middle}
+.qty-input{width:84px;text-align:center;border:1px solid #e6edf3;border-radius:6px;padding:6px}
+
+/* Estimation area */
+.estimation-section{background:transparent;padding:0;margin-bottom:18px}
+.estimation-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding:8px 4px}
+.estimation-header h4{margin:0;color:var(--primary);font-size:1.125rem;font-weight:700}
+.estimation-header .btn{border-radius:8px}
+.estimation-body{display:flex;gap:18px;align-items:flex-start}
+.estimation-summary{background:var(--card-bg);border-radius:10px;padding:16px;box-shadow:0 6px 18px rgba(12,18,34,0.04);border:1px solid #eef2f7;flex:1}
+.estimation-summary .table-responsive{max-height:520px;overflow:auto}
+.estimation-table td,.estimation-table th{padding:10px}
+.estimation-table tbody tr:not(.total-row):hover{background:#fbfcff}
+.estimation-table thead th{background:transparent}
+
+.estimate-totals{width:100%;max-width:360px;border-radius:10px;box-shadow:0 6px 18px rgba(12,18,34,0.04);overflow:hidden}
+.estimate-totals .card-body{background:var(--card-bg);padding:18px}
+.estimate-totals .card-header{background:var(--card-bg);padding:12px 16px;border-bottom:1px solid #eef2f7}
+.estimate-totals h6{margin:0;color:var(--primary);font-weight:700}
+.estimate-totals .card-footer{background:#fbfdff;padding:10px 16px;border-top:1px solid #eef2f7}
+.estimate-totals .d-flex span{font-size:1rem}
+.estimate-totals #subtotalValue,#grandTotalValue{font-weight:700;color:#0f172a}
+.estimate-totals .meta{font-size:0.82rem;color:var(--muted)}
+
+.total-row{background:linear-gradient(90deg,rgba(16,185,129,0.06),rgba(134,239,172,0.06));font-weight:700}
+.estimation-table .subtotal-row td{font-weight:700}
+
+.actions {display:flex;gap:8px}
+.btn-outline-secondary{border-radius:8px}
+.btn-primary{background:var(--primary);border-color:var(--primary);box-shadow:0 6px 14px rgba(37,99,235,0.12)}
+
+.print-hint{font-size:0.85rem;color:var(--muted);margin-top:10px}
+
+/* Sticky totals on larger screens */
+@media (min-width:992px){
+	.estimate-totals{position:sticky;top:24px}
+}
+
+/* Mobile tweaks */
+@media (max-width:767px){
+	.estimation-body{flex-direction:column}
+	.estimate-totals{max-width:none}
+	.page-header{flex-direction:column;align-items:flex-start}
+}
+
+@media print{
+	body{background:#fff}
+	.navbar,.controls-section,.menu-section,#printEstimateBtn,#clearEstimateBtn,.print-hint{display:none !important}
+	.estimation-page{max-width:100%;padding:0}
+	.estimation-summary,.estimate-totals{box-shadow:none;border:none}
+}
+
+.loading-spinner{width:1.4rem;height:1.4rem;border:3px solid #f3f3f3;border-top:3px solid var(--primary);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+.toast-notification{z-index:9999}
+/* Two-column content layout: left = main content, right = sticky totals */
+.content-grid{display:flex;gap:22px;align-items:flex-start;margin-top:10px}
+.content-grid .main-col{flex:1}
+.content-grid .aside-col{width:360px;flex-shrink:0}
+
+@media (max-width: 767px){
+	.content-grid{flex-direction:column}
+	.content-grid .aside-col{width:100%}
+	.estimation-section{margin-top:12px}
+}
