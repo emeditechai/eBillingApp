@@ -334,6 +334,37 @@ namespace RestaurantManagementSystem.Controllers
                             }
                         }
                     }
+
+                    
+
+                    
+
+                    // Server-side duplicate PLUCode check (prevent duplicate PLU on Create)
+                    if (!string.IsNullOrWhiteSpace(model.PLUCode))
+                    {
+                        using (Microsoft.Data.SqlClient.SqlConnection dupConn = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                        {
+                            dupConn.Open();
+                            using (var dupCmd = new Microsoft.Data.SqlClient.SqlCommand("SELECT COUNT(*) FROM dbo.MenuItems WHERE LTRIM(RTRIM(PLUCode)) = @PLU", dupConn))
+                            {
+                                dupCmd.Parameters.AddWithValue("@PLU", model.PLUCode.Trim());
+                                int existing = (int)dupCmd.ExecuteScalar();
+                                if (existing > 0)
+                                {
+                                    ModelState.AddModelError("PLUCode", "PLU Code already exists. Please choose a unique PLU Code.");
+
+                                    // Repopulate ViewBag data for redisplay
+                                    ViewBag.Categories = GetCategorySelectList();
+                                    ViewBag.SubCategories = GetSubCategorySelectList(model.CategoryId);
+                                    ViewBag.Allergens = GetAllAllergens();
+                                    ViewBag.Modifiers = GetAllModifiers();
+                                    ViewBag.KitchenStations = GetKitchenStationSelectList();
+
+                                    return View(model);
+                                }
+                            }
+                        }
+                    }
                     
                     // New enhancement normalization
                     // If GST not applicable, ignore GSTPercentage value
@@ -528,6 +559,34 @@ namespace RestaurantManagementSystem.Controllers
                         }
                     }
                     
+                    // Server-side duplicate PLUCode check (prevent duplicate PLU on Edit)
+                    if (!string.IsNullOrWhiteSpace(model.PLUCode))
+                    {
+                        using (Microsoft.Data.SqlClient.SqlConnection dupConn = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                        {
+                            dupConn.Open();
+                            using (var dupCmd = new Microsoft.Data.SqlClient.SqlCommand("SELECT COUNT(*) FROM dbo.MenuItems WHERE LTRIM(RTRIM(PLUCode)) = @PLU AND Id <> @Id", dupConn))
+                            {
+                                dupCmd.Parameters.AddWithValue("@PLU", model.PLUCode.Trim());
+                                dupCmd.Parameters.AddWithValue("@Id", id);
+                                int existing = (int)dupCmd.ExecuteScalar();
+                                if (existing > 0)
+                                {
+                                    ModelState.AddModelError("PLUCode", "PLU Code already exists on another menu item. Please choose a unique PLU Code.");
+
+                                    // Repopulate ViewBag data for redisplay
+                                    ViewBag.Categories = GetCategorySelectList();
+                                    ViewBag.SubCategories = GetSubCategorySelectList(model.CategoryId);
+                                    ViewBag.Allergens = GetAllAllergens();
+                                    ViewBag.Modifiers = GetAllModifiers();
+                                    ViewBag.KitchenStations = GetKitchenStationSelectList();
+
+                                    return View(model);
+                                }
+                            }
+                        }
+                    }
+
                     if (!model.IsGstApplicable)
                     {
                         model.GSTPercentage = null;
@@ -2282,7 +2341,27 @@ namespace RestaurantManagementSystem.Controllers
                 });
             }
             
-            return stations;
+            // Deduplicate stations by display name (case-insensitive) to avoid showing repeated entries in dropdowns
+            try
+            {
+                var distinctStations = stations
+                    .Where(s => !string.IsNullOrWhiteSpace(s.Text))
+                    .GroupBy(s => s.Text.Trim().ToLowerInvariant())
+                    .Select(g => g.First())
+                    .ToList();
+
+                // Preserve any empty-selection or placeholders (those with empty Value) and then append distinct stations
+                var placeholders = stations.Where(s => string.IsNullOrWhiteSpace(s.Value)).ToList();
+                var result = new List<SelectListItem>();
+                result.AddRange(placeholders);
+                result.AddRange(distinctStations);
+
+                return result;
+            }
+            catch
+            {
+                return stations;
+            }
         }
 
         private List<ModelsMenuItemIngredientViewModel> ConvertIngredientsViewModelToModel(
