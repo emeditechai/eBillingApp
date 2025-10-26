@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using RestaurantManagementSystem.Utilities;
+using System.Globalization;
+using Microsoft.AspNetCore.Localization;
+using System.Collections.Generic;
 
 namespace RestaurantManagementSystem
 {
@@ -58,6 +61,20 @@ namespace RestaurantManagementSystem
                 options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
             var app = builder.Build();
+
+            // Ensure the application uses Indian culture formatting by default
+            // This makes currency formatting (ToString("C")) render ₹ and Indian number formats
+            var defaultCulture = new CultureInfo("en-IN");
+            CultureInfo.DefaultThreadCurrentCulture = defaultCulture;
+            CultureInfo.DefaultThreadCurrentUICulture = defaultCulture;
+
+            var localizationOptions = new RequestLocalizationOptions
+            {
+                DefaultRequestCulture = new RequestCulture(defaultCulture),
+                SupportedCultures = new List<CultureInfo> { defaultCulture },
+                SupportedUICultures = new List<CultureInfo> { defaultCulture }
+            };
+            app.UseRequestLocalization(localizationOptions);
 
             // Configure the HTTP request pipeline.
             if (!app.Environment.IsDevelopment())
