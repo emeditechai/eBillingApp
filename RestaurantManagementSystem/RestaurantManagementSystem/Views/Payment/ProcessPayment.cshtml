@@ -23,7 +23,7 @@
                     <h4 class="mb-0 fw-bold text-primary">Payment Details</h4>
                 </div>
                 <div class="card-body p-4">
-                    <form asp-action="ProcessPayment" method="post">
+                    <form asp-action="ProcessPayment" method="post" id="processPaymentForm">
                         <div asp-validation-summary="ModelOnly" class="text-danger"></div>
                         <input type="hidden" asp-for="OrderId" />
                         <input type="hidden" asp-for="OrderNumber" />
@@ -177,6 +177,7 @@
                                             </select>
                                             <label asp-for="CardType" class="form-label"></label>
                                             <span asp-validation-for="CardType" class="text-danger"></span>
+                                            <div class="invalid-feedback" id="cardTypeFeedback" style="display:none"></div>
                                         </div>
                                     </div>
                                     <div class="col-md-6">
@@ -184,6 +185,7 @@
                                             <input asp-for="LastFourDigits" class="form-control shadow-sm" maxlength="4" placeholder="Last 4 digits" />
                                             <label asp-for="LastFourDigits" class="form-label"></label>
                                             <span asp-validation-for="LastFourDigits" class="text-danger"></span>
+                                            <div class="invalid-feedback" id="last4Feedback" style="display:none"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -332,6 +334,10 @@
                 } else {
                     // For non-card methods, hide card fields
                     $('#cardPaymentFields').hide();
+                    // Clear any client-side validation state when card fields are hidden
+                    $('#cardTypeSelect, #LastFourDigits').removeClass('is-invalid');
+                    $('#cardTypeFeedback').text('').hide();
+                    $('#last4Feedback').text('').hide();
                     
                     // Only make AJAX call if not a card and not complementary
                     $.ajax({
@@ -497,6 +503,51 @@
             $('.form-floating input, .form-floating select').on('focus blur', function(e) {
                 $(this).parents('.form-floating').toggleClass('focused', e.type === 'focus' || this.value.length > 0);
             }).trigger('blur');
+
+            // Client-side validation: require card info when payment method is Card/Credit/Debit
+            $('#processPaymentForm').on('submit', function(e) {
+                // Determine selected payment method text
+                var pmText = $('#paymentMethodSelect option:selected').text().toLowerCase();
+                var requiresCard = pmText.includes('card') || pmText.includes('credit') || pmText.includes('debit');
+
+                // Remove any previous client errors / feedback
+                $('#cardTypeSelect, #LastFourDigits').removeClass('is-invalid');
+                $('#cardTypeFeedback').text('').hide();
+                $('#last4Feedback').text('').hide();
+
+                if (requiresCard) {
+                    var cardType = $('#cardTypeSelect').val();
+                    var last4 = ($('#LastFourDigits').val() || '').trim();
+                    var invalid = false;
+
+                    if (!cardType) {
+                        invalid = true;
+                        $('#cardTypeSelect').addClass('is-invalid');
+                        $('#cardTypeFeedback').text('Card type is required for card payments.').show();
+                    }
+
+                    if (!last4) {
+                        invalid = true;
+                        $('#LastFourDigits').addClass('is-invalid');
+                        $('#last4Feedback').text('Card number (last 4 digits) is required for card payments.').show();
+                    } else if (!/^\d{4}$/.test(last4)) {
+                        invalid = true;
+                        $('#LastFourDigits').addClass('is-invalid');
+                        $('#last4Feedback').text('Please enter exactly 4 numeric digits.').show();
+                    }
+
+                    if (invalid) {
+                        // Prevent form submission
+                        e.preventDefault();
+                        // Scroll to first visible invalid-feedback for better UX
+                        var $firstFeedback = $('.invalid-feedback:visible').first();
+                        if ($firstFeedback.length) {
+                            $('html, body').animate({ scrollTop: $firstFeedback.offset().top - 100 }, 250);
+                        }
+                        return false;
+                    }
+                }
+            });
         });
     </script>
 }
