@@ -29,8 +29,11 @@ namespace RestaurantManagementSystem
                     options.LoginPath = "/Account/Login";
                     options.LogoutPath = "/Account/Logout";
                     options.Cookie.HttpOnly = true;
-                    options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // Ensure cookies are only sent over HTTPS
-                    options.Cookie.SameSite = SameSiteMode.Strict; // Stronger security for authenticated sessions
+                    // Use SameAsRequest so cookies work when the app is behind a reverse proxy
+                    // that terminates TLS or when running on HTTP for local/testing.
+                    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+                    // Use Lax to allow common external navigation flows while still protecting from CSRF
+                    options.Cookie.SameSite = SameSiteMode.Lax;
                 });
 
             // Add authorization services
