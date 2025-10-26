@@ -5,6 +5,17 @@
 }
 
 <div class="container-fluid">
+    <style>
+        .report-tile { border-radius: 8px; color: #fff; min-height: 120px; display:block; }
+        .report-tile .tile-body { padding: 16px; }
+        .tile-red { background: linear-gradient(135deg,#ff6b6b 0%,#ff4d4d 100%); }
+        .tile-orange { background: linear-gradient(135deg,#ffb86b 0%,#ff974d 100%); }
+        .tile-green { background: linear-gradient(135deg,#34c47a 0%,#0fb07a 100%); }
+        .tile-blue { background: linear-gradient(135deg,#4f93ff 0%,#2b6de9 100%); }
+        .kot-table thead { background:#fff; }
+        .kot-table tbody tr td { vertical-align: middle; }
+        @@media (max-width:767px) { .report-tile { min-height:100px; } }
+    </style>
     <div class="row">
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
@@ -47,35 +58,35 @@
 
     <div class="row">
         <div class="col-md-3">
-            <div class="card mb-3">
-                <div class="card-body">
-                    <h5 class="card-title">Total Items</h5>
-                    <p class="display-6">@Model.Items.Count()</p>
-                    <small class="text-muted">Showing items matching filters</small>
+            <div class="report-tile tile-blue mb-3">
+                <div class="tile-body">
+                    <h6 class="text-uppercase text-muted mb-1">Total Items</h6>
+                    <h3 class="mb-0">@Model.Items.Count()</h3>
+                    <small class="text-light">Showing items matching filters</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card mb-3">
-                <div class="card-body">
-                    <h5 class="card-title">Pending</h5>
-                    <p class="display-6">@Model.Items.Count(i => i.Status == "Pending")</p>
+            <div class="report-tile tile-orange mb-3">
+                <div class="tile-body">
+                    <h6 class="text-uppercase text-muted mb-1">Pending</h6>
+                    <h3 class="mb-0">@Model.Items.Count(i => i.Status == "Pending")</h3>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card mb-3">
-                <div class="card-body">
-                    <h5 class="card-title">Completed</h5>
-                    <p class="display-6">@Model.Items.Count(i => i.Status == "Completed")</p>
+            <div class="report-tile tile-green mb-3">
+                <div class="tile-body">
+                    <h6 class="text-uppercase text-muted mb-1">Completed</h6>
+                    <h3 class="mb-0">@Model.Items.Count(i => i.Status == "Completed")</h3>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card mb-3">
-                <div class="card-body">
-                    <h5 class="card-title">Stations</h5>
-                    <p class="display-6">@Model.AvailableStations.Count()</p>
+            <div class="report-tile tile-red mb-3">
+                <div class="tile-body">
+                    <h6 class="text-uppercase text-muted mb-1">Stations</h6>
+                    <h3 class="mb-0">@Model.AvailableStations.Count()</h3>
                 </div>
             </div>
         </div>
