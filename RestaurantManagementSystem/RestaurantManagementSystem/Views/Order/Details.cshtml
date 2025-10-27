@@ -206,6 +206,7 @@
       const saveBtn = document.getElementById('saveOrderBtn');
       const itemsBody = document.getElementById('orderItemsBody');
       const paymentBtn = document.querySelector('a[href*="/Payment/Index/"]');
+  const fireBtn = document.getElementById('fireItemsBtn');
 
       function setSaveEnabled(enabled) {
         if (!saveBtn) return;
@@ -225,6 +226,21 @@
         }
       }
 
+      function setFireEnabled(enabled) {
+        if (!fireBtn) return;
+        if (enabled) {
+          fireBtn.classList.remove('disabled');
+          fireBtn.removeAttribute('disabled');
+          fireBtn.setAttribute('aria-disabled', 'false');
+          fireBtn.style.pointerEvents = '';
+        } else {
+          fireBtn.classList.add('disabled');
+          fireBtn.setAttribute('disabled', 'disabled');
+          fireBtn.setAttribute('aria-disabled', 'true');
+          fireBtn.style.pointerEvents = 'none';
+        }
+      }
+
       function hasSavedItems() {
         // saved items are rendered as rows with class 'existing-item-row'
         const saved = $all('#orderItemsBody tr.existing-item-row');
@@ -236,6 +252,8 @@
         setSaveEnabled(false);
         // Payment enabled only when there are saved items
         setPaymentEnabled(hasSavedItems());
+        // Fire to kitchen enabled only when there are saved items
+        setFireEnabled(hasSavedItems());
       }
 
       // When new rows are added or removed, enable Save (new items) or update Payment state
@@ -293,6 +311,8 @@
               if (response && response.ok) {
                 // Saved to DB -> payment now allowed
                 setPaymentEnabled(true);
+                // Also enable Fire to Kitchen when items are saved
+                setFireEnabled(hasSavedItems());
               } else {
                 // error -> re-enable Save so user can retry
                 setSaveEnabled(true);
