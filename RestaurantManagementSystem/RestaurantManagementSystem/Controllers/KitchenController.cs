@@ -241,6 +241,36 @@ namespace RestaurantManagementSystem.Controllers
                                 item.Modifiers.Add(modifierText);
                             }
                         }
+                        
+                        // If some items are missing SpecialInstructions/Notes in the ticket row (older DB/migration differences),
+                        // try to fetch them from the original OrderItems row as a safe fallback so kitchen can always see instructions.
+                        foreach (var itm in viewModel.Items)
+                        {
+                            if (string.IsNullOrWhiteSpace(itm.Notes) && string.IsNullOrWhiteSpace(itm.SpecialInstructions))
+                            {
+                                try
+                                {
+                                    using (var noteCmd = new SqlCommand("SELECT SpecialInstructions FROM OrderItems WHERE Id = @OrderItemId", connection))
+                                    {
+                                        noteCmd.Parameters.AddWithValue("@OrderItemId", itm.OrderItemId);
+                                        var noteObj = noteCmd.ExecuteScalar();
+                                        if (noteObj != null && noteObj != DBNull.Value)
+                                        {
+                                            var noteText = noteObj.ToString();
+                                            if (!string.IsNullOrWhiteSpace(noteText))
+                                            {
+                                                // populate SpecialInstructions so the view shows it (we prefer Notes but fall back to SpecialInstructions)
+                                                itm.SpecialInstructions = noteText;
+                                            }
+                                        }
+                                    }
+                                }
+                                catch
+                                {
+                                    // Ignore failures here - this is a best-effort fallback.
+                                }
+                            }
+                        }
                     }
                 }
                 
