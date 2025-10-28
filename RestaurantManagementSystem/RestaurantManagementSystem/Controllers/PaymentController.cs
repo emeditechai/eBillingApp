@@ -537,20 +537,46 @@ END", connection))
                                             try
                                             {
                                                 if (!reader.IsClosed) reader.Close();
-                                                using (var orderUpdateCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
-                                                    UPDATE Orders
-                                                    SET Status = 3, -- Completed
-                                                        CompletedAt = CASE WHEN Status < 3 AND CompletedAt IS NULL THEN GETDATE() ELSE CompletedAt END,
-                                                        UpdatedAt = GETDATE()
-                                                    WHERE Id = @OrderId
-                                                      AND Status < 3
-                                                      AND (
-                                                          TotalAmount - ISNULL((SELECT SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId AND Status = 1), 0)
-                                                      ) <= 0.01
+
+                                                // Log order / payments sums and complete only if approved payments cover total (within tolerance)
+                                                using (var checkCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                                    SELECT o.TotalAmount,
+                                                        ISNULL((SELECT SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId AND Status = 1), 0) AS ApprovedSum,
+                                                        ISNULL((SELECT SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId AND Status = 0), 0) AS PendingSum
+                                                    FROM Orders o
+                                                    WHERE o.Id = @OrderId
                                                 ", connection))
                                                 {
-                                                    orderUpdateCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
-                                                    orderUpdateCmd.ExecuteNonQuery();
+                                                    checkCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
+                                                    using (var r2 = checkCmd.ExecuteReader())
+                                                    {
+                                                        if (r2.Read())
+                                                        {
+                                                            decimal orderTotal = r2.IsDBNull(0) ? 0m : r2.GetDecimal(0);
+                                                            decimal approvedSum = r2.IsDBNull(1) ? 0m : r2.GetDecimal(1);
+                                                            decimal pendingSum = r2.IsDBNull(2) ? 0m : r2.GetDecimal(2);
+                                                            _logger?.LogInformation("ProcessPayment: order {OrderId} total={OrderTotal} approvedSum={ApprovedSum} pendingSum={PendingSum}", model.OrderId, orderTotal, approvedSum, pendingSum);
+
+                                                            if (approvedSum >= orderTotal - 0.05m)
+                                                            {
+                                                                using (var completeCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                                                    UPDATE Orders
+                                                                    SET Status = 3,
+                                                                        CompletedAt = CASE WHEN Status < 3 AND CompletedAt IS NULL THEN GETDATE() ELSE CompletedAt END,
+                                                                        UpdatedAt = GETDATE()
+                                                                    WHERE Id = @OrderId AND Status < 3
+                                                                ", connection))
+                                                                {
+                                                                    completeCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
+                                                                    completeCmd.ExecuteNonQuery();
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                _logger?.LogInformation("ProcessPayment: order {OrderId} not completed after payment - shortfall={Shortfall}", model.OrderId, Math.Max(0, (double)(orderTotal - approvedSum)));
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                             catch { /* ignore order update failures */ }
@@ -648,7 +674,7 @@ END", connection))
                                                       AND Status < 3
                                                       AND (
                                                           TotalAmount - ISNULL((SELECT SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId AND Status = 1), 0)
-                                                      ) <= 0.01
+                                                          ) <= 0.05
                                                 ", connection))
                                                 {
                                                     orderUpdateAfterDiscountCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
@@ -657,6 +683,49 @@ END", connection))
                                             }
                                             catch { /* ignore order completion re-check failures */ }
                                         }
+                                        // FINAL SAFETY CHECK: If the order is fully paid considering both approved and pending
+                                        // payments (this covers discount payments that are saved as pending), mark the order
+                                        // completed so fully-paid orders don't remain in Active state. We intentionally
+                                        // include payments with Status IN (0,1) here but leave discount approval workflow
+                                        // (payment status) unchanged.
+                                        try
+                                        {
+                                            if (!reader.IsClosed) reader.Close();
+                                            // If discount approvals are required, do NOT count pending payments that have a discount
+                                            string finalSql;
+                                            if (discountApprovalRequired)
+                                            {
+                                                finalSql = @"UPDATE Orders
+                                                SET Status = 3,
+                                                    CompletedAt = CASE WHEN Status < 3 AND CompletedAt IS NULL THEN GETDATE() ELSE CompletedAt END,
+                                                    UpdatedAt = GETDATE()
+                                                WHERE Id = @OrderId
+                                                  AND Status < 3
+                                                  AND (
+                                                      TotalAmount - ISNULL((SELECT SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId AND (Status = 1 OR (Status = 0 AND ISNULL(DiscAmount,0) = 0))), 0)
+                                                  ) <= 0.05";
+                                            }
+                                            else
+                                            {
+                                                finalSql = @"UPDATE Orders
+                                                SET Status = 3,
+                                                    CompletedAt = CASE WHEN Status < 3 AND CompletedAt IS NULL THEN GETDATE() ELSE CompletedAt END,
+                                                    UpdatedAt = GETDATE()
+                                                WHERE Id = @OrderId
+                                                  AND Status < 3
+                                                  AND (
+                                                      TotalAmount - ISNULL((SELECT SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId AND Status IN (0,1)), 0)
+                                                  ) <= 0.05";
+
+                                            }
+
+                                            using (var finalCompleteCmd = new Microsoft.Data.SqlClient.SqlCommand(finalSql, connection))
+                                            {
+                                                finalCompleteCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
+                                                finalCompleteCmd.ExecuteNonQuery();
+                                            }
+                                        }
+                                        catch { /* don't block the happy path if this fails */ }
                                         return RedirectToAction("Index", new { id = model.OrderId });
                                     }
                                     else
@@ -926,23 +995,129 @@ END", connection))
                                     try
                                     {
                                         if (!reader.IsClosed) reader.Close();
-                                        using (var orderUpdateCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
-                                            UPDATE Orders
-                                            SET Status = 3, -- Completed
+
+                                        using (var checkCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                            SELECT o.TotalAmount,
+                                                ISNULL((SELECT SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId AND Status = 1), 0) AS ApprovedSum,
+                                                ISNULL((SELECT SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId AND Status = 0), 0) AS PendingSum
+                                            FROM Orders o
+                                            WHERE o.Id = @OrderId
+                                        ", connection))
+                                        {
+                                            checkCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                            using (var r2 = checkCmd.ExecuteReader())
+                                            {
+                                                if (r2.Read())
+                                                {
+                                                    decimal orderTotal = r2.IsDBNull(0) ? 0m : r2.GetDecimal(0);
+                                                    decimal approvedSum = r2.IsDBNull(1) ? 0m : r2.GetDecimal(1);
+                                                    decimal pendingSum = r2.IsDBNull(2) ? 0m : r2.GetDecimal(2);
+                                                    _logger?.LogInformation("ApprovePayment: order {OrderId} total={OrderTotal} approvedSum={ApprovedSum} pendingSum={PendingSum}", orderId, orderTotal, approvedSum, pendingSum);
+
+                                                    // If approved payments cover the order (within tolerance), mark completed
+                                                    if (approvedSum >= orderTotal - 0.05m)
+                                                    {
+                                                        using (var completeCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                                            UPDATE Orders
+                                                            SET Status = 3,
+                                                                CompletedAt = CASE WHEN Status < 3 AND CompletedAt IS NULL THEN GETDATE() ELSE CompletedAt END,
+                                                                UpdatedAt = GETDATE()
+                                                            WHERE Id = @OrderId AND Status < 3
+                                                        ", connection))
+                                                        {
+                                                            completeCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                                            completeCmd.ExecuteNonQuery();
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        _logger?.LogInformation("ApprovePayment: order {OrderId} not completed after approval - shortfall={Shortfall}", orderId, Math.Max(0, (double)(orderTotal - approvedSum)));
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        _logger?.LogWarning(ex, "Error while rechecking order completion for approved payment {PaymentId}", id);
+                                    }
+
+                                    // Recalculate and persist aggregate roundoff for the order (approved payments)
+                                    try
+                                    {
+                                        using (var roundoffSumCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                            SELECT ISNULL(SUM(ISNULL(RoundoffAdjustmentAmt,0)), 0) FROM Payments WHERE OrderId = @OrderId AND Status = 1
+                                        ", connection))
+                                        {
+                                            roundoffSumCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                            var sumObj = roundoffSumCmd.ExecuteScalar();
+                                            decimal totalRoundoffForOrder = 0m;
+                                            if (sumObj != null && sumObj != DBNull.Value)
+                                            {
+                                                totalRoundoffForOrder = Convert.ToDecimal(sumObj);
+                                            }
+
+                                            using (var updateOrderRoundoffCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                                UPDATE Orders SET RoundoffAdjustmentAmt = @Roundoff, UpdatedAt = GETDATE() WHERE Id = @OrderId
+                                            ", connection))
+                                            {
+                                                updateOrderRoundoffCmd.Parameters.AddWithValue("@Roundoff", totalRoundoffForOrder);
+                                                updateOrderRoundoffCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                                updateOrderRoundoffCmd.ExecuteNonQuery();
+                                            }
+                                        }
+                                    }
+                                    catch { /* ignore roundoff persistence failures */ }
+
+                                    // FINAL SAFETY: consider pending payments but exclude pending discount payments when discount approvals are required
+                                    try
+                                    {
+                                        bool discountApprovalRequiredLocal = false;
+                                        try
+                                        {
+                                            using (var settingCmd = new Microsoft.Data.SqlClient.SqlCommand("SELECT TOP 1 IsDiscountApprovalRequired FROM dbo.RestaurantSettings", connection))
+                                            {
+                                                var settingObj = settingCmd.ExecuteScalar();
+                                                if (settingObj != null && settingObj != DBNull.Value)
+                                                    discountApprovalRequiredLocal = Convert.ToBoolean(settingObj);
+                                            }
+                                        }
+                                        catch { /* ignore */ }
+
+                                        string finalSqlLocal;
+                                        if (discountApprovalRequiredLocal)
+                                        {
+                                            finalSqlLocal = @"UPDATE Orders
+                                            SET Status = 3,
                                                 CompletedAt = CASE WHEN Status < 3 AND CompletedAt IS NULL THEN GETDATE() ELSE CompletedAt END,
                                                 UpdatedAt = GETDATE()
                                             WHERE Id = @OrderId
                                               AND Status < 3
                                               AND (
-                                                  SELECT ISNULL(SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)), 0) FROM Payments WHERE OrderId = @OrderId AND Status = 1
-                                              ) >= TotalAmount
-                                        ", connection))
+                                                  TotalAmount - ISNULL((SELECT SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId AND (Status = 1 OR (Status = 0 AND ISNULL(DiscAmount,0) = 0))), 0)
+                                              ) <= 0.05";
+                                        }
+                                        else
                                         {
-                                            orderUpdateCmd.Parameters.AddWithValue("@OrderId", orderId);
-                                            orderUpdateCmd.ExecuteNonQuery();
+                                            finalSqlLocal = @"UPDATE Orders
+                                            SET Status = 3,
+                                                CompletedAt = CASE WHEN Status < 3 AND CompletedAt IS NULL THEN GETDATE() ELSE CompletedAt END,
+                                                UpdatedAt = GETDATE()
+                                            WHERE Id = @OrderId
+                                              AND Status < 3
+                                              AND (
+                                                  TotalAmount - ISNULL((SELECT SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId AND Status IN (0,1)), 0)
+                                              ) <= 0.05";
+
+                                        }
+
+                                        using (var finalCompleteCmdLocal = new Microsoft.Data.SqlClient.SqlCommand(finalSqlLocal, connection))
+                                        {
+                                            finalCompleteCmdLocal.Parameters.AddWithValue("@OrderId", orderId);
+                                            finalCompleteCmdLocal.ExecuteNonQuery();
                                         }
                                     }
-                                    catch { /* don't block UI on order update failure */ }
+                                    catch { /* ignore */ }
 
                                     return RedirectToAction("Index", new { id = orderId });
                                 }
@@ -1004,7 +1179,7 @@ END", connection))
                                 if (rowsAffected > 0)
                                 {
                                     TempData["SuccessMessage"] = "Payment rejected successfully.";
-                                    
+
                                     // Check if this was from dashboard
                                     string returnUrl = Request.Headers["Referer"].ToString();
                                     if (returnUrl.Contains("/Payment/Dashboard"))
@@ -1072,21 +1247,127 @@ END", connection))
                                     try
                                     {
                                         if (!reader.IsClosed) reader.Close();
-                                        using (var orderUpdateCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
-                                            UPDATE Orders
-                                            SET Status = 3, -- Completed
-                                                CompletedAt = CASE WHEN Status < 3 AND CompletedAt IS NULL THEN GETDATE() ELSE CompletedAt END,
-                                                UpdatedAt = GETDATE()
-                                            WHERE Id = @OrderId
-                                              AND Status < 3
-                                              AND (
-                                                  SELECT ISNULL(SUM(Amount + TipAmount), 0) FROM Payments WHERE OrderId = @OrderId AND Status = 1
-                                              ) >= TotalAmount
+
+                                        using (var checkCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                            SELECT o.TotalAmount,
+                                                ISNULL((SELECT SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId AND Status = 1), 0) AS ApprovedSum,
+                                                ISNULL((SELECT SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId AND Status = 0), 0) AS PendingSum
+                                            FROM Orders o
+                                            WHERE o.Id = @OrderId
                                         ", connection))
                                         {
-                                            orderUpdateCmd.Parameters.AddWithValue("@OrderId", orderId);
-                                            orderUpdateCmd.ExecuteNonQuery();
+                                            checkCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                            using (var r2 = checkCmd.ExecuteReader())
+                                            {
+                                                if (r2.Read())
+                                                {
+                                                    decimal orderTotal = r2.IsDBNull(0) ? 0m : r2.GetDecimal(0);
+                                                    decimal approvedSum = r2.IsDBNull(1) ? 0m : r2.GetDecimal(1);
+                                                    decimal pendingSum = r2.IsDBNull(2) ? 0m : r2.GetDecimal(2);
+                                                    _logger?.LogInformation("ApprovePaymentAjax: order {OrderId} total={OrderTotal} approvedSum={ApprovedSum} pendingSum={PendingSum}", orderId, orderTotal, approvedSum, pendingSum);
+
+                                                    if (approvedSum >= orderTotal - 0.05m)
+                                                    {
+                                                        using (var completeCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                                            UPDATE Orders
+                                                            SET Status = 3,
+                                                                CompletedAt = CASE WHEN Status < 3 AND CompletedAt IS NULL THEN GETDATE() ELSE CompletedAt END,
+                                                                UpdatedAt = GETDATE()
+                                                            WHERE Id = @OrderId AND Status < 3
+                                                        ", connection))
+                                                        {
+                                                            completeCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                                            completeCmd.ExecuteNonQuery();
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        _logger?.LogInformation("ApprovePaymentAjax: order {OrderId} not completed after approval - shortfall={Shortfall}", orderId, Math.Max(0, (double)(orderTotal - approvedSum)));
+                                                    }
+                                                }
+                                            }
                                         }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        _logger?.LogWarning(ex, "Error while rechecking order completion for approved payment {PaymentId}", id);
+                                    }
+
+                                    // Recalculate aggregate roundoff for the order (approved payments)
+                                    try
+                                    {
+                                        using (var roundoffSumCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                            SELECT ISNULL(SUM(ISNULL(RoundoffAdjustmentAmt,0)), 0) FROM Payments WHERE OrderId = @OrderId AND Status = 1
+                                        ", connection))
+                                        {
+                                            roundoffSumCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                            var sumObj = roundoffSumCmd.ExecuteScalar();
+                                            decimal totalRoundoffForOrder = 0m;
+                                            if (sumObj != null && sumObj != DBNull.Value)
+                                            {
+                                                totalRoundoffForOrder = Convert.ToDecimal(sumObj);
+                                            }
+
+                                            using (var updateOrderRoundoffCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                                UPDATE Orders SET RoundoffAdjustmentAmt = @Roundoff, UpdatedAt = GETDATE() WHERE Id = @OrderId
+                                            ", connection))
+                                            {
+                                                updateOrderRoundoffCmd.Parameters.AddWithValue("@Roundoff", totalRoundoffForOrder);
+                                                updateOrderRoundoffCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                                updateOrderRoundoffCmd.ExecuteNonQuery();
+                                            }
+                                        }
+                                    }
+                                    catch { /* ignore */ }
+
+                                    // FINAL SAFETY: consider pending + approved payments when marking complete
+                                    try
+                                    {
+                                            // Read discount approval setting so we don't count pending discount payments when approvals are required
+                                            bool discountApprovalRequired = false;
+                                            try
+                                            {
+                                                using (var settingCmd = new Microsoft.Data.SqlClient.SqlCommand("SELECT TOP 1 IsDiscountApprovalRequired FROM dbo.RestaurantSettings", connection))
+                                                {
+                                                    var settingObj = settingCmd.ExecuteScalar();
+                                                    if (settingObj != null && settingObj != DBNull.Value)
+                                                        discountApprovalRequired = Convert.ToBoolean(settingObj);
+                                                }
+                                            }
+                                            catch { /* ignore setting read errors, default to false */ }
+
+                                            string finalSql;
+                                            if (discountApprovalRequired)
+                                            {
+                                                finalSql = @"UPDATE Orders
+                                                SET Status = 3,
+                                                    CompletedAt = CASE WHEN Status < 3 AND CompletedAt IS NULL THEN GETDATE() ELSE CompletedAt END,
+                                                    UpdatedAt = GETDATE()
+                                                WHERE Id = @OrderId
+                                                  AND Status < 3
+                                                  AND (
+                                                      TotalAmount - ISNULL((SELECT SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId AND (Status = 1 OR (Status = 0 AND ISNULL(DiscAmount,0) = 0))), 0)
+                                                  ) <= 0.05";
+                                            }
+                                            else
+                                            {
+                                                finalSql = @"UPDATE Orders
+                                                SET Status = 3,
+                                                    CompletedAt = CASE WHEN Status < 3 AND CompletedAt IS NULL THEN GETDATE() ELSE CompletedAt END,
+                                                    UpdatedAt = GETDATE()
+                                                WHERE Id = @OrderId
+                                                  AND Status < 3
+                                                  AND (
+                                                      TotalAmount - ISNULL((SELECT SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId AND Status IN (0,1)), 0)
+                                                  ) <= 0.05";
+
+                                            }
+
+                                            using (var finalCompleteCmd = new Microsoft.Data.SqlClient.SqlCommand(finalSql, connection))
+                                            {
+                                                finalCompleteCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                                finalCompleteCmd.ExecuteNonQuery();
+                                            }
                                     }
                                     catch { /* ignore */ }
 

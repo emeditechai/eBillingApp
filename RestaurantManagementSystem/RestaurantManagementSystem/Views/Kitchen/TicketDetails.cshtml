@@ -149,10 +149,18 @@
                                             <div>
                                                 <strong>@item.MenuItemName</strong>
                                             </div>
-                                            @if (!string.IsNullOrEmpty(item.SpecialInstructions))
+                                            @* Show any special instructions or notes (prefer Notes, fallback to SpecialInstructions).
+                                               Encode and preserve line breaks for safety and readability. *@
+                                            @{ 
+                                                var rawNote = !string.IsNullOrWhiteSpace(item.Notes) ? item.Notes : item.SpecialInstructions;
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(rawNote))
                                             {
-                                                <div class="text-danger">
-                                                    <small>@item.SpecialInstructions</small>
+                                                <div class="mt-1">
+                                                    <div class="p-2 bg-light border rounded" style="font-size:.95rem;">
+                                                        <strong class="me-2">Note:</strong>
+                                                        @Html.Raw(System.Net.WebUtility.HtmlEncode(rawNote).Replace("\r\n", "<br/>").Replace("\n", "<br/>"))
+                                                    </div>
                                                 </div>
                                             }
                                             @if (item.Modifiers.Any())
@@ -164,6 +172,8 @@
                                                     }
                                                 </div>
                                             }
+                                            @* Show kitchen/order-attached note if present *@
+                                            @* Former Notes block removed - combined above to ensure visibility and safety *@
                                         </td>
                                         <td>@item.Quantity</td>
                                         <td>
