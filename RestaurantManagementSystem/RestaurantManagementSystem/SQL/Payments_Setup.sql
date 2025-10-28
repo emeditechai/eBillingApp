@@ -440,14 +440,15 @@ BEGIN
             WHERE Id = @OrderId;
         END
         
-        -- Reopen order if needed
-        UPDATE Orders
-        SET Status = 1, -- In Progress
-            CompletedAt = NULL,
-            UpdatedAt = GETDATE()
-        WHERE Id = @OrderId
-          AND Status = 3 -- Completed
-          AND (SELECT SUM(Amount + TipAmount) FROM Payments WHERE OrderId = @OrderId AND Status = 1) < TotalAmount;
+                -- Reopen order if needed. Include per-payment RoundoffAdjustmentAmt in sums so
+                -- the decision to reopen matches UI/Controller math that includes roundoff.
+                UPDATE Orders
+                SET Status = 1, -- In Progress
+                        CompletedAt = NULL,
+                        UpdatedAt = GETDATE()
+                WHERE Id = @OrderId
+                    AND Status = 3 -- Completed
+                    AND (SELECT ISNULL(SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)),0) FROM Payments WHERE OrderId = @OrderId AND Status = 1) < TotalAmount;
         
         COMMIT TRANSACTION;
         

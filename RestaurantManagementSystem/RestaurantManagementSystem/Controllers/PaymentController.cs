@@ -956,10 +956,13 @@ END", connection))
                                                 DECLARE @NewTax DECIMAL(18,2) = 0;
                                                 IF @GSTPerc > 0 SET @NewTax = ROUND(@NetSubtotal * @GSTPerc / 100.0, 2);
                                                 DECLARE @NewTotal DECIMAL(18,2) = @NetSubtotal + @NewTax + @Tip;
+                                                -- Also persist aggregated roundoff from approved payments so UI shows correct Paid amount
+                                                DECLARE @TotalRoundoff DECIMAL(18,2) = ISNULL((SELECT SUM(ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId AND Status <> 3), 0);
                                                 UPDATE Orders
                                                 SET DiscountAmount = @TotalDiscount,
                                                     TaxAmount = @NewTax,
                                                     TotalAmount = @NewTotal,
+                                                    RoundoffAdjustmentAmt = @TotalRoundoff,
                                                     UpdatedAt = GETDATE()
                                                 WHERE Id = @OrderId;", connection))
                                             {
@@ -2134,8 +2137,8 @@ END", connection))
                             }
                         }
 
-                        // Sum roundoff adjustments across all payments for order-level display
-                        model.TotalRoundoff = model.Payments.Sum(p => p.RoundoffAdjustmentAmt ?? 0m);
+                        // Sum roundoff adjustments across approved payments for order-level display
+                        model.TotalRoundoff = model.Payments.Where(p => p.Status == 1).Sum(p => p.RoundoffAdjustmentAmt ?? 0m);
 
                         // Fallback 1: if payments resultset did not include RoundoffAdjustmentAmt (old SP),
                         // query Payments table directly to get the persisted roundoff sum. This makes the
@@ -2170,10 +2173,10 @@ END", connection))
                         // the adjustment even without DB schema changes.
                         try
                         {
-                            if (model.TotalRoundoff == 0m && model.Payments != null && model.Payments.Any())
+                            if (model.TotalRoundoff == 0m && model.Payments != null && model.Payments.Any(p => p.Status == 1))
                             {
                                 decimal impliedSum = 0m;
-                                foreach (var p in model.Payments)
+                                foreach (var p in model.Payments.Where(p => p.Status == 1))
                                 {
                                     var amt = p.Amount + p.TipAmount;
                                     // Round each payment to nearest whole rupee using AwayFromZero
@@ -2247,8 +2250,8 @@ END", connection))
                         // resultset (or the stored proc) didn't include it.
                         try
                         {
-                            var paidFromPayments = model.Payments.Sum(p => p.Amount + p.TipAmount + (p.RoundoffAdjustmentAmt ?? 0m));
-                            // If we have a meaningful sum from payments, prefer it over the reader's PaidAmount
+                            var paidFromPayments = model.Payments.Where(p => p.Status == 1).Sum(p => p.Amount + p.TipAmount + (p.RoundoffAdjustmentAmt ?? 0m));
+                            // If we have a meaningful sum from approved payments, prefer it over the reader's PaidAmount
                             if (paidFromPayments > 0m)
                             {
                                 model.PaidAmount = paidFromPayments;
