@@ -1968,6 +1968,73 @@ END", connection))
                     }
                 }
 
+                    // Populate pending payments (awaiting approval) within the selected date range
+                    try
+                    {
+                        using (var pendingCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                            SELECT 
+                                p.Id AS PaymentId,
+                                p.OrderId,
+                                o.OrderNumber,
+                                ISNULL(tt.TableName, 'Takeout/Delivery') AS TableName,
+                                pm.Name AS PaymentMethodName,
+                                pm.DisplayName AS PaymentMethodDisplay,
+                                ISNULL(p.Amount,0) AS Amount,
+                                ISNULL(p.TipAmount,0) AS TipAmount,
+                                ISNULL(p.DiscAmount,0) AS DiscAmount,
+                                (ISNULL(p.Amount,0) + ISNULL(p.DiscAmount,0)) AS OriginalAmount,
+                                p.CreatedAt,
+                                p.ProcessedByName,
+                                p.ReferenceNumber,
+                                p.LastFourDigits,
+                                p.CardType,
+                                p.Notes
+                            FROM Payments p
+                            INNER JOIN Orders o ON p.OrderId = o.Id
+                            LEFT JOIN TableTurnovers tto ON o.TableTurnoverId = tto.Id
+                            LEFT JOIN Tables tt ON tto.TableId = tt.Id
+                            LEFT JOIN PaymentMethods pm ON p.PaymentMethodId = pm.Id
+                            WHERE p.Status = 0 -- Pending
+                              AND CAST(p.CreatedAt AS DATE) BETWEEN @FromDate AND @ToDate
+                            ORDER BY p.CreatedAt DESC", connection))
+                        {
+                            pendingCmd.Parameters.AddWithValue("@FromDate", model.FromDate.Date);
+                            pendingCmd.Parameters.AddWithValue("@ToDate", model.ToDate.Date);
+
+                            using (var rdr = pendingCmd.ExecuteReader())
+                            {
+                                while (rdr.Read())
+                                {
+                                    var pending = new PendingPaymentItem
+                                    {
+                                        PaymentId = rdr.GetInt32(rdr.GetOrdinal("PaymentId")),
+                                        OrderId = rdr.GetInt32(rdr.GetOrdinal("OrderId")),
+                                        OrderNumber = rdr.IsDBNull(rdr.GetOrdinal("OrderNumber")) ? string.Empty : rdr.GetString(rdr.GetOrdinal("OrderNumber")),
+                                        TableName = rdr.IsDBNull(rdr.GetOrdinal("TableName")) ? "" : rdr.GetString(rdr.GetOrdinal("TableName")),
+                                        PaymentMethodName = rdr.IsDBNull(rdr.GetOrdinal("PaymentMethodName")) ? "" : rdr.GetString(rdr.GetOrdinal("PaymentMethodName")),
+                                        PaymentMethodDisplay = rdr.IsDBNull(rdr.GetOrdinal("PaymentMethodDisplay")) ? "" : rdr.GetString(rdr.GetOrdinal("PaymentMethodDisplay")),
+                                        Amount = rdr.IsDBNull(rdr.GetOrdinal("Amount")) ? 0m : rdr.GetDecimal(rdr.GetOrdinal("Amount")),
+                                        TipAmount = rdr.IsDBNull(rdr.GetOrdinal("TipAmount")) ? 0m : rdr.GetDecimal(rdr.GetOrdinal("TipAmount")),
+                                        DiscountAmount = rdr.IsDBNull(rdr.GetOrdinal("DiscAmount")) ? 0m : rdr.GetDecimal(rdr.GetOrdinal("DiscAmount")),
+                                        OriginalAmount = rdr.IsDBNull(rdr.GetOrdinal("OriginalAmount")) ? 0m : rdr.GetDecimal(rdr.GetOrdinal("OriginalAmount")),
+                                        CreatedAt = rdr.IsDBNull(rdr.GetOrdinal("CreatedAt")) ? DateTime.MinValue : rdr.GetDateTime(rdr.GetOrdinal("CreatedAt")),
+                                        ProcessedByName = rdr.IsDBNull(rdr.GetOrdinal("ProcessedByName")) ? string.Empty : rdr.GetString(rdr.GetOrdinal("ProcessedByName")),
+                                        ReferenceNumber = rdr.IsDBNull(rdr.GetOrdinal("ReferenceNumber")) ? string.Empty : rdr.GetString(rdr.GetOrdinal("ReferenceNumber")),
+                                        LastFourDigits = rdr.IsDBNull(rdr.GetOrdinal("LastFourDigits")) ? string.Empty : rdr.GetString(rdr.GetOrdinal("LastFourDigits")),
+                                        CardType = rdr.IsDBNull(rdr.GetOrdinal("CardType")) ? string.Empty : rdr.GetString(rdr.GetOrdinal("CardType")),
+                                        Notes = rdr.IsDBNull(rdr.GetOrdinal("Notes")) ? string.Empty : rdr.GetString(rdr.GetOrdinal("Notes"))
+                                    };
+
+                                    model.PendingPayments.Add(pending);
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogError(ex, "Error loading pending payments for dashboard");
+                    }
+
             }
 
             return View(model);
