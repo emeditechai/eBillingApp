@@ -1036,13 +1036,11 @@ END", connection))
                                 if (rowsAffected > 0)
                                 {
                                     TempData["SuccessMessage"] = "Payment approved successfully.";
-                                    
-                                    // Check if this was from dashboard
+
+                                    // Determine whether caller was Dashboard so we can redirect there after processing
                                     string returnUrl = Request.Headers["Referer"].ToString();
-                                    if (returnUrl.Contains("/Payment/Dashboard"))
-                                    {
-                                        return RedirectToAction("Dashboard");
-                                    }
+                                    bool callerWasDashboard = !string.IsNullOrEmpty(returnUrl) && returnUrl.Contains("/Payment/Dashboard");
+
                                     // After approval, ensure order status is updated if fully paid
                                     try
                                     {
@@ -1171,6 +1169,11 @@ END", connection))
                                     }
                                     catch { /* ignore */ }
 
+                                    // Redirect back to Dashboard if the approve action was invoked from there, otherwise show the order payment index
+                                    if (callerWasDashboard)
+                                    {
+                                        return RedirectToAction("Dashboard");
+                                    }
                                     return RedirectToAction("Index", new { id = orderId });
                                 }
                                 else
