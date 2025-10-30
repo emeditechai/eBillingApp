@@ -1,0 +1,90 @@
+@model RestaurantManagementSystem.Models.OrderViewModel
+@{
+    ViewData["Title"] = "KOT Bill";
+}
+<div class="receipt-wrapper py-3" id="kotBillPrint">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">KOT Bill</h4>
+        <div>
+            <button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fas fa-print"></i> Print</button>
+            <a asp-action="Details" asp-route-id="Model.Id" class="btn btn-sm btn-outline-secondary ms-2">Back</a>
+        </div>
+    </div>
+
+    <!-- Top-level order header removed; Order # and Table will be shown under each KOT as requested -->
+
+    @if (Model.KitchenTickets != null && Model.KitchenTickets.Any())
+    {
+        foreach (var ticket in Model.KitchenTickets)
+        {
+            <div class="card mb-2">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <div><strong>KOT #</strong> @ticket.TicketNumber</div>
+                        <div class="small">Order #: @Model.OrderNumber</div>
+                        <div class="small">Table: @(string.IsNullOrEmpty(Model.TableName) ? "—" : Model.TableName)</div>
+                    </div>
+                    <div class="small text-muted">@ticket.CreatedAt.ToString("g")</div>
+                </div>
+                <div class="card-body p-2">
+                    <table class="table table-sm kot-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th class="text-center">Qty</th>
+                                <th class="text-end">Note</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach(var it in ticket.Items)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold">@it.MenuItemName</div>
+                                        @if (it.Modifiers != null && it.Modifiers.Any())
+                                        {
+                                            <div class="small text-muted">@string.Join(", ", it.Modifiers)</div>
+                                        }
+                                    </td>
+                                    <td class="text-center">@it.Quantity</td>
+                                    <td class="text-end small text-muted">@(string.IsNullOrEmpty(it.SpecialInstructions)? "-" : it.SpecialInstructions)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="alert alert-warning">No kitchen tickets found for this order.</div>
+    }
+
+    <!-- Order Note removed from print layout as requested -->
+
+</div>
+
+<style>
+    /* POS / Thermal receipt styling: ~80mm width */
+    .receipt-wrapper { display:flex; justify-content:center; }
+    .receipt-card { border: none; box-shadow:none; }
+    .receipt-card .card-body { padding: .3rem .5rem; }
+    .receipt-wrapper h4 { font-size: 1rem; margin:0; }
+    .receipt-wrapper .kot-table { width: 100%; border-collapse: collapse; font-family: "Courier New", monospace; font-size: 12px; }
+    .receipt-wrapper .kot-table td, .receipt-wrapper .kot-table th { padding: 4px 2px; border-bottom: 1px dashed #bbb; }
+    .receipt-wrapper .kot-table thead th { border-bottom: 1px solid #000; }
+    .receipt-wrapper .small.text-muted { font-size: 10px; }
+
+    /* Print only the receipt area */
+    @@media print {
+        @@page { size: 80mm auto; margin: 4mm; }
+        body * { visibility: hidden; }
+        #kotBillPrint, #kotBillPrint * { visibility: visible; }
+        #kotBillPrint { position: absolute; left: 0; top: 0; width: 80mm; }
+        .receipt-wrapper { justify-content: flex-start; }
+        .receipt-wrapper .kot-table thead { display: table-header-group; }
+        /* remove buttons in print */
+        button, a.btn { display: none !important; }
+    }
+</style>

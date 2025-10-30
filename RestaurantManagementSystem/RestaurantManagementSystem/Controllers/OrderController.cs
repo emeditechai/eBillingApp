@@ -322,6 +322,23 @@ namespace RestaurantManagementSystem.Controllers
             return View(model);
         }
 
+        // KOT Bill print view
+        public IActionResult KOTBill(int id)
+        {
+            var model = GetOrderDetails(id);
+            if (model == null)
+            {
+                return NotFound();
+            }
+            // Only allow KOT print if there are kitchen tickets (items fired to kitchen)
+            if (model.KitchenTickets == null || !model.KitchenTickets.Any())
+            {
+                TempData["ErrorMessage"] = "No items have been fired to kitchen for this order. KOT not available.";
+                return RedirectToAction("Details", new { id = id });
+            }
+            return View("KOTBill", model);
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult QuickAddMenuItem(int orderId, string menuItemNameOrId, int quantity)
