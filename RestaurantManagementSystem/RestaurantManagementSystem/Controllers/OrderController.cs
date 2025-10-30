@@ -12,9 +12,9 @@ namespace RestaurantManagementSystem.Controllers
         }
         
         // Order Dashboard
-        public IActionResult Dashboard()
+        public IActionResult Dashboard(DateTime? fromDate = null, DateTime? toDate = null)
         {
-            var model = GetOrderDashboard();
+            var model = GetOrderDashboard(fromDate, toDate);
             return View(model);
         }
         
@@ -1539,7 +1539,7 @@ namespace RestaurantManagementSystem.Controllers
         }
         
         // Helper Methods
-        private OrderDashboardViewModel GetOrderDashboard()
+    private OrderDashboardViewModel GetOrderDashboard(DateTime? fromDate = null, DateTime? toDate = null)
         {
             var model = new OrderDashboardViewModel
             {
@@ -1653,8 +1653,8 @@ namespace RestaurantManagementSystem.Controllers
                     }
                 }
                 
-                // Get completed orders for today
-                using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(@"
+                // Get completed orders (filtered by date range if provided)
+                string completedSql = @"
                     SELECT 
                         o.Id,
                         o.OrderNumber,
@@ -1678,9 +1678,26 @@ namespace RestaurantManagementSystem.Controllers
                     LEFT JOIN Tables t ON tt.TableId = t.Id
                     LEFT JOIN Users u ON o.UserId = u.Id
                     WHERE o.Status = 3 -- Completed
-                    AND CAST(o.CreatedAt AS DATE) = CAST(GETDATE() AS DATE)
-                    ORDER BY o.CompletedAt DESC", connection))
+                ";
+
+                if (fromDate.HasValue && toDate.HasValue)
                 {
+                    completedSql += " AND CAST(o.CreatedAt AS DATE) BETWEEN @FromDate AND @ToDate";
+                    completedSql += " ORDER BY o.CompletedAt DESC";
+                }
+                else
+                {
+                    // default: today
+                    completedSql += " AND CAST(o.CreatedAt AS DATE) = CAST(GETDATE() AS DATE) ORDER BY o.CompletedAt DESC";
+                }
+
+                using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(completedSql, connection))
+                {
+                    if (fromDate.HasValue && toDate.HasValue)
+                    {
+                        command.Parameters.AddWithValue("@FromDate", fromDate.Value.Date);
+                        command.Parameters.AddWithValue("@ToDate", toDate.Value.Date);
+                    }
                     using (Microsoft.Data.SqlClient.SqlDataReader reader = command.ExecuteReader())
                     {
                         while (reader.Read())
