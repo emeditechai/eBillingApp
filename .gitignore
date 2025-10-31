@@ -37,8 +37,12 @@ artifacts/
 *.user
 *.userosscache
 *.sln.docstates
+restaurantapp.sln
+RestaurantManagementSystem.csproj
 
 # ReSharper
 _ReSharper*/
 *.[Rr]e[Ss]harper
 *.DotSettings.user
+
+
