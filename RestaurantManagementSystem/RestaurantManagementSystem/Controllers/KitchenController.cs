@@ -36,10 +36,12 @@ namespace RestaurantManagementSystem.Controllers
                 viewModel.Stations = GetKitchenStations(connection);
                 
                 // Set the selected station
+                string selectedStationName = null;
                 if (stationId.HasValue && stationId.Value > 0)
                 {
                     viewModel.SelectedStationId = stationId.Value;
-                    viewModel.SelectedStationName = viewModel.Stations.FirstOrDefault(s => s.Id == stationId.Value)?.Name ?? "All Stations";
+                    selectedStationName = viewModel.Stations.FirstOrDefault(s => s.Id == stationId.Value)?.Name;
+                    viewModel.SelectedStationName = selectedStationName ?? "All Stations";
                 }
                 else
                 {
@@ -47,11 +49,11 @@ namespace RestaurantManagementSystem.Controllers
                 }
                 
                 // Get tickets by status and station
-                viewModel.NewTickets = GetTicketsByStatus(connection, 0, stationId);
-                viewModel.InProgressTickets = GetTicketsByStatus(connection, 1, stationId);
-                viewModel.ReadyTickets = GetTicketsByStatus(connection, 2, stationId);
+                viewModel.NewTickets = GetTicketsByStatus(connection, 0, stationId, selectedStationName);
+                viewModel.InProgressTickets = GetTicketsByStatus(connection, 1, stationId, selectedStationName);
+                viewModel.ReadyTickets = GetTicketsByStatus(connection, 2, stationId, selectedStationName);
                 // Delivered tickets (today only)
-                var deliveredAll = GetTicketsByStatus(connection, 3, stationId);
+                var deliveredAll = GetTicketsByStatus(connection, 3, stationId, selectedStationName);
                 var today = DateTime.Today;
                 // Normalize CompletedAt to local date and also accept UTC-stored dates
                 viewModel.DeliveredTickets = deliveredAll
@@ -65,6 +67,20 @@ namespace RestaurantManagementSystem.Controllers
                 
                 // Get dashboard statistics
                 viewModel.Stats = GetKitchenStats(connection, stationId);
+
+                // Safe alignment: if filtering by a specific station and stats came back empty
+                // but we do have tickets in the lists (due to fallback filtering), override counts
+                if (stationId.HasValue && stationId.Value > 0)
+                {
+                    var sum = (viewModel.NewTickets?.Count ?? 0) + (viewModel.InProgressTickets?.Count ?? 0) + (viewModel.ReadyTickets?.Count ?? 0);
+                    if (sum > 0 && (viewModel.Stats.TotalTicketsCount == 0))
+                    {
+                        viewModel.Stats.NewTicketsCount = viewModel.NewTickets?.Count ?? 0;
+                        viewModel.Stats.InProgressTicketsCount = viewModel.InProgressTickets?.Count ?? 0;
+                        viewModel.Stats.ReadyTicketsCount = viewModel.ReadyTickets?.Count ?? 0;
+                        // Keep Pending/Ready Items and Avg prep as-is (we don't recalc here)
+                    }
+                }
             }
             
             return View(viewModel);
@@ -608,35 +624,22 @@ namespace RestaurantManagementSystem.Controllers
             return deduped;
         }
         
-        private List<KitchenTicket> GetTicketsByStatus(Microsoft.Data.SqlClient.SqlConnection connection, int status, int? stationId)
+        private List<KitchenTicket> GetTicketsByStatus(Microsoft.Data.SqlClient.SqlConnection connection, int status, int? stationId, string stationNameFallback = null)
         {
             var tickets = new List<KitchenTicket>();
-            
-            using (var command = new Microsoft.Data.SqlClient.SqlCommand("GetKitchenTicketsByStatus", connection))
+
+            void ReadIntoList(Microsoft.Data.SqlClient.SqlCommand cmd, List<KitchenTicket> list)
             {
-                command.CommandType = CommandType.StoredProcedure;
-                command.Parameters.AddWithValue("@Status", status);
-                
-                if (stationId.HasValue && stationId.Value > 0)
-                {
-                    command.Parameters.AddWithValue("@StationId", stationId.Value);
-                }
-                else
-                {
-                    command.Parameters.AddWithValue("@StationId", DBNull.Value);
-                }
-                
-                using (var reader = command.ExecuteReader())
+                using (var reader = cmd.ExecuteReader())
                 {
                     while (reader.Read())
                     {
                         string tableName = reader["TableName"].ToString();
                         if (string.IsNullOrWhiteSpace(tableName))
                         {
-                            // Fallback lookup
                             tableName = GetTableNameForOrder(connection, (int)reader["OrderId"]);
                         }
-                        tickets.Add(new KitchenTicket
+                        list.Add(new KitchenTicket
                         {
                             Id = (int)reader["Id"],
                             TicketNumber = reader["TicketNumber"].ToString(),
@@ -653,8 +656,75 @@ namespace RestaurantManagementSystem.Controllers
                     }
                 }
             }
-            
-            return tickets;
+
+            // When filtering by station: fetch ALL tickets of this status, then filter by item-level station assignment
+            // because tickets may not have a top-level StationId but items do
+            if (stationId.HasValue && stationId.Value > 0)
+            {
+                // Get all tickets for this status
+                using (var cmdAll = new Microsoft.Data.SqlClient.SqlCommand("GetKitchenTicketsByStatus", connection))
+                {
+                    cmdAll.CommandType = CommandType.StoredProcedure;
+                    cmdAll.Parameters.AddWithValue("@Status", status);
+                    cmdAll.Parameters.AddWithValue("@StationId", DBNull.Value);
+                    ReadIntoList(cmdAll, tickets);
+                }
+
+                // Filter to tickets that have at least one item assigned to this station
+                var ticketIdsForStation = GetTicketIdsByItemStation(connection, stationId.Value, stationNameFallback);
+                if (ticketIdsForStation.Count > 0)
+                {
+                    tickets = tickets.Where(t => ticketIdsForStation.Contains(t.Id)).ToList();
+                }
+                else
+                {
+                    // No items found for station, return empty
+                    tickets = new List<KitchenTicket>();
+                }
+            }
+            else
+            {
+                // No station filter: use stored proc as-is
+                using (var command = new Microsoft.Data.SqlClient.SqlCommand("GetKitchenTicketsByStatus", connection))
+                {
+                    command.CommandType = CommandType.StoredProcedure;
+                    command.Parameters.AddWithValue("@Status", status);
+                    command.Parameters.AddWithValue("@StationId", DBNull.Value);
+                    ReadIntoList(command, tickets);
+                }
+            }
+
+            return tickets ?? new List<KitchenTicket>();
+        }
+
+        // Best-effort fallback helper: find tickets that have at least one item for a specific station
+        private HashSet<int> GetTicketIdsByItemStation(Microsoft.Data.SqlClient.SqlConnection connection, int stationId, string stationNameKey)
+        {
+            var set = new HashSet<int>();
+            try
+            {
+                var sql = @"SELECT DISTINCT KitchenTicketId
+                            FROM KitchenTicketItems
+                            WHERE (KitchenStationId = @StationId)
+                               OR (StationName IS NOT NULL AND LTRIM(RTRIM(LOWER(StationName))) = @StationNameKey)";
+                using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(sql, connection))
+                {
+                    cmd.Parameters.AddWithValue("@StationId", stationId);
+                    cmd.Parameters.AddWithValue("@StationNameKey", stationNameKey);
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            set.Add(Convert.ToInt32(reader[0]));
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore if table/columns differ in schema
+            }
+            return set;
         }
         
         private List<KitchenTicket> GetFilteredTickets(Microsoft.Data.SqlClient.SqlConnection connection, KitchenStationFilterViewModel filter)
