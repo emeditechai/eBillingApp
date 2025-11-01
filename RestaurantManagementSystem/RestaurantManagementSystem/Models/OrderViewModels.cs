@@ -119,6 +119,9 @@ namespace RestaurantManagementSystem.Models
         public List<MenuCategoryViewModel> MenuCategories { get; set; } = new List<MenuCategoryViewModel>();
         public List<CourseType> AvailableCourses { get; set; } = new List<CourseType>();
         public List<MenuItem> AvailableMenuItems { get; set; } = new List<MenuItem>();
+        // Filtering support: list of menu item groups and current selection (default 1)
+        public List<MenuItemGroup> MenuItemGroups { get; set; } = new List<MenuItemGroup>();
+        public int SelectedMenuItemGroupId { get; set; } = 1;
         // Payment aggregates
         public decimal PaidAmount { get; set; }
         public decimal RemainingAmount { get; set; }
@@ -257,6 +260,7 @@ namespace RestaurantManagementSystem.Models
         public int OrderId { get; set; }
         public List<int> SelectedItems { get; set; } = new List<int>();
         public bool FireAll { get; set; }
+        public bool IsBarOrder { get; set; } // Flag to indicate if this is a bar order
     }
     
     public class TableViewModel

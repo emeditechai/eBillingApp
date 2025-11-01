@@ -83,8 +83,11 @@
 @{
   var isFullyPaid = Model.IsFullyPaid;
   var paymentClass = "btn btn-sm btn-success" + (isFullyPaid ? " btn-disabled" : "");
+  var isBarOrder = ViewBag.IsBarOrder ?? false;
+  var fireButtonLabel = isBarOrder ? "Fire To Bar" : "Fire To Kitchen";
+  var fireButtonIcon = isBarOrder ? "fa-cocktail" : "fa-fire";
 }
-<div class="container-fluid py-3 position-relative" id="orderDetailsApp" data-order-id="@Model.Id" data-is-fully-paid="@isFullyPaid.ToString().ToLower()">
+<div class="container-fluid py-3 position-relative" id="orderDetailsApp" data-order-id="@Model.Id" data-is-fully-paid="@isFullyPaid.ToString().ToLower()"  data-is-bar-order="@isBarOrder.ToString().ToLower()">
   @if (isFullyPaid)
   {
     <div class="page-watermark" aria-hidden="true">
@@ -99,12 +102,19 @@
           <input type="hidden" id="orderId" value="@Model.Id" />
             <div class="col" style="min-width:200px;">
             <label for="menuItemGroupSelect" class="form-label small mb-1 fw-semibold">Item Group</label>
-            <select id="menuItemGroupSelect" class="form-select form-select-sm">
+            <select id="menuItemGroupSelect" class="form-select form-select-sm" disabled>
                 @if (Model.MenuItemGroups != null && Model.MenuItemGroups.Any())
                 {
                     foreach (var g in Model.MenuItemGroups)
                     {
-                        <option value="@g.ID" selected="@(g.ID == Model.SelectedMenuItemGroupId ? "selected" : null)">@g.ItemGroup</option>
+                        if (g.ID == Model.SelectedMenuItemGroupId)
+                        {
+                            <option value="@g.ID" selected>@g.ItemGroup</option>
+                        }
+                        else
+                        {
+                            <option value="@g.ID">@g.ItemGroup</option>
+                        }
                     }
                 }
                 else
@@ -132,7 +142,7 @@
             </div>
         </form>
         <div class="ms-auto d-flex gap-2">
-          <button type="button" id="fireItemsBtn" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#fireItemsModal"><i class="fas fa-fire"></i> Fire To Kitchen</button>
+          <button type="button" id="fireItemsBtn" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#fireItemsModal"><i class="fas @fireButtonIcon"></i> @fireButtonLabel</button>
           @{ var hasKOT = Model.KitchenTickets != null && Model.KitchenTickets.Any(); }
           <a asp-action="KOTBill" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-info @(hasKOT ? "" : "btn-disabled")" title="Print KOT Bill" target="_blank" rel="noopener noreferrer" aria-disabled="@(hasKOT? "false" : "true")"> <i class="fas fa-print"></i> KOT Bill</a>
           <a asp-action="Dashboard" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> Back</a>
@@ -256,7 +266,8 @@
           <form id="fireItemsForm" asp-action="FireItems" method="post">
             @Html.AntiForgeryToken()
             <input type="hidden" name="OrderId" value="@Model.Id" />
-            <div class="modal-header"><h5 class="modal-title">Send Items To Kitchen</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <input type="hidden" name="IsBarOrder" value="@isBarOrder.ToString().ToLower()" />
+            <div class="modal-header"><h5 class="modal-title">@(isBarOrder ? "Send Items To Bar" : "Send Items To Kitchen")</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
               <div class="mb-2 d-flex justify-content-between align-items-center">
                 <span class="small text-muted">Select which un-fired items to send.</span>

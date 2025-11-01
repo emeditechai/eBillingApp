@@ -1,0 +1,284 @@
+@model RestaurantManagementSystem.ViewModels.BOTDashboardViewModel
+
+@{
+    ViewData["Title"] = "Bar Dashboard";
+}
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0"><i class="fas fa-cocktail"></i> Bar Dashboard</h1>
+        <div class="d-flex align-items-center">
+            <button onclick="location.reload()" class="btn btn-primary">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-2">
+            <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Total Tickets</h5>
+                    <h2 class="mb-0">@(Model.Stats.NewBOTsCount + Model.Stats.InProgressBOTsCount + Model.Stats.ReadyBOTsCount)</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-warning text-dark">
+                <div class="card-body text-center">
+                    <h5 class="card-title">New</h5>
+                    <h2 class="mb-0">@Model.Stats.NewBOTsCount</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">In Progress</h5>
+                    <h2 class="mb-0">@Model.Stats.InProgressBOTsCount</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Ready</h5>
+                    <h2 class="mb-0">@Model.Stats.ReadyBOTsCount</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-secondary text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Pending Items</h5>
+                    <h2 class="mb-0">0</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-dark text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Avg Prep Time</h5>
+                    <h2 class="mb-0">@Model.Stats.AvgPrepTimeMinutes.ToString("F1") min</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ticket Lists -->
+    <div class="row">
+        <!-- New Tickets -->
+        <div class="col-md-4">
+            <div class="card border-warning mb-4 h-100">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">New Beverage Orders (@Model.NewTickets.Count)</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush bar-ticket-list">
+                        @if (Model.NewTickets.Any())
+                        {
+                            foreach (var ticket in Model.NewTickets)
+                            {
+                                <a href="@Url.Action("TicketDetails", "Kitchen", new { id = ticket.Id })" class="list-group-item list-group-item-action">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <h5 class="mb-1">BOT #@ticket.TicketNumber</h5>
+                                            <div class="ticket-meta text-muted">
+                                                Order @ticket.OrderNumber | Table @(!string.IsNullOrWhiteSpace(ticket.TableName) ? ticket.TableName : "-")
+                                                @if(!string.IsNullOrWhiteSpace(ticket.TableName) && ticket.TableName.Contains("+")) {<span class="badge bg-secondary ms-1">Merged</span>}
+                                            </div>
+                                            <p class="mb-1 small text-muted mb-1">Station: BAR</p>
+                                        </div>
+                                        <small class="text-muted text-end">@ticket.MinutesSinceCreated min<br /><span class="text-nowrap">@ticket.CreatedAt.ToString("MM/dd HH:mm")</span></small>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <small class="text-muted">&nbsp;</small>
+                                        <form method="post" action="@Url.Action("UpdateTicketStatus", "BOT")">
+                                            <input type="hidden" name="TicketId" value="@ticket.Id" />
+                                            <input type="hidden" name="Status" value="1" />
+                                            <button type="submit" class="btn btn-sm btn-info">Start</button>
+                                        </form>
+                                    </div>
+                                </a>
+                            }
+                        }
+                        else
+                        {
+                            <div class="list-group-item">
+                                <p class="mb-0 text-center text-muted">No new beverage orders</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- In Progress Tickets -->
+        <div class="col-md-4">
+            <div class="card border-info mb-4 h-100">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">In Progress (@Model.InProgressTickets.Count)</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush bar-ticket-list">
+                        @if (Model.InProgressTickets.Any())
+                        {
+                            foreach (var ticket in Model.InProgressTickets)
+                            {
+                                <a href="@Url.Action("TicketDetails", "Kitchen", new { id = ticket.Id })" class="list-group-item list-group-item-action">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <h5 class="mb-1">BOT #@ticket.TicketNumber</h5>
+                                            <div class="ticket-meta text-muted">
+                                                Order @ticket.OrderNumber | Table @(!string.IsNullOrWhiteSpace(ticket.TableName) ? ticket.TableName : "-")
+                                                @if(!string.IsNullOrWhiteSpace(ticket.TableName) && ticket.TableName.Contains("+")) {<span class="badge bg-secondary ms-1">Merged</span>}
+                                            </div>
+                                            <p class="mb-1 small text-muted mb-1">Station: BAR</p>
+                                        </div>
+                                        <small class="text-@(ticket.MinutesSinceCreated > 15 ? "danger" : "muted") text-end">
+                                            <strong>@ticket.MinutesSinceCreated min</strong><br />
+                                            <span class="text-nowrap">@ticket.CreatedAt.ToString("MM/dd HH:mm")</span>
+                                        </small>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <small class="text-muted">&nbsp;</small>
+                                        <form method="post" action="@Url.Action("UpdateTicketStatus", "BOT")">
+                                            <input type="hidden" name="TicketId" value="@ticket.Id" />
+                                            <input type="hidden" name="Status" value="2" />
+                                            <button type="submit" class="btn btn-sm btn-success">Mark Ready</button>
+                                        </form>
+                                    </div>
+                                </a>
+                            }
+                        }
+                        else
+                        {
+                            <div class="list-group-item">
+                                <p class="mb-0 text-center text-muted">No beverages in progress</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Ready Tickets -->
+        <div class="col-md-4">
+            <div class="card border-success mb-4 h-100">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Ready for Service (@Model.ReadyTickets.Count)</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush bar-ticket-list">
+                        @if (Model.ReadyTickets.Any())
+                        {
+                            foreach (var ticket in Model.ReadyTickets)
+                            {
+                                <a href="@Url.Action("TicketDetails", "Kitchen", new { id = ticket.Id })" class="list-group-item list-group-item-action">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <h5 class="mb-1">BOT #@ticket.TicketNumber</h5>
+                                            <div class="ticket-meta text-muted">
+                                                Order @ticket.OrderNumber | Table @(!string.IsNullOrWhiteSpace(ticket.TableName) ? ticket.TableName : "-")
+                                                @if(!string.IsNullOrWhiteSpace(ticket.TableName) && ticket.TableName.Contains("+")) {<span class="badge bg-secondary ms-1">Merged</span>}
+                                            </div>
+                                            <p class="mb-1 small text-muted mb-1">Station: BAR</p>
+                                        </div>
+                                        <small class="text-@(ticket.MinutesSinceCreated > 5 ? "danger" : "muted") text-end">
+                                            <strong>@ticket.MinutesSinceCreated min</strong><br />
+                                            <span class="text-nowrap">@ticket.CreatedAt.ToString("MM/dd HH:mm")</span>
+                                        </small>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <small class="text-muted">&nbsp;</small>
+                                        <form method="post" action="@Url.Action("UpdateTicketStatus", "BOT")">
+                                            <input type="hidden" name="TicketId" value="@ticket.Id" />
+                                            <input type="hidden" name="Status" value="3" />
+                                            <button type="submit" class="btn btn-sm btn-secondary">Delivered</button>
+                                        </form>
+                                    </div>
+                                </a>
+                            }
+                        }
+                        else
+                        {
+                            <div class="list-group-item">
+                                <p class="mb-0 text-center text-muted">No beverages ready for service</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Delivered Today Tickets -->
+        <div class="col-md-12">
+            <div class="card border-secondary mb-4">
+                <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Delivered Today (@Model.DeliveredTickets.Count)</h5>
+                    <small>Showing only beverage tickets delivered today</small>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush bar-ticket-list">
+                        @if (Model.DeliveredTickets.Any())
+                        {
+                            foreach (var ticket in Model.DeliveredTickets)
+                            {
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h6 class="mb-1">BOT #@ticket.TicketNumber</h6>
+                                        <div class="ticket-meta text-muted">Order @ticket.OrderNumber | Table @(!string.IsNullOrWhiteSpace(ticket.TableName) ? ticket.TableName : "-") @if(!string.IsNullOrWhiteSpace(ticket.TableName) && ticket.TableName.Contains("+")) {<span class="badge bg-secondary ms-1">Merged</span>}</div>
+                                        <small class="text-muted">Delivered @ticket.CompletedAt?.ToString("HH:mm")</small>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <small class="text-muted">Created @ticket.CreatedAt.ToString("MM/dd HH:mm")</small>
+                                        <small class="text-muted">Prep: @ticket.MinutesSinceCreated min</small>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="list-group-item">
+                                <p class="mb-0 text-center text-muted">No beverage tickets delivered today</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Auto refresh the dashboard every 30 seconds
+            setInterval(function() {
+                location.reload();
+            }, 30000);
+        });
+    </script>
+}
+
+@section Styles {
+    <style>
+        .bar-ticket-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .bar-ticket-list .list-group-item:hover {
+            background-color: #f8f9fa;
+        }
+        .ticket-meta {
+            font-size: 0.8rem;
+            line-height: 1.1rem;
+            margin-top: -0.25rem;
+            margin-bottom: 0.25rem;
+        }
+    </style>
+}
+
+
+ 

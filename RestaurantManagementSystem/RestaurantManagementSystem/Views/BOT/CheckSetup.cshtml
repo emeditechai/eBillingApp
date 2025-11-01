@@ -1,0 +1,143 @@
+@{
+    ViewData["Title"] = "BOT Setup Check";
+}
+
+<div class="container mt-5">
+    <h2><i class="fas fa-tools"></i> BOT Module Setup Check</h2>
+    <p class="text-muted">This page verifies if the BOT database components are properly installed.</p>
+
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Database Setup Status</h5>
+        </div>
+        <div class="card-body">
+            <button id="checkSetupBtn" class="btn btn-primary mb-3">
+                <i class="fas fa-sync"></i> Check Setup Status
+            </button>
+
+            <div id="setupResults" style="display: none;">
+                <h6>Setup Status:</h6>
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Component</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="setupTableBody">
+                    </tbody>
+                </table>
+
+                <div id="setupInstructions" style="display: none;" class="alert alert-warning">
+                    <h6><i class="fas fa-exclamation-triangle"></i> Setup Required</h6>
+                    <p>Some BOT components are missing. Please follow these steps:</p>
+                    <ol>
+                        <li>Open SQL Server Management Studio or Azure Data Studio</li>
+                        <li>Connect to your database</li>
+                        <li>Open the file: <code>SQL/BOT_Setup.sql</code></li>
+                        <li>Execute the entire script</li>
+                        <li>Return to this page and click "Check Setup Status" again</li>
+                    </ol>
+                    <p><strong>SQL File Location:</strong> <code>/Users/abhikporel/dev/Restaurantapp/RestaurantManagementSystem/RestaurantManagementSystem/SQL/BOT_Setup.sql</code></p>
+                </div>
+
+                <div id="setupComplete" style="display: none;" class="alert alert-success">
+                    <h6><i class="fas fa-check-circle"></i> Setup Complete!</h6>
+                    <p>All BOT database components are installed. You can now:</p>
+                    <ul>
+                        <li>Create a "Bar" menu item group (if not exists)</li>
+                        <li>Assign bar items to the Bar group</li>
+                        <li>Mark alcoholic items with IsAlcoholic = 1</li>
+                        <li><a href="@Url.Action("Dashboard", "BOT")" class="btn btn-sm btn-success">Go to BOT Dashboard</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div id="setupError" style="display: none;" class="alert alert-danger">
+                <h6><i class="fas fa-times-circle"></i> Error</h6>
+                <p id="errorMessage"></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">Quick Setup SQL</h5>
+        </div>
+        <div class="card-body">
+            <p>Copy and execute these SQL commands to create the Bar menu group:</p>
+            <pre><code>-- Create Bar menu item group
+IF NOT EXISTS (SELECT 1 FROM menuitemgroup WHERE itemgroup = 'Bar')
+BEGIN
+    INSERT INTO menuitemgroup (itemgroup, is_active, GST_Perc)
+    VALUES ('Bar', 1, 18.00);
+    PRINT 'Bar menu item group created successfully';
+END
+GO
+
+-- Verify Bar group created
+SELECT * FROM menuitemgroup WHERE itemgroup = 'Bar';</code></pre>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('#checkSetupBtn').click(function() {
+                $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Checking...');
+                
+                $.ajax({
+                    url: '@Url.Action("CheckSetup", "BOT")',
+                    type: 'GET',
+                    success: function(response) {
+                        $('#setupResults').show();
+                        $('#setupError').hide();
+                        
+                        if (response.success) {
+                            var tbody = $('#setupTableBody');
+                            tbody.empty();
+                            
+                            var allExists = true;
+                            $.each(response.setup, function(key, value) {
+                                var statusClass = value === 'EXISTS' ? 'text-success' : 'text-danger';
+                                var statusIcon = value === 'EXISTS' ? 'fa-check-circle' : 'fa-times-circle';
+                                
+                                tbody.append(
+                                    '<tr>' +
+                                    '<td>' + key + '</td>' +
+                                    '<td class="' + statusClass + '"><i class="fas ' + statusIcon + '"></i> ' + value + '</td>' +
+                                    '</tr>'
+                                );
+                                
+                                if (value !== 'EXISTS') {
+                                    allExists = false;
+                                }
+                            });
+                            
+                            if (allExists) {
+                                $('#setupComplete').show();
+                                $('#setupInstructions').hide();
+                            } else {
+                                $('#setupComplete').hide();
+                                $('#setupInstructions').show();
+                            }
+                        } else {
+                            $('#setupResults').hide();
+                            $('#setupError').show();
+                            $('#errorMessage').text(response.error);
+                        }
+                        
+                        $('#checkSetupBtn').prop('disabled', false).html('<i class="fas fa-sync"></i> Check Setup Status');
+                    },
+                    error: function() {
+                        $('#setupResults').hide();
+                        $('#setupError').show();
+                        $('#errorMessage').text('Failed to connect to the server. Please check your connection.');
+                        $('#checkSetupBtn').prop('disabled', false).html('<i class="fas fa-sync"></i> Check Setup Status');
+                    }
+                });
+            });
+        });
+    </script>
+}

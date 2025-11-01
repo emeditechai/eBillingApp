@@ -1,0 +1,190 @@
+@model RestaurantManagementSystem.ViewModels.BOTTicketsViewModel
+
+@{
+    ViewData["Title"] = "Bar Tickets";
+}
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">Bar Tickets</h1>
+        <div>
+            <a href="@Url.Action("Dashboard", "BOT")" class="btn btn-primary">
+                <i class="fas fa-th-large"></i> BOT Dashboard
+            </a>
+        </div>
+    </div>
+    
+    <!-- Filter Form -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Filter Tickets</h5>
+        </div>
+        <div class="card-body">
+            <form method="get" action="@Url.Action("Tickets", "BOT")">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Status</label>
+                        <select name="Status" class="form-select">
+                            <option value="">All Statuses</option>
+                            @foreach (var status in Model.Filter.StatusOptions)
+                            {
+                                <option value="@status.Value" selected="@(Model.Filter.Status == status.Value)">@status.Text</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">From Date</label>
+                        <input type="date" name="DateFrom" class="form-control" value="@(Model.Filter.DateFrom?.ToString("yyyy-MM-dd"))" />
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">To Date</label>
+                        <input type="date" name="DateTo" class="form-control" value="@(Model.Filter.DateTo?.ToString("yyyy-MM-dd"))" />
+                    </div>
+                </div>
+                <div class="text-end">
+                    <a href="@Url.Action("Tickets", "BOT")" class="btn btn-outline-secondary me-2">Clear</a>
+                    <button type="submit" class="btn btn-primary">Apply Filters</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-2">
+            <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Total Tickets</h5>
+                    <h2 class="mb-0">@Model.TotalTicketsCount</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-warning text-dark">
+                <div class="card-body text-center">
+                    <h5 class="card-title">New</h5>
+                    <h2 class="mb-0">@Model.Stats.NewBOTsCount</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">In Progress</h5>
+                    <h2 class="mb-0">@Model.Stats.InProgressBOTsCount</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Ready</h5>
+                    <h2 class="mb-0">@Model.Stats.ReadyBOTsCount</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-secondary text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Pending Items</h5>
+                    <h2 class="mb-0">0</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-dark text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Avg Prep Time</h5>
+                    <h2 class="mb-0">@Model.Stats.AvgPrepTimeMinutes.ToString("F1") min</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tickets Table -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Ticket List</h5>
+            <div>
+                <a asp-action="ExportCsv" asp-controller="BOT" class="btn btn-outline-secondary btn-sm me-2" title="Export CSV">
+                    <i class="fas fa-file-csv"></i>
+                </a>
+                <a asp-action="PrintTickets" asp-controller="BOT" target="_blank" class="btn btn-outline-secondary btn-sm" title="Print / PDF">
+                    <i class="fas fa-print"></i>
+                </a>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0" id="ticketsTable">
+                    <thead>
+                        <tr>
+                            <th>Ticket #</th>
+                            <th>Order #</th>
+                            <th>Table</th>
+                            <th>Station</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Wait Time</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Tickets.Any())
+                        {
+                            foreach (var ticket in Model.Tickets)
+                            {
+                                <tr>
+                                    <td>@ticket.TicketNumber</td>
+                                    <td>@ticket.OrderNumber</td>
+                                    <td>@ticket.TableName</td>
+                                    <td>@ticket.StationName</td>
+                                    <td>
+                                        <span class="badge @(ticket.Status == 0 ? "bg-warning text-dark" : 
+                                                          ticket.Status == 1 ? "bg-info" : 
+                                                          ticket.Status == 2 ? "bg-success" : 
+                                                          ticket.Status == 3 ? "bg-secondary" : 
+                                                          "bg-danger")">
+                                            @ticket.StatusDisplay
+                                        </span>
+                                    </td>
+                                    <td>@ticket.CreatedAt.ToString("MM/dd/yyyy HH:mm")</td>
+                                    <td>
+                                        <span class="@(ticket.MinutesSinceCreated > 15 && ticket.Status < 3 ? "text-danger" : "")">
+                                            @ticket.MinutesSinceCreated min
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <a href="@Url.Action("TicketDetails", "Kitchen", new { id = ticket.Id })" class="btn btn-sm btn-primary">
+                                            <i class="fas fa-eye"></i> Details
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="8" class="text-center">No tickets found matching the selected filters</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            $('#ticketsTable').DataTable({
+                "order": [[5, "desc"]],
+                "pageLength": 25,
+                "columnDefs": [
+                    { "orderable": false, "targets": 7 }
+                ]
+            });
+        });
+    </script>
+}

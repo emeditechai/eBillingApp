@@ -130,6 +130,19 @@
                             </ul>
                         </li>
                         <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle text-white" href="#" id="barDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-cocktail compact-icon"></i> Bar
+                            </a>
+                            <ul class="dropdown-menu shadow-lg" aria-labelledby="barDropdown" style="border-top: 2px solid #7c3aed;">
+                                <li><a class="dropdown-item" asp-area="" asp-controller="BOT" asp-action="BarOrderDashboard"><i class="fas fa-tachometer-alt compact-icon text-primary"></i> Bar Order Dashboard</a></li>
+                                <li><a class="dropdown-item" asp-area="" asp-controller="BOT" asp-action="Dashboard"><i class="fas fa-th-large compact-icon text-primary"></i> BOT Dashboard</a></li>
+                                <li><a class="dropdown-item" asp-area="" asp-controller="BOT" asp-action="Tickets"><i class="fas fa-receipt compact-icon text-primary"></i> Bar Tickets</a></li>
+                                <li><a class="dropdown-item" asp-area="" asp-controller="BOT" asp-action="BarOrderCreate"><i class="fas fa-plus compact-icon text-primary"></i> Bar Order Create</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" asp-area="" asp-controller="BOT" asp-action="CheckSetup"><i class="fas fa-tools compact-icon text-warning"></i> Setup Check</a></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle text-white" href="#" id="onlineOrderDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="fas fa-globe compact-icon"></i> Online
                             </a>

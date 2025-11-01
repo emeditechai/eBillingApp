@@ -1,0 +1,216 @@
+@model CreateOrderViewModel
+@{
+    ViewData["Title"] = "Create Bar Order";
+}
+
+<div class="container py-5" style="background: linear-gradient(135deg, #f5f3ff 60%, #ede9fe 100%); min-height: 100vh;">
+    <div class="row justify-content-center">
+        <div class="col-lg-7 col-md-10">
+            <div class="card shadow-lg border-0 rounded-4">
+                <div class="card-header text-white d-flex align-items-center" style="background: linear-gradient(90deg, #9333ea 60%, #a855f7 100%); border-top-left-radius: 1rem; border-top-right-radius: 1rem;">
+                    <span class="me-2"><i class="fas fa-wine-glass-alt" style="font-size:2rem;"></i></span>
+                    <h4 class="mb-0 flex-grow-1">@ViewData["Title"]</h4>
+                    <a asp-controller="BOT" asp-action="Dashboard" class="btn btn-outline-light ms-auto"><i class="fas fa-arrow-left"></i></a>
+                </div>
+                <div class="card-body px-4 py-4" style="background: #fff; border-bottom-left-radius: 1rem; border-bottom-right-radius: 1rem;">
+                    @if (TempData["SuccessMessage"] != null)
+                    {
+                        <div class="alert alert-success">@TempData["SuccessMessage"]</div>
+                    }
+                    @if (!ViewData.ModelState.IsValid)
+                    {
+                        <div class="alert alert-danger">
+                            <strong>Please correct the errors below.</strong>
+                            <ul class="mb-0">
+                            @foreach (var entry in ViewData.ModelState)
+                            {
+                                foreach (var error in entry.Value.Errors)
+                                {
+                                    <li><b>@entry.Key</b>: @error.ErrorMessage</li>
+                                }
+                            }
+                            </ul>
+                        </div>
+                    }
+                    <form asp-controller="BOT" asp-action="BarOrderCreate" method="post" autocomplete="off">
+                        <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <div class="mb-2 text-secondary fw-bold" style="font-size:1.1rem;">Order Info</div>
+                                <label asp-for="OrderType" class="form-label">Order Type</label>
+                                <select asp-for="OrderType" class="form-select" id="orderType">
+                                    <option value="0">Dine-In</option>
+                                    <option value="1">Takeout</option>
+                                    <option value="2">Delivery</option>
+                                </select>
+                                <span asp-validation-for="OrderType" class="text-danger"></span>
+                                <div id="tableSection" class="mt-3">
+                                    <label asp-for="TableTurnoverId" class="form-label">Table (Primary)</label>
+                                    <div class="form-text mb-2">Select a primary table (or none). You can also merge multiple tables below.</div>
+                                    
+                                    @if (Model.SelectedTableId.HasValue)
+                                    {
+                                        <div class="alert alert-success">
+                                            <i class="fas fa-check-circle"></i> Table selected from dashboard: 
+                                            @(Model.AvailableTables.FirstOrDefault(t => t.Id == Model.SelectedTableId)?.TableName ?? "Unknown Table")
+                                        </div>
+                                        <input type="hidden" asp-for="SelectedTableId" />
+                                    }
+                                    else
+                                    {
+                                        <select asp-for="TableTurnoverId" class="form-select">
+                                            <option value="">-- No Table --</option>
+                                            @if (Model.AvailableTables.Any())
+                                            {
+                                                <optgroup label="Available Tables">
+                                                    @foreach (var table in Model.AvailableTables)
+                                                    {
+                                                        <option value="-@table.Id">@table.TableName (Available - seats @table.Capacity)</option>
+                                                    }
+                                                </optgroup>
+                                            }
+                                            @if (Model.OccupiedTables.Any())
+                                            {
+                                                <optgroup label="Seated Tables">
+                                                    @foreach (var table in Model.OccupiedTables)
+                                                    {
+                                                        <option value="@table.TurnoverId">@table.TableName - @table.GuestName (@table.PartySize guests)</option>
+                                                    }
+                                                </optgroup>
+                                            }
+                                        </select>
+                                    }
+                                    <span asp-validation-for="TableTurnoverId" class="text-danger"></span>
+                                    <div class="mt-3" id="mergeTablesWrapper">
+                                        <label class="form-label">Merge Additional Tables</label>
+                                        <div class="form-text mb-2">Check any extra tables to merge into this order (capacity combined).</div>
+                                        <div class="border rounded p-2" style="max-height:180px; overflow-y:auto; background:#fdfdfd;">
+                                            @if (Model.AvailableTables.Any())
+                                            {
+                                                <div class="fw-bold small text-uppercase text-secondary mb-1">Available</div>
+                                                @foreach (var table in Model.AvailableTables)
+                                                {
+                                                    <div class="form-check form-check-sm">
+                                                        <input class="form-check-input" type="checkbox" name="SelectedTableIds" value="@table.Id" id="merge_avail_@table.Id" />
+                                                        <label class="form-check-label" for="merge_avail_@table.Id">@table.TableName <span class="text-muted">(seats @table.Capacity)</span></label>
+                                                    </div>
+                                                }
+                                            }
+                                            @if (Model.OccupiedTables.Any())
+                                            {
+                                                <div class="fw-bold small text-uppercase text-secondary mt-2 mb-1">Seated</div>
+                                                @foreach (var table in Model.OccupiedTables)
+                                                {
+                                                    <div class="form-check form-check-sm">
+                                                        <input class="form-check-input" type="checkbox" name="SelectedTableIds" value="@table.TableId" id="merge_occ_@table.TableId" />
+                                                        <label class="form-check-label" for="merge_occ_@table.TableId">@table.TableName <span class="text-muted">(@table.GuestName, @table.PartySize guests)</span></label>
+                                                    </div>
+                                                }
+                                            }
+                                            @if (!Model.AvailableTables.Any() && !Model.OccupiedTables.Any())
+                                            {
+                                                <div class="text-muted small">No tables found.</div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="customerSection" class="mt-3 d-none">
+                                    <label asp-for="CustomerName" class="form-label">Customer Name</label>
+                                    <input asp-for="CustomerName" class="form-control" />
+                                    <span asp-validation-for="CustomerName" class="text-danger"></span>
+                                </div>
+                                <div id="phoneSection" class="mt-3 d-none">
+                                    <label asp-for="CustomerPhone" class="form-label">Customer Phone</label>
+                                    <input asp-for="CustomerPhone" class="form-control" />
+                                    <span asp-validation-for="CustomerPhone" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-2 text-secondary fw-bold" style="font-size:1.1rem;">Special Instructions</div>
+                                <label asp-for="SpecialInstructions" class="form-label">Instructions</label>
+                                <textarea asp-for="SpecialInstructions" class="form-control" rows="5" placeholder="E.g., Extra ice, specific brand request, serving preferences..."></textarea>
+                                <span asp-validation-for="SpecialInstructions" class="text-danger"></span>
+                                
+                                <div class="alert alert-info mt-3" style="background-color: #ede9fe; border-color: #a855f7;">
+                                    <i class="fas fa-info-circle text-purple"></i> 
+                                    <strong>Bar Orders:</strong> Once created, you can add bar items to this order. The system will automatically generate BOTs (Beverage Order Tickets) for bar items.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between mt-4">
+                            <a asp-controller="BOT" asp-action="Dashboard" class="btn btn-outline-secondary">Cancel</a>
+                            <button type="submit" class="btn px-4" style="background: linear-gradient(90deg, #9333ea 60%, #a855f7 100%); color: white;">
+                                <i class="fas fa-plus-circle"></i> Create Bar Order
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script>
+        $(function () {
+            function toggleTableSection() {
+                var orderType = $('#orderType').val();
+                if (orderType === '0') {
+                    $('#tableSection').removeClass('d-none');
+                    $('#customerSection, #phoneSection').addClass('d-none');
+                    $('#mergeTablesWrapper').removeClass('d-none');
+                } else {
+                    $('#tableSection').addClass('d-none');
+                    $('#customerSection, #phoneSection').removeClass('d-none');
+                    $('#mergeTablesWrapper').addClass('d-none');
+                }
+            }
+
+            function resolvePrimaryTableId() {
+                var hidden = $('input[name="SelectedTableId"]').val();
+                if (hidden) return hidden;
+                var dropdownVal = $('#TableTurnoverId').val();
+                if (!dropdownVal) return null;
+                if (dropdownVal.startsWith('-')) return dropdownVal.substring(1);
+                return dropdownVal; 
+            }
+
+            function updateMergeTableOptions() {
+                var $all = $('input[name="SelectedTableIds"]').prop('disabled', false).closest('.form-check').removeClass('text-muted');
+                var primaryId = resolvePrimaryTableId();
+                if (primaryId) {
+                    var $cb = $('input[name="SelectedTableIds"][value="' + primaryId + '"]');
+                    if ($cb.length) {
+                        $cb.prop('disabled', true).prop('checked', false).closest('.form-check').addClass('text-muted');
+                    }
+                }
+            }
+
+            $('#orderType').on('change', function(){ toggleTableSection(); updateMergeTableOptions(); });
+            $('#TableTurnoverId').on('change', updateMergeTableOptions);
+
+            $('form').on('submit', function(e){
+                if ($('#orderType').val() === '0') {
+                    var hasHidden = $('input[name="SelectedTableId"]').val();
+                    var dropdownVal = $('#TableTurnoverId').val();
+                    if (!hasHidden && (!dropdownVal || dropdownVal === '')) {
+                        e.preventDefault();
+                        $('.alert-danger.table-validation').remove();
+                        var alertHtml = '<div class="alert alert-danger alert-dismissible fade show table-validation" role="alert">' +
+                            '<i class="fas fa-exclamation-triangle me-2"></i><strong>Primary Table Required!</strong> Please select a primary table for Dine-In orders.' +
+                            '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+                        $('form .row').first().before(alertHtml);
+                        $('html, body').animate({ scrollTop: $(document).find('.alert-danger.table-validation').offset().top - 100 }, 400);
+                        $('#TableTurnoverId').focus();
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            toggleTableSection();
+            updateMergeTableOptions();
+        });
+    </script>
+}

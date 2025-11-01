@@ -1,0 +1,252 @@
+@model RestaurantManagementSystem.Models.BeverageOrderTicket
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>@Model.BOT_No</title>
+    <style>
+        @@media print {
+            @@page {
+                size: 80mm auto;
+                margin: 0mm;
+            }
+            body {
+                margin: 5mm;
+            }
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            font-size: 12pt;
+            max-width: 80mm;
+            margin: 0 auto;
+            padding: 5mm;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 2px dashed #000;
+            padding-bottom: 5mm;
+            margin-bottom: 5mm;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 18pt;
+            font-weight: bold;
+        }
+
+        .header h2 {
+            margin: 2mm 0;
+            font-size: 14pt;
+        }
+
+        .info-section {
+            margin-bottom: 5mm;
+            border-bottom: 1px dashed #000;
+            padding-bottom: 3mm;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 2mm 0;
+        }
+
+        .info-label {
+            font-weight: bold;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 5mm;
+        }
+
+        .items-table th {
+            text-align: left;
+            border-bottom: 2px solid #000;
+            padding: 2mm 0;
+            font-weight: bold;
+        }
+
+        .items-table td {
+            padding: 2mm 0;
+            border-bottom: 1px dotted #000;
+        }
+
+        .item-name {
+            font-weight: bold;
+        }
+
+        .alcoholic-badge {
+            background: #000;
+            color: #fff;
+            padding: 1mm 2mm;
+            font-size: 10pt;
+            border-radius: 2mm;
+        }
+
+        .special-instructions {
+            font-style: italic;
+            margin-left: 5mm;
+            color: #666;
+        }
+
+        .totals {
+            margin-top: 5mm;
+            border-top: 2px solid #000;
+            padding-top: 3mm;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 2mm 0;
+            font-size: 14pt;
+        }
+
+        .grand-total {
+            font-weight: bold;
+            font-size: 16pt;
+            border-top: 2px solid #000;
+            padding-top: 3mm;
+            margin-top: 3mm;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 10mm;
+            border-top: 2px dashed #000;
+            padding-top: 5mm;
+            font-size: 10pt;
+        }
+
+        .no-print {
+            text-align: center;
+            margin: 10mm 0;
+        }
+
+        @@media print {
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🍹 BEVERAGE ORDER TICKET</h1>
+        <h2>@Model.BOT_No</h2>
+    </div>
+
+    <div class="info-section">
+        <div class="info-row">
+            <span class="info-label">Order:</span>
+            <span>@Model.OrderNumber</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Table:</span>
+            <span>@(Model.TableName ?? "N/A")</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Guest:</span>
+            <span>@(Model.GuestName ?? "N/A")</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Server:</span>
+            <span>@(Model.ServerName ?? "N/A")</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Time:</span>
+            <span>@Model.CreatedAt.ToString("dd MMM yyyy HH:mm")</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Status:</span>
+            <span><strong>@Model.StatusDisplay</strong></span>
+        </div>
+    </div>
+
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th style="text-align: center;">Qty</th>
+                <th style="text-align: right;">Price</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model.Items != null && Model.Items.Any())
+            {
+                foreach (var item in Model.Items)
+                {
+                    <tr>
+                        <td>
+                            <div class="item-name">
+                                @item.MenuItemName
+                                @if (item.IsAlcoholic)
+                                {
+                                    <span class="alcoholic-badge">ALC</span>
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(item.SpecialInstructions))
+                            {
+                                <div class="special-instructions">
+                                    → @item.SpecialInstructions
+                                </div>
+                            }
+                        </td>
+                        <td style="text-align: center;"><strong>@item.Quantity</strong></td>
+                        <td style="text-align: right;">₹@item.Amount.ToString("N2")</td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+
+    <div class="totals">
+        <div class="total-row">
+            <span>Subtotal:</span>
+            <span>₹@Model.SubtotalAmount.ToString("N2")</span>
+        </div>
+        <div class="total-row">
+            <span>Tax:</span>
+            <span>₹@Model.TaxAmount.ToString("N2")</span>
+        </div>
+        <div class="total-row grand-total">
+            <span>TOTAL:</span>
+            <span>₹@Model.TotalAmount.ToString("N2")</span>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Printed: @DateTime.Now.ToString("dd MMM yyyy HH:mm:ss")</p>
+        <p><strong>BAR COPY</strong></p>
+        <p>─────────────────────────</p>
+        <p>Thank you!</p>
+    </div>
+
+    <div class="no-print">
+        <button onclick="window.print()" style="padding: 10px 30px; font-size: 14pt; cursor: pointer;">
+            🖨️ Print BOT
+        </button>
+        <button onclick="window.close()" style="padding: 10px 30px; font-size: 14pt; cursor: pointer; margin-left: 10px;">
+            ✖️ Close
+        </button>
+    </div>
+
+    <script>
+        // Auto-print when page loads
+        window.onload = function() {
+            // Small delay to ensure page is fully rendered
+            setTimeout(function() {
+                window.print();
+            }, 500);
+        };
+    </script>
+</body>
+</html>

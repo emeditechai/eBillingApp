@@ -621,6 +621,12 @@ namespace RestaurantManagementSystem.Controllers
                 .Select(g => g.OrderByDescending(s => s.UpdatedAt).First())
                 .ToList();
 
+            // Exclude BAR station from Kitchen views (BOT tickets are handled in the BOT dashboard)
+            deduped = deduped
+                .Where(s => !string.Equals((s.Name ?? string.Empty).Trim(), "BAR", StringComparison.OrdinalIgnoreCase)
+                          && !string.Equals((s.Name ?? string.Empty).Trim(), "Bar", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
             return deduped;
         }
         
@@ -694,7 +700,13 @@ namespace RestaurantManagementSystem.Controllers
                 }
             }
 
-            return tickets ?? new List<KitchenTicket>();
+            // Exclude BOT/BAR tickets from Kitchen dashboard
+            tickets = (tickets ?? new List<KitchenTicket>())
+                .Where(t => !(t?.TicketNumber?.StartsWith("BOT-", StringComparison.OrdinalIgnoreCase) ?? false)
+                            && !string.Equals((t?.StationName ?? string.Empty).Trim(), "BAR", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            return tickets;
         }
 
         // Best-effort fallback helper: find tickets that have at least one item for a specific station
@@ -780,7 +792,7 @@ namespace RestaurantManagementSystem.Controllers
                         {
                             tableName = GetTableNameForOrder(connection, (int)reader["OrderId"]);
                         }
-                        tickets.Add(new KitchenTicket
+                        var kt = new KitchenTicket
                         {
                             Id = (int)reader["Id"],
                             TicketNumber = reader["TicketNumber"].ToString(),
@@ -793,7 +805,15 @@ namespace RestaurantManagementSystem.Controllers
                             CreatedAt = (DateTime)reader["CreatedAt"],
                             CompletedAt = reader["CompletedAt"] as DateTime?,
                             MinutesSinceCreated = (int)reader["MinutesSinceCreated"]
-                        });
+                        };
+
+                        // Exclude BOT/BAR tickets
+                        bool isBarTicket = (kt.TicketNumber?.StartsWith("BOT-", StringComparison.OrdinalIgnoreCase) ?? false)
+                                           || string.Equals((kt.StationName ?? string.Empty).Trim(), "BAR", StringComparison.OrdinalIgnoreCase);
+                        if (!isBarTicket)
+                        {
+                            tickets.Add(kt);
+                        }
                     }
                 }
             }

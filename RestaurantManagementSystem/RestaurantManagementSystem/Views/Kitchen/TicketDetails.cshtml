@@ -8,7 +8,14 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="mb-0">Ticket #@Model.Ticket.TicketNumber</h1>
         <div>
-            <a href="@Url.Action("Dashboard", "Kitchen")" class="btn btn-outline-secondary me-2">
+            @{ 
+                var isBar = (Model?.Ticket?.TicketNumber?.StartsWith("BOT-", StringComparison.OrdinalIgnoreCase) ?? false)
+                            || string.Equals((Model?.Ticket?.StationName ?? string.Empty).Trim(), "BAR", StringComparison.OrdinalIgnoreCase);
+                var backUrl = isBar 
+                    ? Url.Action("Dashboard", "BOT") 
+                    : Url.Action("Dashboard", "Kitchen", new { stationId = Model?.Ticket?.KitchenStationId });
+            }
+            <a href="@backUrl" class="btn btn-outline-secondary me-2">
                 <i class="fas fa-arrow-left"></i> Back to Dashboard
             </a>
             @if (Model.CanUpdateStatus)

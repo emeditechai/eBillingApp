@@ -289,21 +289,93 @@ namespace RestaurantManagementSystem.Controllers
         }
         
         // Order Details
-        public IActionResult Details(int id)
+        public IActionResult Details(int id, bool fromBar = false)
         {
             var model = GetOrderDetails(id);
             if (model == null)
             {
                 return NotFound();
             }
-            // Populate available menu items for quick add
+            
+            // Store bar order flag in ViewBag for the view
+            ViewBag.IsBarOrder = fromBar || TempData["IsBarOrder"] as bool? == true;
+            
+            // Populate Menu Item Groups and items (default group = 1)
             model.AvailableMenuItems = new List<MenuItem>();
+            model.MenuItemGroups = new List<MenuItemGroup>();
             using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
             {
                 connection.Open();
-                using (var command = new Microsoft.Data.SqlClient.SqlCommand("SELECT Id, PLUCode, Name, Description, Price FROM MenuItems WHERE IsAvailable = 1 ORDER BY Name", connection))
+                // Load active groups
+                using (var gcmd = new Microsoft.Data.SqlClient.SqlCommand(@"IF OBJECT_ID('dbo.menuitemgroup','U') IS NOT NULL
+                    SELECT ID, itemgroup, is_active, CAST(GST_Perc AS decimal(12,2)) FROM dbo.menuitemgroup WHERE is_active = 1 ORDER BY itemgroup
+                    ELSE SELECT CAST(NULL AS int) AS ID, CAST(NULL AS varchar(20)) AS itemgroup, CAST(1 AS bit) AS is_active, CAST(NULL AS decimal(12,2)) AS GST_Perc WHERE 1=0", connection))
                 {
-                    using (var reader = command.ExecuteReader())
+                    using (var gr = gcmd.ExecuteReader())
+                    {
+                        while (gr.Read())
+                        {
+                            model.MenuItemGroups.Add(new MenuItemGroup
+                            {
+                                ID = gr.GetInt32(0),
+                                ItemGroup = gr.IsDBNull(1) ? string.Empty : gr.GetString(1),
+                                IsActive = gr.IsDBNull(2) ? true : gr.GetBoolean(2),
+                                GST_Perc = gr.IsDBNull(3) ? (decimal?)null : Convert.ToDecimal(gr[3])
+                            });
+                        }
+                    }
+                }
+
+                // Determine selected group based on order source
+                if (model.MenuItemGroups != null && model.MenuItemGroups.Count > 0)
+                {
+                    if (ViewBag.IsBarOrder)
+                    {
+                        // For bar orders, try to select "Bar" group first
+                        var barGroup = model.MenuItemGroups.FirstOrDefault(g => g.ItemGroup.Equals("Bar", StringComparison.OrdinalIgnoreCase));
+                        model.SelectedMenuItemGroupId = barGroup?.ID ?? model.MenuItemGroups.First().ID;
+                    }
+                    else
+                    {
+                        // For regular orders, try to select "Foods" group first, then fallback to group 1 or first active group
+                        var foodGroup = model.MenuItemGroups.FirstOrDefault(g => g.ItemGroup.Equals("Foods", StringComparison.OrdinalIgnoreCase));
+                        if (foodGroup != null)
+                        {
+                            model.SelectedMenuItemGroupId = foodGroup.ID;
+                        }
+                        else
+                        {
+                            model.SelectedMenuItemGroupId = model.MenuItemGroups.Any(g => g.ID == 1) ? 1 : model.MenuItemGroups.First().ID;
+                        }
+                    }
+                }
+                else
+                {
+                    model.SelectedMenuItemGroupId = 1; // safe default even if table missing
+                }
+
+                // Load available menu items filtered by group if column exists; else load all
+                var sql = @"DECLARE @hasCol bit = 0;
+                             IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.MenuItems') AND name = 'menuitemgroupID')
+                                SET @hasCol = 1;
+                             IF (@hasCol = 1)
+                             BEGIN
+                                SELECT Id, PLUCode, Name, Description, Price
+                                FROM dbo.MenuItems
+                                WHERE IsAvailable = 1 AND (menuitemgroupID = @GroupId)
+                                ORDER BY Name
+                             END
+                             ELSE
+                             BEGIN
+                                SELECT Id, PLUCode, Name, Description, Price
+                                FROM dbo.MenuItems
+                                WHERE IsAvailable = 1
+                                ORDER BY Name
+                             END";
+                using (var icmd = new Microsoft.Data.SqlClient.SqlCommand(sql, connection))
+                {
+                    icmd.Parameters.AddWithValue("@GroupId", model.SelectedMenuItemGroupId);
+                    using (var reader = icmd.ExecuteReader())
                     {
                         while (reader.Read())
                         {
@@ -320,6 +392,55 @@ namespace RestaurantManagementSystem.Controllers
                 }
             }
             return View(model);
+        }
+
+        [HttpGet]
+        public JsonResult GetMenuItemsByGroup(int groupId)
+        {
+            var items = new List<object>();
+            try
+            {
+                using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    var sql = @"DECLARE @hasCol bit = 0;
+                                 IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.MenuItems') AND name = 'menuitemgroupID')
+                                    SET @hasCol = 1;
+                                 IF (@hasCol = 1)
+                                 BEGIN
+                                    SELECT Id, PLUCode, Name, Price
+                                    FROM dbo.MenuItems
+                                    WHERE IsAvailable = 1 AND (menuitemgroupID = @GroupId)
+                                    ORDER BY Name
+                                 END
+                                 ELSE
+                                 BEGIN
+                                    SELECT Id, PLUCode, Name, Price
+                                    FROM dbo.MenuItems
+                                    WHERE IsAvailable = 1
+                                    ORDER BY Name
+                                 END";
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(sql, connection))
+                    {
+                        cmd.Parameters.AddWithValue("@GroupId", groupId);
+                        using (var r = cmd.ExecuteReader())
+                        {
+                            while (r.Read())
+                            {
+                                items.Add(new
+                                {
+                                    Id = r.GetInt32(0),
+                                    PLUCode = r.IsDBNull(1) ? null : r.GetString(1),
+                                    Name = r.GetString(2),
+                                    Price = r.GetDecimal(3)
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+            return Json(items);
         }
 
         // KOT Bill print view
@@ -934,7 +1055,6 @@ namespace RestaurantManagementSystem.Controllers
                         // First, let's create the kitchen ticket
                         // We'll use our own SQL instead of calling the stored procedure directly
                         // to handle table name differences
-                        string ticketNumber = null;
                         int kitchenTicketId = 0;
                         
                         try
@@ -944,20 +1064,45 @@ namespace RestaurantManagementSystem.Controllers
                             {
                                 try
                                 {
-                                    // Generate unique ticket number
-                                    string ticketNumberSql = @"
-                                        SELECT 'KOT-' + CONVERT(NVARCHAR(8), GETDATE(), 112) + '-' + 
+                                    // Get items to process
+                                    List<int> itemsToProcess = new List<int>();
+                                    
+                                    if (!model.FireAll && model.SelectedItems != null && model.SelectedItems.Any())
+                                    {
+                                        itemsToProcess = model.SelectedItems.ToList();
+                                    }
+                                    else
+                                    {
+                                        // Get all unfired items for this order
+                                        using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                            SELECT Id FROM OrderItems 
+                                            WHERE OrderId = @OrderId AND Status = 0", connection, transaction))
+                                        {
+                                            cmd.Parameters.AddWithValue("@OrderId", model.OrderId);
+                                            using (var reader = cmd.ExecuteReader())
+                                            {
+                                                while (reader.Read())
+                                                {
+                                                    itemsToProcess.Add(reader.GetInt32(0));
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Generate unique ticket number based on order type
+                                    // BOT for bar orders, KOT for kitchen/food orders
+                                    string ticketPrefix = model.IsBarOrder ? "BOT" : "KOT";
+                                    string ticketNumberSql = $@"
+                                        SELECT '{ticketPrefix}-' + CONVERT(NVARCHAR(8), GETDATE(), 112) + '-' + 
                                         RIGHT('0000' + CAST((SELECT ISNULL(MAX(CAST(RIGHT(TicketNumber, 4) AS INT)), 0) + 1 
                                                             FROM KitchenTickets 
-                                                            WHERE LEFT(TicketNumber, 12) = 'KOT-' + CONVERT(NVARCHAR(8), GETDATE(), 112)) AS NVARCHAR(4)), 4)
+                                                            WHERE LEFT(TicketNumber, 12) = '{ticketPrefix}-' + CONVERT(NVARCHAR(8), GETDATE(), 112)) AS NVARCHAR(4)), 4)
                                     ";
                                     
-                                    
-                                    
+                                    string ticketNumber = null;
                                     using (Microsoft.Data.SqlClient.SqlCommand cmd = new Microsoft.Data.SqlClient.SqlCommand(ticketNumberSql, connection, transaction))
                                     {
                                         ticketNumber = (string)cmd.ExecuteScalar();
-                                        
                                     }
                                     
                                     // First check the structure of KitchenTickets table
@@ -1009,23 +1154,41 @@ namespace RestaurantManagementSystem.Controllers
                                     }
                                     
                                     // Now include the OrderNumber in our insert
-                                    string insertKitchenTicketSql = @"
-                                        INSERT INTO [KitchenTickets] (
-                                            [TicketNumber],
-                                            [OrderId],
-                                            [OrderNumber],
-                                            [Status],
-                                            [CreatedAt]
-                                        ) VALUES (
-                                            @TicketNumber,
-                                            @OrderId,
-                                            @OrderNumber,
-                                            0,
-                                            GETDATE()
-                                        );
-                                        SELECT SCOPE_IDENTITY();";
+                                    // Add KitchenStation column support for BAR vs KITCHEN
+                                    bool hasKitchenStationColumn = ColumnExistsInTable("KitchenTickets", "KitchenStation");
+                                    string kitchenStation = model.IsBarOrder ? "BAR" : "KITCHEN";
                                     
-                                    
+                                    string insertKitchenTicketSql = hasKitchenStationColumn
+                                        ? @"INSERT INTO [KitchenTickets] (
+                                                [TicketNumber],
+                                                [OrderId],
+                                                [OrderNumber],
+                                                [KitchenStation],
+                                                [Status],
+                                                [CreatedAt]
+                                            ) VALUES (
+                                                @TicketNumber,
+                                                @OrderId,
+                                                @OrderNumber,
+                                                @KitchenStation,
+                                                0,
+                                                GETDATE()
+                                            );
+                                            SELECT SCOPE_IDENTITY();"
+                                        : @"INSERT INTO [KitchenTickets] (
+                                                [TicketNumber],
+                                                [OrderId],
+                                                [OrderNumber],
+                                                [Status],
+                                                [CreatedAt]
+                                            ) VALUES (
+                                                @TicketNumber,
+                                                @OrderId,
+                                                @OrderNumber,
+                                                0,
+                                                GETDATE()
+                                            );
+                                            SELECT SCOPE_IDENTITY();";
                                     
                                     // Create kitchen ticket
                                     using (Microsoft.Data.SqlClient.SqlCommand cmd = new Microsoft.Data.SqlClient.SqlCommand(insertKitchenTicketSql, connection, transaction))
@@ -1033,132 +1196,82 @@ namespace RestaurantManagementSystem.Controllers
                                         cmd.Parameters.AddWithValue("@TicketNumber", ticketNumber);
                                         cmd.Parameters.AddWithValue("@OrderId", model.OrderId);
                                         cmd.Parameters.AddWithValue("@OrderNumber", orderNumber);
+                                        if (hasKitchenStationColumn)
+                                        {
+                                            cmd.Parameters.AddWithValue("@KitchenStation", kitchenStation);
+                                        }
                                         kitchenTicketId = Convert.ToInt32(cmd.ExecuteScalar());
-                                        
                                     }
                                     
                                     // Update order items and add them to kitchen ticket items
-                                    if (!model.FireAll && model.SelectedItems != null && model.SelectedItems.Any())
-                                    {
-                                        // Update selected order items
-                                        foreach (int itemId in model.SelectedItems)
-                                        {
-                                            // Check if OrderItems table has UpdatedAt column
-                                            bool hasItemUpdatedAtColumn = ColumnExistsInTable("OrderItems", "UpdatedAt");
-                                            
-                                            // Build SQL based on column existence
-                                            string updateItemSql = hasItemUpdatedAtColumn
-                                                ? @"UPDATE [OrderItems]
-                                                    SET [Status] = 1,
-                                                        [FireTime] = GETDATE(),
-                                                        [UpdatedAt] = GETDATE()
-                                                    WHERE [Id] = @ItemId AND [OrderId] = @OrderId AND [Status] = 0;"
-                                                : @"UPDATE [OrderItems]
-                                                    SET [Status] = 1,
-                                                        [FireTime] = GETDATE()
-                                                    WHERE [Id] = @ItemId AND [OrderId] = @OrderId AND [Status] = 0;";
-                                            
-                                            using (Microsoft.Data.SqlClient.SqlCommand cmd = new Microsoft.Data.SqlClient.SqlCommand(updateItemSql, connection, transaction))
-                                            {
-                                                cmd.Parameters.AddWithValue("@ItemId", itemId);
-                                                cmd.Parameters.AddWithValue("@OrderId", model.OrderId);
-                                                cmd.ExecuteNonQuery();
-                                            }
-                                            
-                                            // Get the menu item name
-                                            string menuItemName = null;
-                                            using (Microsoft.Data.SqlClient.SqlCommand menuItemCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
-                                                SELECT mi.Name
-                                                FROM OrderItems oi
-                                                INNER JOIN MenuItems mi ON oi.MenuItemId = mi.Id
-                                                WHERE oi.Id = @ItemId
-                                            ", connection, transaction))
-                                            {
-                                                menuItemCmd.Parameters.AddWithValue("@ItemId", itemId);
-                                                object result = menuItemCmd.ExecuteScalar();
-                                                if (result != null)
-                                                {
-                                                    menuItemName = result.ToString();
-                                                    
-                                                }
-                                                else
-                                                {
-                                                    // Use a default value if we can't find the name
-                                                    menuItemName = "Unknown Item";
-                                                    
-                                                }
-                                            }
-                                            
-                                            // Add to kitchen ticket items with the menu item name
-                                            using (Microsoft.Data.SqlClient.SqlCommand cmd = new Microsoft.Data.SqlClient.SqlCommand($@"
-                                                INSERT INTO [{kitchenTicketItemsTableName}] (
-                                                    [KitchenTicketId], 
-                                                    [OrderItemId], 
-                                                    [MenuItemName],
-                                                    [Status]
-                                                ) VALUES (
-                                                    @KitchenTicketId, 
-                                                    @OrderItemId, 
-                                                    @MenuItemName,
-                                                    0
-                                                );
-                                            ", connection, transaction))
-                                            {
-                                                cmd.Parameters.AddWithValue("@KitchenTicketId", kitchenTicketId);
-                                                cmd.Parameters.AddWithValue("@OrderItemId", itemId);
-                                                cmd.Parameters.AddWithValue("@MenuItemName", menuItemName);
-                                                cmd.ExecuteNonQuery();
-                                                
-                                            }
-                                        }
-                                    }
-                                    else
+                                    // Note: Only processing food items now (bar items already handled by BOT)
+                                    foreach (int itemId in itemsToProcess)
                                     {
                                         // Check if OrderItems table has UpdatedAt column
                                         bool hasItemUpdatedAtColumn = ColumnExistsInTable("OrderItems", "UpdatedAt");
                                         
                                         // Build SQL based on column existence
-                                        string updateAllItemsSql = hasItemUpdatedAtColumn
-                                            ? @"UPDATE oi
-                                                SET oi.[Status] = 1,
-                                                    oi.[FireTime] = GETDATE(),
-                                                    oi.[UpdatedAt] = GETDATE()
-                                                FROM [OrderItems] oi
-                                                WHERE oi.[OrderId] = @OrderId AND oi.[Status] = 0;"
-                                            : @"UPDATE oi
-                                                SET oi.[Status] = 1,
-                                                    oi.[FireTime] = GETDATE()
-                                                FROM [OrderItems] oi
-                                                WHERE oi.[OrderId] = @OrderId AND oi.[Status] = 0;";
+                                        string updateItemSql = hasItemUpdatedAtColumn
+                                            ? @"UPDATE [OrderItems]
+                                                SET [Status] = 1,
+                                                    [FireTime] = GETDATE(),
+                                                    [UpdatedAt] = GETDATE()
+                                                WHERE [Id] = @ItemId AND [OrderId] = @OrderId AND [Status] = 0;"
+                                            : @"UPDATE [OrderItems]
+                                                SET [Status] = 1,
+                                                    [FireTime] = GETDATE()
+                                                WHERE [Id] = @ItemId AND [OrderId] = @OrderId AND [Status] = 0;";
                                         
-                                        // Update all unfired order items
-                                        using (Microsoft.Data.SqlClient.SqlCommand cmd = new Microsoft.Data.SqlClient.SqlCommand(updateAllItemsSql, connection, transaction))
+                                        using (Microsoft.Data.SqlClient.SqlCommand cmd = new Microsoft.Data.SqlClient.SqlCommand(updateItemSql, connection, transaction))
                                         {
+                                            cmd.Parameters.AddWithValue("@ItemId", itemId);
                                             cmd.Parameters.AddWithValue("@OrderId", model.OrderId);
                                             cmd.ExecuteNonQuery();
                                         }
                                         
-                                        // Add all newly fired items to kitchen ticket items including menu item names
+                                        // Get the menu item name
+                                        string menuItemName = null;
+                                        using (Microsoft.Data.SqlClient.SqlCommand menuItemCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                            SELECT mi.Name
+                                            FROM OrderItems oi
+                                            INNER JOIN MenuItems mi ON oi.MenuItemId = mi.Id
+                                            WHERE oi.Id = @ItemId
+                                        ", connection, transaction))
+                                        {
+                                            menuItemCmd.Parameters.AddWithValue("@ItemId", itemId);
+                                            object result = menuItemCmd.ExecuteScalar();
+                                            if (result != null)
+                                            {
+                                                menuItemName = result.ToString();
+                                                
+                                            }
+                                            else
+                                            {
+                                                // Use a default value if we can't find the name
+                                                menuItemName = "Unknown Item";
+                                                
+                                            }
+                                        }
+                                        
+                                        // Add to kitchen ticket items with the menu item name
                                         using (Microsoft.Data.SqlClient.SqlCommand cmd = new Microsoft.Data.SqlClient.SqlCommand($@"
                                             INSERT INTO [{kitchenTicketItemsTableName}] (
                                                 [KitchenTicketId], 
                                                 [OrderItemId], 
                                                 [MenuItemName],
                                                 [Status]
-                                            )
-                                            SELECT 
+                                            ) VALUES (
                                                 @KitchenTicketId, 
-                                                oi.[Id], 
-                                                mi.[Name],
+                                                @OrderItemId, 
+                                                @MenuItemName,
                                                 0
-                                            FROM [OrderItems] oi
-                                            INNER JOIN [MenuItems] mi ON oi.[MenuItemId] = mi.[Id]
-                                            WHERE oi.[OrderId] = @OrderId AND oi.[Status] = 1;
+                                            );
                                         ", connection, transaction))
                                         {
                                             cmd.Parameters.AddWithValue("@KitchenTicketId", kitchenTicketId);
-                                            cmd.Parameters.AddWithValue("@OrderId", model.OrderId);
-                                            int rowsAffected = cmd.ExecuteNonQuery();
+                                            cmd.Parameters.AddWithValue("@OrderItemId", itemId);
+                                            cmd.Parameters.AddWithValue("@MenuItemName", menuItemName);
+                                            cmd.ExecuteNonQuery();
                                             
                                         }
                                     }
@@ -1186,14 +1299,25 @@ namespace RestaurantManagementSystem.Controllers
                                     // Commit the transaction
                                     transaction.Commit();
                                     
+                                    // Build success message based on order type
+                                    string successMsg = "";
                                     if (kitchenTicketId > 0)
                                     {
-                                        TempData["SuccessMessage"] = $"Items fired to kitchen successfully. Ticket #{ticketNumber} created.";
+                                        if (model.IsBarOrder)
+                                        {
+                                            successMsg = $"Items sent to bar successfully. BOT #{ticketNumber} created.";
+                                        }
+                                        else
+                                        {
+                                            successMsg = $"Items fired to kitchen successfully. KOT #{ticketNumber} created.";
+                                        }
                                     }
                                     else
                                     {
-                                        TempData["ErrorMessage"] = "Failed to create kitchen ticket.";
+                                        successMsg = "Failed to create ticket.";
                                     }
+                                    
+                                    TempData["SuccessMessage"] = successMsg;
                                 }
                                 catch (Exception ex)
                                 {
@@ -1228,7 +1352,7 @@ namespace RestaurantManagementSystem.Controllers
         }
         
         // Cancel Entire Order
-        public IActionResult CancelOrder(int id)
+        public IActionResult CancelOrder(int id, string? returnUrl = null)
         {
             try
             {
@@ -1248,19 +1372,19 @@ namespace RestaurantManagementSystem.Controllers
                         if (status == null)
                         {
                             TempData["ErrorMessage"] = "Order not found.";
-                            return RedirectToAction("Dashboard");
+                            return SafeRedirectTo(returnUrl, nameof(Dashboard));
                         }
 
                         if (status == 3) // If already completed
                         {
                             TempData["ErrorMessage"] = "Cannot cancel order that has already been completed.";
-                            return RedirectToAction("Dashboard");
+                            return SafeRedirectTo(returnUrl, nameof(Dashboard));
                         }
                         
                         if (status == 4) // If already cancelled
                         {
                             TempData["ErrorMessage"] = "This order has already been cancelled.";
-                            return RedirectToAction("Dashboard");
+                            return SafeRedirectTo(returnUrl, nameof(Dashboard));
                         }
                     }
 
@@ -1334,7 +1458,17 @@ namespace RestaurantManagementSystem.Controllers
                 TempData["ErrorMessage"] = "Error cancelling order: " + ex.Message;
             }
 
-            return RedirectToAction("Dashboard");
+            return SafeRedirectTo(returnUrl, nameof(Dashboard));
+        }
+
+        // Helper: redirect to a local returnUrl if provided, else to a controller action
+        private IActionResult SafeRedirectTo(string? returnUrl, string fallbackAction)
+        {
+            if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return LocalRedirect(returnUrl);
+            }
+            return RedirectToAction(fallbackAction);
         }
 
         // Cancel Order Item
@@ -2862,6 +2996,225 @@ namespace RestaurantManagementSystem.Controllers
             return turnoverId;
         }
         
+        #region BOT (Beverage Order Ticket) Helper Methods
+
+        /// <summary>
+        /// Create BOT for beverage items
+        /// </summary>
+        private int CreateBOT(int orderId, List<int> barItemIds, Microsoft.Data.SqlClient.SqlConnection connection, Microsoft.Data.SqlClient.SqlTransaction transaction)
+        {
+            try
+            {
+                // Get next BOT number
+                string botNumber = null;
+                using (var cmd = new Microsoft.Data.SqlClient.SqlCommand("GetNextBOTNumber", connection, transaction))
+                {
+                    cmd.CommandType = System.Data.CommandType.StoredProcedure;
+                    botNumber = (string)cmd.ExecuteScalar();
+                }
+
+                // Get order details
+                string orderNumber = null, tableName = null, guestName = null, serverName = null;
+                using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    SELECT o.OrderNumber, t.Name as TableName, o.GuestName, u.UserName as ServerName
+                    FROM Orders o
+                    LEFT JOIN Tables t ON o.TableId = t.Id
+                    LEFT JOIN AspNetUsers u ON o.UserId = u.Id
+                    WHERE o.Id = @OrderId", connection, transaction))
+                {
+                    cmd.Parameters.AddWithValue("@OrderId", orderId);
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            orderNumber = reader.IsDBNull(0) ? null : reader.GetString(0);
+                            tableName = reader.IsDBNull(1) ? null : reader.GetString(1);
+                            guestName = reader.IsDBNull(2) ? null : reader.GetString(2);
+                            serverName = reader.IsDBNull(3) ? null : reader.GetString(3);
+                        }
+                    }
+                }
+
+                // Calculate totals for BOT items
+                decimal subtotal = 0, taxAmount = 0, totalAmount = 0;
+                using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    SELECT SUM(oi.Quantity * oi.Price) as Subtotal,
+                           SUM(oi.Quantity * oi.Price * ISNULL(mi.GST_Perc, 0) / 100) as TaxAmount
+                    FROM OrderItems oi
+                    INNER JOIN MenuItems mi ON oi.MenuItemId = mi.Id
+                    WHERE oi.Id IN (" + string.Join(",", barItemIds) + ")", connection, transaction))
+                {
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            subtotal = reader.IsDBNull(0) ? 0 : reader.GetDecimal(0);
+                            taxAmount = reader.IsDBNull(1) ? 0 : reader.GetDecimal(1);
+                            totalAmount = subtotal + taxAmount;
+                        }
+                    }
+                }
+
+                // Insert BOT Header with KitchenStation
+                int botId = 0;
+                
+                // Check if KitchenStation column exists in BOT_Header
+                bool hasKitchenStationColumn = false;
+                using (var checkCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    SELECT CASE WHEN EXISTS (
+                        SELECT 1 FROM sys.columns 
+                        WHERE object_id = OBJECT_ID('dbo.BOT_Header') AND name = 'KitchenStation'
+                    ) THEN 1 ELSE 0 END", connection, transaction))
+                {
+                    hasKitchenStationColumn = (int)checkCmd.ExecuteScalar() == 1;
+                }
+                
+                string insertSql = hasKitchenStationColumn
+                    ? @"INSERT INTO BOT_Header (BOT_No, OrderId, OrderNumber, TableName, GuestName, ServerName, 
+                                           KitchenStation, Status, SubtotalAmount, TaxAmount, TotalAmount, 
+                                           CreatedAt, CreatedBy, UpdatedAt, UpdatedBy)
+                        VALUES (@BOT_No, @OrderId, @OrderNumber, @TableName, @GuestName, @ServerName,
+                                'BAR', 0, @Subtotal, @Tax, @Total,
+                                GETDATE(), @CreatedBy, GETDATE(), @UpdatedBy);
+                        SELECT SCOPE_IDENTITY();"
+                    : @"INSERT INTO BOT_Header (BOT_No, OrderId, OrderNumber, TableName, GuestName, ServerName, 
+                                           Status, SubtotalAmount, TaxAmount, TotalAmount, 
+                                           CreatedAt, CreatedBy, UpdatedAt, UpdatedBy)
+                        VALUES (@BOT_No, @OrderId, @OrderNumber, @TableName, @GuestName, @ServerName,
+                                0, @Subtotal, @Tax, @Total,
+                                GETDATE(), @CreatedBy, GETDATE(), @UpdatedBy);
+                        SELECT SCOPE_IDENTITY();";
+                
+                using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(insertSql, connection, transaction))
+                {
+                    cmd.Parameters.AddWithValue("@BOT_No", botNumber);
+                    cmd.Parameters.AddWithValue("@OrderId", orderId);
+                    cmd.Parameters.AddWithValue("@OrderNumber", orderNumber ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@TableName", tableName ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@GuestName", guestName ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@ServerName", serverName ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@Subtotal", subtotal);
+                    cmd.Parameters.AddWithValue("@Tax", taxAmount);
+                    cmd.Parameters.AddWithValue("@Total", totalAmount);
+                    cmd.Parameters.AddWithValue("@CreatedBy", User.Identity?.Name ?? "System");
+                    cmd.Parameters.AddWithValue("@UpdatedBy", User.Identity?.Name ?? "System");
+                    
+                    botId = Convert.ToInt32(cmd.ExecuteScalar());
+                }
+
+                // Insert BOT Detail items
+                foreach (int itemId in barItemIds)
+                {
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        INSERT INTO BOT_Detail (BOT_ID, OrderItemId, MenuItemId, MenuItemName, Quantity, 
+                                               UnitPrice, Amount, TaxRate, TaxAmount, IsAlcoholic, 
+                                               SpecialInstructions, Status)
+                        SELECT @BOT_ID, oi.Id, oi.MenuItemId, mi.Name, oi.Quantity,
+                               oi.Price, oi.Quantity * oi.Price, ISNULL(mi.GST_Perc, 0),
+                               oi.Quantity * oi.Price * ISNULL(mi.GST_Perc, 0) / 100,
+                               ISNULL(mi.IsAlcoholic, 0), oi.SpecialInstructions, 0
+                        FROM OrderItems oi
+                        INNER JOIN MenuItems mi ON oi.MenuItemId = mi.Id
+                        WHERE oi.Id = @ItemId", connection, transaction))
+                    {
+                        cmd.Parameters.AddWithValue("@BOT_ID", botId);
+                        cmd.Parameters.AddWithValue("@ItemId", itemId);
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+
+                // Log audit
+                using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    INSERT INTO BOT_Audit (BOT_ID, BOT_No, Action, NewStatus, UserName, Timestamp)
+                    VALUES (@BOT_ID, @BOT_No, 'CREATE', 0, @UserName, GETDATE())", connection, transaction))
+                {
+                    cmd.Parameters.AddWithValue("@BOT_ID", botId);
+                    cmd.Parameters.AddWithValue("@BOT_No", botNumber);
+                    cmd.Parameters.AddWithValue("@UserName", User.Identity?.Name ?? "System");
+                    cmd.ExecuteNonQuery();
+                }
+
+                return botId;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Failed to create BOT: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Get "Bar" menu item group ID
+        /// </summary>
+        private int? GetBarMenuItemGroupId(Microsoft.Data.SqlClient.SqlConnection connection, Microsoft.Data.SqlClient.SqlTransaction transaction)
+        {
+            try
+            {
+                using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    SELECT ID FROM menuitemgroup 
+                    WHERE itemgroup = 'Bar' AND is_active = 1", connection, transaction))
+                {
+                    var result = cmd.ExecuteScalar();
+                    return result != null ? Convert.ToInt32(result) : (int?)null;
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Classify order items as Bar (BOT) or Food (KOT)
+        /// </summary>
+        private (List<int> barItems, List<int> foodItems) ClassifyOrderItems(List<int> itemIds, Microsoft.Data.SqlClient.SqlConnection connection, Microsoft.Data.SqlClient.SqlTransaction transaction)
+        {
+            var barItems = new List<int>();
+            var foodItems = new List<int>();
+
+            int? barGroupId = GetBarMenuItemGroupId(connection, transaction);
+            if (!barGroupId.HasValue)
+            {
+                // If no Bar group exists, all items are food
+                foodItems.AddRange(itemIds);
+                return (barItems, foodItems);
+            }
+
+            foreach (int itemId in itemIds)
+            {
+                using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    SELECT mi.menuitemgroupID
+                    FROM OrderItems oi
+                    INNER JOIN MenuItems mi ON oi.MenuItemId = mi.Id
+                    WHERE oi.Id = @ItemId", connection, transaction))
+                {
+                    cmd.Parameters.AddWithValue("@ItemId", itemId);
+                    var result = cmd.ExecuteScalar();
+                    
+                    if (result != null && result != DBNull.Value)
+                    {
+                        int groupId = Convert.ToInt32(result);
+                        if (groupId == barGroupId.Value)
+                        {
+                            barItems.Add(itemId);
+                        }
+                        else
+                        {
+                            foodItems.Add(itemId);
+                        }
+                    }
+                    else
+                    {
+                        // No group assigned, treat as food
+                        foodItems.Add(itemId);
+                    }
+                }
+            }
+
+            return (barItems, foodItems);
+        }
+
+        #endregion
+
         // Menu Items & Estimation Page  
         public IActionResult Estimation()
         {
