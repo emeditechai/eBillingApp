@@ -509,8 +509,10 @@
                 return Math.round(val * 100) / 100;
             }
             function roundHalfUp(val) {
-                // 0 decimals, away-from-zero
-                return (val >= 0) ? Math.round(val + 0.5) : -Math.round(-val + 0.5);
+                // Nearest rupee, half-away-from-zero.
+                // Correct behavior: integers remain unchanged; .5 goes to next magnitude.
+                if (!isFinite(val)) return 0;
+                return (val >= 0) ? Math.floor(val + 0.5) : Math.ceil(val - 0.5);
             }
             function currentType() { return (typePercent && typePercent.checked) ? 'percent' : 'amount'; }
             function clamp(n, min, max) { return Math.min(Math.max(n, min), max); }

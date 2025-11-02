@@ -449,7 +449,11 @@
             // Consistent rounding helpers (match Payment/Index page)
             function roundMoney(val) { return Math.round((val + (val >= 0 ? 0.0000001 : -0.0000001)) * 100) / 100; }
             function roundAway(val, digits) { const m = Math.pow(10, digits); return Math.round(val * m + (val >= 0 ? 0.0000001 : -0.0000001)) / m; }
-            function roundHalfUp(val) { return (val >= 0) ? Math.round(val + 0.5) : -Math.round(-val + 0.5); }
+            function roundHalfUp(val) {
+                // Nearest rupee, half-away-from-zero. Integers remain unchanged.
+                if (!isFinite(val)) return 0;
+                return (val >= 0) ? Math.floor(val + 0.5) : Math.ceil(val - 0.5);
+            }
 
             // Recompute totals from Subtotal -> Discount -> GST -> Tip; then compute remaining by subtracting paid
             function updatePaymentSummary() {
