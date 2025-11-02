@@ -17,28 +17,32 @@ BEGIN
     ELSE IF @StartDate IS NULL SET @StartDate = @EndDate;
     ELSE IF @EndDate IS NULL SET @EndDate = @StartDate;
 
-    IF OBJECT_ID('tempdb..#PaymentCTE') IS NOT NULL DROP TABLE #PaymentCTE;
-
+    -- Aggregate payments by order to handle split payments correctly
+    -- Multiple payment rows per order should be treated as one invoice
+    IF OBJECT_ID('tempdb..#OrderGST') IS NOT NULL DROP TABLE #OrderGST;
+    
     SELECT 
-        p.Id,
-        p.CreatedAt,
-        p.OrderId,
+        o.Id AS OrderId,
         o.OrderNumber,
-        (p.Amount_ExclGST - ISNULL(p.DiscAmount,0)) AS TaxableValue,
-        ISNULL(p.DiscAmount,0) AS DiscountAmount,
-        ISNULL(p.CGST_Perc,0) AS CGSTPerc,
-        ISNULL(p.CGSTAmount,0) AS CGSTAmount,
-        ISNULL(p.SGST_Perc,0) AS SGSTPerc,
-        ISNULL(p.SGSTAmount,0) AS SGSTAmount,
-        ISNULL(p.CGSTAmount,0) + ISNULL(p.SGSTAmount,0) AS TotalGST,
-        (p.Amount_ExclGST - ISNULL(p.DiscAmount,0)) + (ISNULL(p.CGSTAmount,0) + ISNULL(p.SGSTAmount,0)) AS InvoiceTotal
-    INTO #PaymentCTE
-    FROM Payments p
-    INNER JOIN Orders o ON p.OrderId = o.Id
+        MIN(p.CreatedAt) AS PaymentDate,
+        -- Sum amounts across all payment lines for this order
+        SUM(p.Amount_ExclGST) - SUM(ISNULL(p.DiscAmount,0)) AS TaxableValue,
+        SUM(ISNULL(p.DiscAmount,0)) AS DiscountAmount,
+        -- Use MAX for percentages (should be same across all lines for an order)
+        MAX(ISNULL(p.CGST_Perc,0)) AS CGSTPerc,
+        SUM(ISNULL(p.CGSTAmount,0)) AS CGSTAmount,
+        MAX(ISNULL(p.SGST_Perc,0)) AS SGSTPerc,
+        SUM(ISNULL(p.SGSTAmount,0)) AS SGSTAmount,
+        SUM(ISNULL(p.CGSTAmount,0)) + SUM(ISNULL(p.SGSTAmount,0)) AS TotalGST,
+        SUM(p.Amount_ExclGST) - SUM(ISNULL(p.DiscAmount,0)) + (SUM(ISNULL(p.CGSTAmount,0)) + SUM(ISNULL(p.SGSTAmount,0))) AS InvoiceTotal
+    INTO #OrderGST
+    FROM Orders o
+    INNER JOIN Payments p ON o.Id = p.OrderId
     WHERE CAST(p.CreatedAt AS DATE) BETWEEN @StartDate AND @EndDate
-      AND p.Status = 1; -- Only completed / paid
+      AND p.Status = 1 -- Only approved/completed payments
+    GROUP BY o.Id, o.OrderNumber;
 
-    -- Summary
+    -- Summary: One row per order (invoice)
     SELECT 
         COUNT(*) AS InvoiceCount,
         SUM(TaxableValue) AS TotalTaxableValue,
@@ -48,22 +52,23 @@ BEGIN
         SUM(InvoiceTotal) AS NetAmount,
         CASE WHEN COUNT(*) > 0 THEN SUM(TaxableValue) / COUNT(*) ELSE 0 END AS AverageTaxablePerInvoice,
         CASE WHEN COUNT(*) > 0 THEN (SUM(CGSTAmount)+SUM(SGSTAmount)) / COUNT(*) ELSE 0 END AS AverageGSTPerInvoice
-    FROM #PaymentCTE;
+    FROM #OrderGST;
 
-    -- Detail rows (grouped per order)
+    -- Detail rows: One row per order (already aggregated in temp table)
     SELECT 
-        MIN(CreatedAt) AS PaymentDate,
+        PaymentDate,
         OrderNumber,
-        SUM(TaxableValue) AS TaxableValue,
-        SUM(DiscountAmount) AS DiscountAmount,
-        MAX(CGSTPerc) AS CGSTPercentage,
-        SUM(CGSTAmount) AS CGSTAmount,
-        MAX(SGSTPerc) AS SGSTPercentage,
-        SUM(SGSTAmount) AS SGSTAmount,
-        SUM(TotalGST) AS TotalGST,
-        SUM(InvoiceTotal) AS InvoiceTotal
-    FROM #PaymentCTE
-    GROUP BY OrderNumber
-    ORDER BY MIN(CreatedAt) ASC;
+        TaxableValue,
+        DiscountAmount,
+        CGSTPerc AS CGSTPercentage,
+        CGSTAmount,
+        SGSTPerc AS SGSTPercentage,
+        SGSTAmount,
+        TotalGST,
+        InvoiceTotal
+    FROM #OrderGST
+    ORDER BY PaymentDate ASC, OrderNumber ASC;
+    
+    DROP TABLE #OrderGST;
 END
 GO
