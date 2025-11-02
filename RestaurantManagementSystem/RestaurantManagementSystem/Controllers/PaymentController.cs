@@ -1054,7 +1054,8 @@ END", connection))
                             DECLARE @NetSubtotal DECIMAL(18,2) = @CurrentSubtotal - @NewDiscountAmount;
                             IF @NetSubtotal < 0 SET @NetSubtotal = 0;
                             DECLARE @NewGSTAmount DECIMAL(18,2) = ROUND(@NetSubtotal * @GSTPerc / 100, 2);
-                            DECLARE @NewTotalAmount DECIMAL(18,2) = @NetSubtotal + @NewGSTAmount + @CurrentTipAmount;
+                            -- Round total amount to match split payment rounding logic (round to nearest rupee)
+                            DECLARE @NewTotalAmount DECIMAL(18,2) = ROUND(@NetSubtotal + @NewGSTAmount + @CurrentTipAmount, 0);
 
                             UPDATE Orders 
                             SET DiscountAmount = @NewDiscountAmount, 
@@ -1208,25 +1209,41 @@ END", connection))
 
                             // Finalize order completion and persist aggregate roundoff
                             using (var finalCmd = new SqlCommand(@"
-                                DECLARE @ApprovedSum DECIMAL(18,2) = ISNULL((SELECT SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId AND Status = 1), 0);
-                                DECLARE @PendingSum DECIMAL(18,2) = ISNULL((SELECT SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId AND Status = 0), 0);
+                                DECLARE @TotalPaid DECIMAL(18,2) = ISNULL((SELECT SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId), 0);
                                 DECLARE @OrderTotal DECIMAL(18,2) = ISNULL((SELECT TotalAmount FROM Orders WHERE Id = @OrderId), 0);
+                                DECLARE @RowsUpdated INT = 0;
 
-                                IF @ApprovedSum >= @OrderTotal - 0.05
+                                -- For split payments, mark order as completed if total paid (approved + pending) covers the order total
+                                IF @TotalPaid >= @OrderTotal - 0.05
                                 BEGIN
                                     UPDATE Orders
                                     SET Status = 3,
                                         CompletedAt = CASE WHEN Status < 3 AND CompletedAt IS NULL THEN GETDATE() ELSE CompletedAt END,
                                         UpdatedAt = GETDATE()
                                     WHERE Id = @OrderId AND Status < 3;
+                                    
+                                    SET @RowsUpdated = @@ROWCOUNT;
                                 END
 
-                                -- Persist aggregate roundoff (approved only)
-                                DECLARE @AggRoundoff DECIMAL(18,2) = ISNULL((SELECT SUM(ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId AND Status = 1), 0);
-                                UPDATE Orders SET RoundoffAdjustmentAmt = @AggRoundoff, UpdatedAt = GETDATE() WHERE Id = @OrderId;", connection, tx))
+                                -- Persist aggregate roundoff (all payments, not just approved)
+                                DECLARE @AggRoundoff DECIMAL(18,2) = ISNULL((SELECT SUM(ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = @OrderId), 0);
+                                UPDATE Orders SET RoundoffAdjustmentAmt = @AggRoundoff, UpdatedAt = GETDATE() WHERE Id = @OrderId;
+                                
+                                -- Return debug info
+                                SELECT @TotalPaid AS TotalPaid, @OrderTotal AS OrderTotal, @RowsUpdated AS RowsUpdated;", connection, tx))
                             {
                                 finalCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
-                                finalCmd.ExecuteNonQuery();
+                                using (var reader = finalCmd.ExecuteReader())
+                                {
+                                    if (reader.Read())
+                                    {
+                                        var dbTotalPaid = reader.GetDecimal(0);
+                                        var dbOrderTotal = reader.GetDecimal(1);
+                                        var dbRowsUpdated = reader.GetInt32(2);
+                                        _logger?.LogInformation("Order {OrderId} completion check: TotalPaid={TotalPaid}, OrderTotal={OrderTotal}, RowsUpdated={RowsUpdated}", 
+                                            model.OrderId, dbTotalPaid, dbOrderTotal, dbRowsUpdated);
+                                    }
+                                }
                             }
 
                             tx.Commit();

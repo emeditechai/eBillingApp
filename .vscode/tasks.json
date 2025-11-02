@@ -92,6 +92,38 @@
 			"isBackground": false,
 			"problemMatcher": [],
 			"group": "build"
+		},
+		{
+			"label": "Build Split Payment Roundoff Fix",
+			"type": "shell",
+			"command": "dotnet build RestaurantManagementSystem/RestaurantManagementSystem/RestaurantManagementSystem.csproj",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Build PrintPOS Fix",
+			"type": "shell",
+			"command": "dotnet build RestaurantManagementSystem/RestaurantManagementSystem/RestaurantManagementSystem.csproj",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Build Order Completion Fix",
+			"type": "shell",
+			"command": "dotnet build RestaurantManagementSystem/RestaurantManagementSystem/RestaurantManagementSystem.csproj",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Build Order Completion Debug",
+			"type": "shell",
+			"command": "dotnet build RestaurantManagementSystem/RestaurantManagementSystem/RestaurantManagementSystem.csproj",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
 		}
 	]
 }
