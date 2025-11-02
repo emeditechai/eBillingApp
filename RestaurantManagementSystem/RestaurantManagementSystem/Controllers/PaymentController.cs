@@ -220,7 +220,7 @@ namespace RestaurantManagementSystem.Controllers
         }
         
         // Process Payment
-        public IActionResult ProcessPayment(int orderId)
+        public IActionResult ProcessPayment(int orderId, decimal? discount = null, string discountType = null)
         {
             // Get payment view model with GST calculations
             var paymentViewModel = GetPaymentViewModel(orderId);
@@ -239,6 +239,20 @@ namespace RestaurantManagementSystem.Controllers
                 Subtotal = paymentViewModel.Subtotal, // base amount before GST
                 GSTPercentage = paymentViewModel.GSTPercentage // dynamic GST %
             };
+            // If a discount preview/value was provided from Payment Index, prefill here (additional discount)
+            if (discount.HasValue && discount.Value > 0)
+            {
+                // If discountType=percent apply on subtotal; else treat as amount
+                if (!string.IsNullOrEmpty(discountType) && discountType.Equals("percent", StringComparison.OrdinalIgnoreCase))
+                {
+                    var percentDisc = Math.Round(paymentViewModel.Subtotal * discount.Value / 100m, 2, MidpointRounding.AwayFromZero);
+                    model.DiscountAmount = Math.Min(percentDisc, paymentViewModel.Subtotal);
+                }
+                else
+                {
+                    model.DiscountAmount = Math.Min(discount.Value, paymentViewModel.Subtotal);
+                }
+            }
             
             using (Microsoft.Data.SqlClient.SqlConnection connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
             {
@@ -433,8 +447,27 @@ END", connection))
                     }
                     
                     // NEW CORRECT PROCESS: Apply discount on subtotal, then recalculate GST
-                    // Step 1: Apply discount on original subtotal (excludes GST)
+                    // Support optional percent discount when provided via query string from Payment Index
                     decimal discountAmount = model.DiscountAmount;
+                    try
+                    {
+                        var discQuery = HttpContext?.Request?.Query["discount"].ToString();
+                        var discType = HttpContext?.Request?.Query["discountType"].ToString();
+                        if (!string.IsNullOrEmpty(discQuery))
+                        {
+                            var discVal = Convert.ToDecimal(discQuery);
+                            if (!string.IsNullOrEmpty(discType) && discType.Equals("percent", StringComparison.OrdinalIgnoreCase))
+                            {
+                                // percent on subtotal
+                                discountAmount = Math.Round(orderSubtotal * discVal / 100m, 2, MidpointRounding.AwayFromZero);
+                            }
+                            else
+                            {
+                                discountAmount = discVal;
+                            }
+                        }
+                    }
+                    catch { /* ignore malformed discount params */ }
                     decimal discountedSubtotal = orderSubtotal - discountAmount;
                     
                     // Step 2: Calculate GST on the discounted subtotal
@@ -2637,7 +2670,7 @@ END", connection))
         }
         
         // GET: Payment/PrintBill
-        public IActionResult PrintBill(int orderId)
+    public IActionResult PrintBill(int orderId, decimal? discount = null, string discountType = null)
         {
             try
             {
@@ -2647,6 +2680,38 @@ END", connection))
                 {
                     TempData["ErrorMessage"] = "Order not found.";
                     return RedirectToAction("Index", "Order");
+                }
+                
+                // If a pending discount is supplied, adjust the displayed totals without persisting
+                if (discount.HasValue && discount.Value > 0)
+                {
+                    try
+                    {
+                        var pendingDisc = Math.Max(0m, discount.Value);
+                        if (!string.IsNullOrEmpty(discountType) && discountType.Equals("percent", StringComparison.OrdinalIgnoreCase))
+                        {
+                            pendingDisc = Math.Round(model.Subtotal * pendingDisc / 100m, 2, MidpointRounding.AwayFromZero);
+                        }
+                        var combinedDisc = model.DiscountAmount + pendingDisc;
+                        // Cap discount at subtotal
+                        if (combinedDisc > model.Subtotal) combinedDisc = model.Subtotal;
+                        var netSubtotal = model.Subtotal - combinedDisc;
+
+                        // Ensure GST percentage is set (fallback handled elsewhere too)
+                        var gstPerc = model.GSTPercentage > 0 ? model.GSTPercentage : 5.0m;
+                        var gstAmount = Math.Round(netSubtotal * gstPerc / 100m, 2, MidpointRounding.AwayFromZero);
+                        var cgst = Math.Round(gstAmount / 2m, 2, MidpointRounding.AwayFromZero);
+                        var sgst = gstAmount - cgst;
+
+                        model.DiscountAmount = combinedDisc;
+                        model.TaxAmount = gstAmount;
+                        model.CGSTAmount = cgst;
+                        model.SGSTAmount = sgst;
+                        model.TotalAmount = netSubtotal + gstAmount + model.TipAmount;
+                        model.RemainingAmount = model.TotalAmount - model.PaidAmount;
+                        ViewBag.PendingDiscount = pendingDisc;
+                    }
+                    catch { /* ignore display-only failures */ }
                 }
                 
                 // Get restaurant settings for bill header
@@ -2707,7 +2772,7 @@ END", connection))
         }
 
         // GET: Payment/PrintPOS
-        public IActionResult PrintPOS(int orderId)
+    public IActionResult PrintPOS(int orderId, decimal? discount = null, string discountType = null)
         {
             try
             {
@@ -2716,6 +2781,36 @@ END", connection))
                 {
                     TempData["ErrorMessage"] = "Order not found.";
                     return RedirectToAction("Index", "Order");
+                }
+
+                // If a pending discount is supplied, adjust the displayed totals without persisting
+                if (discount.HasValue && discount.Value > 0)
+                {
+                    try
+                    {
+                        var pendingDisc = Math.Max(0m, discount.Value);
+                        if (!string.IsNullOrEmpty(discountType) && discountType.Equals("percent", StringComparison.OrdinalIgnoreCase))
+                        {
+                            pendingDisc = Math.Round(model.Subtotal * pendingDisc / 100m, 2, MidpointRounding.AwayFromZero);
+                        }
+                        var combinedDisc = model.DiscountAmount + pendingDisc;
+                        if (combinedDisc > model.Subtotal) combinedDisc = model.Subtotal;
+                        var netSubtotal = model.Subtotal - combinedDisc;
+
+                        var gstPerc = model.GSTPercentage > 0 ? model.GSTPercentage : 5.0m;
+                        var gstAmount = Math.Round(netSubtotal * gstPerc / 100m, 2, MidpointRounding.AwayFromZero);
+                        var cgst = Math.Round(gstAmount / 2m, 2, MidpointRounding.AwayFromZero);
+                        var sgst = gstAmount - cgst;
+
+                        model.DiscountAmount = combinedDisc;
+                        model.TaxAmount = gstAmount;
+                        model.CGSTAmount = cgst;
+                        model.SGSTAmount = sgst;
+                        model.TotalAmount = netSubtotal + gstAmount + model.TipAmount;
+                        model.RemainingAmount = model.TotalAmount - model.PaidAmount;
+                        ViewBag.PendingDiscount = pendingDisc;
+                    }
+                    catch { /* ignore display-only failures */ }
                 }
 
                 // Get restaurant settings for bill header (reuse same logic as PrintBill)

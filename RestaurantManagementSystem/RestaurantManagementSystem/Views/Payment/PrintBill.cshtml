@@ -73,31 +73,30 @@
                     <td>Subtotal:</td>
                     <td class="text-end">₹@Model.Subtotal.ToString("F2")</td>
                 </tr>
-                @* If there is remaining amount to be paid, show expected roundoff and total-to-process before payment *@
-                @if (Model.RemainingAmount > 0)
+                @{ // Standardize: round on TOTAL, not on remaining
+                    var total = Model.TotalAmount; // exact total before rounding
+                    var totalRounded = Math.Round(total, 0, MidpointRounding.AwayFromZero);
+                    var roundOffNow = Math.Round(totalRounded - total, 2, MidpointRounding.AwayFromZero);
+                    var paid = Model.PaidAmount;
+                    var toProcessNow = Math.Max(0M, totalRounded - paid);
+                }
+                @if (toProcessNow > 0)
                 {
-                    var pre = Model.RemainingAmount;
-                    // Use explicit rounding rule so small negative/positive differences are consistent
-                    var rounded = Math.Round(pre, 0, MidpointRounding.AwayFromZero);
-                    var expected = Math.Round(rounded - pre, 2);
                     <tr>
                         <td>Payment Amount:</td>
-                        <td class="text-end">₹@pre.ToString("F2")</td>
+                        <td class="text-end">₹@toProcessNow.ToString("F0")</td>
                     </tr>
-                    @if (expected != 0)
+                    @if (roundOffNow != 0)
                     {
                         <tr>
                             <td>Roundoff (if paid now):</td>
-                            <td class="text-end">₹@expected.ToString("+0.00;-0.00;0.00")</td>
+                            <td class="text-end">₹@roundOffNow.ToString("+0.00;-0.00;0.00")</td>
                         </tr>
                     }
                     <tr>
                         <td><strong>Total to Process:</strong></td>
-                        <td class="text-end"><strong>₹@rounded.ToString("F0")</strong></td>
+                        <td class="text-end"><strong>₹@totalRounded.ToString("F0")</strong></td>
                     </tr>
-                }
-                else
-                {
                 }
                 
                 @if (Model.GSTPercentage > 0)
@@ -163,8 +162,8 @@
                     </tr>
                 }
                 <tr class="table-active">
-                    <td><strong>Total:</strong></td>
-                    <td class="text-end"><strong>₹@Model.TotalAmount.ToString("F2")</strong></td>
+                    <td><strong>Grand Total:</strong></td>
+                    <td class="text-end"><strong>₹@totalRounded.ToString("F0")</strong></td>
                 </tr>
                 <tr>
                     <td>Paid:</td>

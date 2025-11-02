@@ -45,7 +45,7 @@
                                             </div>
                                             <div>
                                                 <h6 class="mb-0 text-muted">Order Total</h6>
-                                                <h4 class="mb-0 fw-bold text-primary">₹@Model.TotalAmount.ToString("F2")</h4>
+                                                <h4 class="mb-0 fw-bold text-primary">₹<span id="orderTotalDisplay">@Model.TotalAmount.ToString("F2")</span></h4>
                                             </div>
                                         </div>
                                     </div>
@@ -59,7 +59,7 @@
                                             </div>
                                             <div>
                                                 <h6 class="mb-0 text-muted">Remaining Balance</h6>
-                                                <h4 class="mb-0 fw-bold @(Model.RemainingAmount > 0 ? "text-success" : "text-muted")">₹@Model.RemainingAmount.ToString("F2")</h4>
+                                                <h4 class="mb-0 fw-bold @(Model.RemainingAmount > 0 ? "text-success" : "text-muted")">₹<span id="remainingBalanceDisplay">@Model.RemainingAmount.ToString("F2")</span></h4>
                                             </div>
                                         </div>
                                     </div>
@@ -278,6 +278,12 @@
     <script>
         $(document).ready(function() {
             // Update payment summary when page loads
+            // If server provided a pending discount (from Payment page), seed the entry field
+            var initialServerDiscount = parseFloat($('#DiscountAmount').val()) || 0;
+            if ((($('#discountEntry').val() || '').trim() === '') && initialServerDiscount > 0) {
+                $('#discountEntry').val(initialServerDiscount.toFixed(2));
+            }
+            // Initial computations
             updatePaymentSummary();
             calculateTipPreviews();
             
@@ -427,8 +433,11 @@
                 }
             }
             
-            // Track original remaining for discount calculations
+            // Track original remaining and paid; we'll recompute remaining after discount using the same
+            // rounding rules as the Payment page (subtotal -> discount -> GST -> tip -> round to whole rupee)
             var originalRemaining = parseFloat('@Model.RemainingAmount');
+            var modelOrderTotal = parseFloat('@Model.TotalAmount');
+            var alreadyPaid = Math.max(0, +(modelOrderTotal - originalRemaining));
             var manualAmountOverride = false;
 
             $('#Amount').on('input', function(){
@@ -437,43 +446,49 @@
                 calculateTipPreviews();
             });
 
-            // Update payment summary display (discount already applied by adjusting Amount)
+            // Consistent rounding helpers (match Payment/Index page)
+            function roundMoney(val) { return Math.round((val + (val >= 0 ? 0.0000001 : -0.0000001)) * 100) / 100; }
+            function roundAway(val, digits) { const m = Math.pow(10, digits); return Math.round(val * m + (val >= 0 ? 0.0000001 : -0.0000001)) / m; }
+            function roundHalfUp(val) { return (val >= 0) ? Math.round(val + 0.5) : -Math.round(-val + 0.5); }
+
+            // Recompute totals from Subtotal -> Discount -> GST -> Tip; then compute remaining by subtracting paid
             function updatePaymentSummary() {
-                // Calculate the canonical pre-round amount from order subtotal / discount / GST
-                var baseSubtotal = parseFloat($('#Subtotal').val()) || 0;
+                var baseSubtotal = parseFloat($('#Subtotal').val()) || 0; // pre-GST base
                 var gstPerc = parseFloat($('#GSTPercentage').val()) || 0;
-                var discount = parseFloat($('#DiscountAmount').val()) || 0;
-
-                var discountedSubtotal = baseSubtotal - discount;
-                if (discountedSubtotal < 0) discountedSubtotal = 0;
-                var paymentGstAmount = parseFloat((Math.round(discountedSubtotal * gstPerc / 100 * 100 + (discountedSubtotal * gstPerc / 100 >= 0 ? 0.0000001 : -0.0000001)) / 100).toFixed(2));
-                var preRoundTotal = discountedSubtotal + paymentGstAmount;
-
+                var discount = parseFloat($('#DiscountAmount').val()) || 0; // discount on subtotal
                 var tip = parseFloat($('#TipAmount').val()) || 0;
-                preRoundTotal = preRoundTotal + tip;
 
-                // Displayed amount is what the cashier/customer will actually pay (the 'Total to Process' field).
-                // If the user has not overridden the amount, show rounded total; otherwise keep user-entered value.
+                var discountedSubtotal = baseSubtotal - discount; if (discountedSubtotal < 0) discountedSubtotal = 0;
+                var gstAmount = roundAway(discountedSubtotal * gstPerc / 100.0, 2);
+                var preRoundTotal = roundMoney(discountedSubtotal + gstAmount + tip);
+
+                // Remaining after considering previous payments
+                var newRemaining = Math.max(0, preRoundTotal - alreadyPaid);
+
+                // Display amount (Total to Process) rounds to whole rupee unless user overrides
                 var displayedAmount = parseFloat($('#Amount').val());
                 if (!manualAmountOverride) {
-                    displayedAmount = Math.round(preRoundTotal);
+                    displayedAmount = roundHalfUp(newRemaining);
                     $('#Amount').val(displayedAmount.toFixed(2));
                 } else {
-                    if (isNaN(displayedAmount)) displayedAmount = Math.round(preRoundTotal);
+                    if (isNaN(displayedAmount)) displayedAmount = roundHalfUp(newRemaining);
                 }
+                var roundoff = roundMoney(displayedAmount - newRemaining);
 
-                var roundoff = +(displayedAmount - preRoundTotal);
-
-                // Update hidden form fields so server receives both values
-                $('#OriginalAmount').val(preRoundTotal.toFixed(2));
+                // Update hidden fields for server
+                $('#OriginalAmount').val(newRemaining.toFixed(2));
                 $('#RoundoffAdjustmentAmt').val(roundoff.toFixed(2));
 
-                // Update summary: show canonical payment amount, roundoff, and final total to process
-                $('#summaryAmount').text('₹' + preRoundTotal.toFixed(2));
-                $('#summaryTip').text('₹' + tip.toFixed(2));
-                $('#summaryDiscount').text((discount).toFixed(2));
-                $('#summaryRoundoff').text('₹' + roundoff.toFixed(2));
-                $('#summaryTotal').text('₹' + displayedAmount.toFixed(2));
+                // Update summary spans (numbers only; currency symbol is outside)
+                $('#summaryAmount').text(newRemaining.toFixed(2));
+                $('#summaryTip').text(tip.toFixed(2));
+                $('#summaryDiscount').text(discount.toFixed(2));
+                $('#summaryRoundoff').text(roundoff.toFixed(2));
+                $('#summaryTotal').text(displayedAmount.toFixed(2));
+
+                // Reflect discount on header cards
+                $('#orderTotalDisplay').text(preRoundTotal.toFixed(2));
+                $('#remainingBalanceDisplay').text(newRemaining.toFixed(2));
             }
 
             function recalcDiscountAndAmount(){
@@ -483,24 +498,12 @@
                 var entry = parseFloat($('#discountEntry').val());
                 if (isNaN(entry) || entry < 0) entry = 0;
                 var discountAmt = 0;
-                if (mode === 'percent') {
-                    if (entry > 100) entry = 100;
-                    discountAmt = baseSubtotal * (entry / 100.0);
-                } else {
-                    discountAmt = entry;
-                }
+                if (mode === 'percent') { if (entry > 100) entry = 100; discountAmt = baseSubtotal * (entry / 100.0); }
+                else { discountAmt = entry; }
                 if (discountAmt > baseSubtotal) discountAmt = baseSubtotal;
-                $('#DiscountAmount').val(discountAmt.toFixed(2));
-                var discountedSubtotal = baseSubtotal - discountAmt;
-                if (discountedSubtotal < 0) discountedSubtotal = 0;
-                var gstAmount = discountedSubtotal * (gstPerc / 100.0);
-                // Simulate MidpointRounding.AwayFromZero
-                gstAmount = parseFloat((Math.round(gstAmount * 100 + (gstAmount >= 0 ? 0.0000001 : -0.0000001)) / 100).toFixed(2));
-                var totalWithGst = discountedSubtotal + gstAmount;
-                if (!manualAmountOverride){
-                    $('#Amount').val(totalWithGst.toFixed(2));
-                }
-                originalRemaining = totalWithGst;
+                $('#DiscountAmount').val(roundMoney(discountAmt).toFixed(2));
+                // Recompute summary and header
+                manualAmountOverride = false; // reset when discount changes
                 updatePaymentSummary();
                 calculateTipPreviews();
             }

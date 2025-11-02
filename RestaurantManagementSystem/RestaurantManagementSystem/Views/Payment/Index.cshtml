@@ -66,7 +66,9 @@
                         <span class="badge bg-danger rounded-pill px-3 py-2">@Model.OrderStatusDisplay</span>
                     }
                 </div>
-                <div class="card-body p-4">
+             <div class="card-body p-4" id="paymentSummary"
+                 data-subtotal="@Model.Subtotal" data-gst="@Model.GSTPercentage" data-tip="@Model.TipAmount"
+                 data-paid="@Model.PaidAmount" data-existing-discount="@Model.DiscountAmount" data-roundoff="@Model.TotalRoundoff">
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -132,17 +134,38 @@
                             <hr class="my-2">
                             <div class="row mb-2">
                                 <div class="col-6 text-end fw-semibold">Total:</div>
-                                <div class="col-6 text-end fw-semibold">₹@Model.TotalAmount.ToString("F2")</div>
+                                <div class="col-6 text-end fw-semibold"><span id="totalAmountDisplay">₹@Model.TotalAmount.ToString("F2")</span></div>
                             </div>
                             <div class="row mb-2">
                                 <div class="col-6 text-end text-muted">Paid:</div>
                                 <div class="col-6 text-end text-success">₹@Model.PaidAmount.ToString("F2")</div>
                             </div>
                             <hr class="my-2">
+                            <!-- Discount (Optional) with Amount/Percent toggle -->
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <div class="text-end flex-grow-1">2. Discount (Optional)</div>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="btn-group btn-group-sm" role="group" aria-label="Discount type">
+                                        <input type="radio" class="btn-check" name="discountType" id="discTypeAmount" value="amount" checked>
+                                        <label class="btn btn-outline-secondary" for="discTypeAmount">Amount</label>
+                                        <input type="radio" class="btn-check" name="discountType" id="discTypePercent" value="percent">
+                                        <label class="btn btn-outline-secondary" for="discTypePercent">Percent</label>
+                                    </div>
+                                    <div class="input-group input-group-sm flex-grow-1">
+                                        <span class="input-group-text" id="discPrefix">₹</span>
+                                        <input type="number" min="0" step="0.01" id="preDiscountAmount" class="form-control" placeholder="Enter discount" aria-describedby="discPrefix" />
+                                        <button type="button" id="applyDiscountBtn" class="btn btn-outline-primary">Apply</button>
+                                    </div>
+                                </div>
+                                <div class="form-text">If Percent is selected, discount is applied on Subtotal before GST. It will flow to Process Payment and print previews.</div>
+                            </div>
+                            <hr class="my-2">
                             <div class="row mb-2">
                                 <div class="col-6 text-end fs-5 fw-bold">Remaining:</div>
-                                <div class="col-6 text-end fs-5 fw-bold @(Model.RemainingAmount <= 0 ? "text-success" : "text-danger")">
-                                    ₹@Model.RemainingAmount.ToString("F2")
+                                <div class="col-6 text-end fs-5 fw-bold @(Model.RemainingAmount <= 0 ? "text-success" : "text-danger")" id="remainingAmountWrapper">
+                                    <span id="remainingAmountDisplay">₹@Model.RemainingAmount.ToString("F2")</span>
                                 </div>
                             </div>
                             @* Show expected roundoff if there is a remaining amount (pre-payment) *@
@@ -154,11 +177,11 @@
                                 var expectedRoundoff = Math.Round(rounded - preRound, 2, MidpointRounding.AwayFromZero);
                                 <div class="row mb-2">
                                     <div class="col-6 text-end text-muted">Roundoff (if paid now):</div>
-                                    <div class="col-6 text-end">₹@expectedRoundoff.ToString("+0.00;-0.00;0.00")</div>
+                                    <div class="col-6 text-end"><span id="roundoffIfNowDisplay">₹@expectedRoundoff.ToString("+0.00;-0.00;0.00")</span></div>
                                 </div>
                                 <div class="row mb-2">
                                     <div class="col-6 text-end fw-semibold">Total to Process:</div>
-                                    <div class="col-6 text-end fw-semibold">₹@rounded.ToString("F0")</div>
+                                    <div class="col-6 text-end fw-semibold"><span id="totalToProcessDisplay">₹@rounded.ToString("F0")</span></div>
                                 </div>
                             }
                                 </div>
@@ -172,7 +195,7 @@
                             <div class="d-flex gap-2">
                                 @if (Model.RemainingAmount > 0)
                                 {
-                                    <a asp-action="ProcessPayment" asp-route-orderId="@Model.OrderId" class="btn btn-primary btn-lg">
+                                    <a id="processPaymentLink" asp-action="ProcessPayment" asp-route-orderId="@Model.OrderId" class="btn btn-primary btn-lg">
                                         <i class="fas fa-money-bill-wave me-1"></i> Process Payment
                                     </a>
                                 }
@@ -186,13 +209,13 @@
                                 }
                                 @if (!string.Equals(billFormat, "POS", StringComparison.OrdinalIgnoreCase))
                                 {
-                                    <a asp-action="PrintBill" asp-route-orderId="@Model.OrderId" class="btn btn-outline-success btn-lg" target="_blank">
+                                    <a id="printA4Link" asp-action="PrintBill" asp-route-orderId="@Model.OrderId" class="btn btn-outline-success btn-lg" target="_blank">
                                         <i class="fas fa-print me-1"></i> Print Bill(A4)
                                     </a>
                                 }
                                 @if (string.Equals(billFormat, "POS", StringComparison.OrdinalIgnoreCase))
                                 {
-                                    <a asp-action="PrintPOS" asp-route-orderId="@Model.OrderId" class="btn btn-outline-dark btn-lg" target="_blank">
+                                    <a id="printPOSLink" asp-action="PrintPOS" asp-route-orderId="@Model.OrderId" class="btn btn-outline-dark btn-lg" target="_blank">
                                         <i class="fas fa-print me-1"></i> POS Print Bill
                                     </a>
                                 }
@@ -427,5 +450,171 @@
         function openPrintBill(orderId) {
             window.open('/Payment/PrintBill/' + orderId, '_blank');
         }
+
+        // Wire up Discount (Amount/Percent): update links and preview Remaining/Roundoff/Total-to-Process
+        (function() {
+            const applyBtn = document.getElementById('applyDiscountBtn');
+            const input = document.getElementById('preDiscountAmount');
+            const typeAmount = document.getElementById('discTypeAmount');
+            const typePercent = document.getElementById('discTypePercent');
+            const lblAmount = document.querySelector('label[for="discTypeAmount"]');
+            const lblPercent = document.querySelector('label[for="discTypePercent"]');
+            const discPrefix = document.getElementById('discPrefix');
+            const processLink = document.getElementById('processPaymentLink');
+            const printA4 = document.getElementById('printA4Link');
+            const printPOS = document.getElementById('printPOSLink');
+            const summary = document.getElementById('paymentSummary');
+            if (!applyBtn || !input || !processLink || !summary) return;
+
+            const remainingEl = document.getElementById('remainingAmountDisplay');
+            const remainingWrap = document.getElementById('remainingAmountWrapper');
+            const roundoffEl = document.getElementById('roundoffIfNowDisplay');
+            const totalProcessEl = document.getElementById('totalToProcessDisplay');
+            const totalAmountEl = document.getElementById('totalAmountDisplay');
+
+            // Lock/unlock state for the discount UI
+            let discountLocked = false;
+            function setLocked(state) {
+                discountLocked = !!state;
+                input.disabled = discountLocked;
+                typeAmount.disabled = discountLocked;
+                typePercent.disabled = discountLocked;
+                // Visually dim the toggle labels when locked
+                [lblAmount, lblPercent].forEach(l => {
+                    if (!l) return;
+                    l.classList.toggle('disabled', discountLocked);
+                });
+                // Toggle button text and style
+                if (discountLocked) {
+                    applyBtn.textContent = 'Edit';
+                    applyBtn.classList.remove('btn-outline-primary');
+                    applyBtn.classList.add('btn-outline-secondary');
+                } else {
+                    applyBtn.textContent = 'Apply';
+                    applyBtn.classList.remove('btn-outline-secondary');
+                    applyBtn.classList.add('btn-outline-primary');
+                }
+            }
+
+            function fmtMoney(val, digits=2) {
+                const sign = val < 0 ? '-' : '';
+                const abs = Math.abs(val);
+                return `₹${abs.toFixed(digits)}`.replace(/^/, sign);
+            }
+            function roundAway(val, digits) {
+                const m = Math.pow(10, digits);
+                return Math.round(val * m + (val >= 0 ? 0.0000001 : -0.0000001)) / m; // mitigate float noise
+            }
+            function roundMoney(val) {
+                return Math.round(val * 100) / 100;
+            }
+            function roundHalfUp(val) {
+                // 0 decimals, away-from-zero
+                return (val >= 0) ? Math.round(val + 0.5) : -Math.round(-val + 0.5);
+            }
+            function currentType() { return (typePercent && typePercent.checked) ? 'percent' : 'amount'; }
+            function clamp(n, min, max) { return Math.min(Math.max(n, min), max); }
+            function parseNum(s) { const v = parseFloat(s); return isNaN(v) ? 0 : v; }
+
+            const baseSubtotal = parseNum(summary.dataset.subtotal);
+            const gstPerc = parseNum(summary.dataset.gst);
+            const tip = parseNum(summary.dataset.tip);
+            const paid = parseNum(summary.dataset.paid);
+            const existingDisc = parseNum(summary.dataset.existingDiscount);
+            const existingRoundoff = parseNum(summary.dataset.roundoff);
+
+            function computeDiscountAmount() {
+                let v = parseNum(input.value);
+                if (currentType() === 'percent') {
+                    v = clamp(v, 0, 100);
+                    return roundMoney(baseSubtotal * v / 100.0);
+                }
+                // amount
+                v = Math.max(0, v);
+                return roundMoney(v);
+            }
+
+            function updateLinksAndPreview() {
+                const userDiscAmt = computeDiscountAmount();
+                const combinedDisc = Math.min(baseSubtotal, roundMoney(existingDisc + userDiscAmt));
+                const netSub = roundMoney(baseSubtotal - combinedDisc);
+                const gstAmt = roundMoney(netSub * gstPerc / 100.0);
+                const total = roundMoney(netSub + gstAmt + tip);
+                // Calculate roundoff ON TOTAL to avoid double-rounding when previous payments already include roundoff
+                const totalRounded = roundHalfUp(total);
+                const overallRoundoff = roundMoney(totalRounded - total);
+                const additionalRoundoffNow = roundMoney(overallRoundoff - existingRoundoff);
+                // Amount the customer needs to pay now is Rounded(Total) minus ALL amounts already paid (incl. previous roundoff)
+                let toProcess = Math.max(0, totalRounded - paid);
+                const remaining = roundMoney(total - paid);
+                const roundoff = additionalRoundoffNow;
+
+                // Update displays
+                if (remainingEl) remainingEl.textContent = fmtMoney(remaining);
+                if (totalAmountEl) totalAmountEl.textContent = fmtMoney(total);
+                if (roundoffEl) roundoffEl.textContent = (roundoff===0? '₹0.00' : (roundoff>0? `₹+${roundoff.toFixed(2)}` : `₹${roundoff.toFixed(2)}`));
+                if (totalProcessEl) totalProcessEl.textContent = `₹${toProcess.toFixed(0)}`;
+                if (remainingWrap) {
+                    remainingWrap.classList.remove('text-success','text-danger');
+                    remainingWrap.classList.add(remaining<=0 ? 'text-success' : 'text-danger');
+                }
+
+                // Update links (send absolute discount amount)
+                const applyParam = (anchor) => {
+                    if (!anchor) return;
+                    const href = anchor.getAttribute('href');
+                    try {
+                        const url = new URL(href, window.location.origin);
+                        if (userDiscAmt > 0) {
+                            url.searchParams.set('discount', userDiscAmt.toFixed(2));
+                        } else {
+                            url.searchParams.delete('discount');
+                        }
+                        anchor.setAttribute('href', url.pathname + url.search);
+                    } catch(e) {
+                        let base = href.split('?')[0];
+                        if (userDiscAmt > 0) base += `?discount=${encodeURIComponent(userDiscAmt.toFixed(2))}`;
+                        anchor.setAttribute('href', base);
+                    }
+                };
+                applyParam(processLink);
+                applyParam(printA4);
+                applyParam(printPOS);
+            }
+
+            function setPrefix() {
+                if (discPrefix) discPrefix.textContent = currentType() === 'percent' ? '%' : '₹';
+            }
+
+            applyBtn.addEventListener('click', function() {
+                if (!discountLocked) {
+                    // Apply and freeze
+                    setPrefix();
+                    updateLinksAndPreview();
+                    setLocked(true);
+                    // Subtle visual confirm
+                    applyBtn.classList.remove('btn-outline-secondary');
+                    applyBtn.classList.add('btn-secondary');
+                    setTimeout(() => {
+                        applyBtn.classList.add('btn-outline-secondary');
+                        applyBtn.classList.remove('btn-secondary');
+                    }, 400);
+                } else {
+                    // Unlock for editing
+                    setLocked(false);
+                    // Focus input for quick edit
+                    setTimeout(() => input && input.focus(), 0);
+                }
+            });
+            [typeAmount, typePercent].forEach(el => el && el.addEventListener('change', () => {
+                setPrefix();
+            }));
+            input.addEventListener('keydown', function(evt) {
+                if (evt.key === 'Enter') { evt.preventDefault(); applyBtn.click(); }
+            });
+
+            // Initialize prefix based on default selection
+            setPrefix();
+        })();
     </script>
 }

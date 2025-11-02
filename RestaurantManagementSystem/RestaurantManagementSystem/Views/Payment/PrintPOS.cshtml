@@ -95,45 +95,26 @@
             var cgstPercent = Math.Round(gstPercent / 2, 2);
             var sgstPercent = Math.Round(gstPercent - cgstPercent, 2);
             var discount = (Model.DiscountAmount > 0) ? Model.DiscountAmount : 0M;
-            var total = Model.TotalAmount;
-            // If there's a remaining amount (pre-payment), show expected payment + roundoff for the customer.
-            var preRemaining = Model.RemainingAmount;
-            var paidPreRoundFallback = Model.Payments != null && Model.Payments.Any() ? Model.Payments.Sum(p => p.Amount) : 0m;
-            var roundOff = 0M;
-            var grandRounded = 0M;
-            var paidPreRoundComputed = 0M;
-            if (preRemaining > 0)
-            {
-                // When showing a pre-payment preview, compute the roundoff as the difference
-                // between the nearest whole-rupee amount and the exact remaining amount.
-                paidPreRoundComputed = preRemaining;
-                var rounded = Math.Round(preRemaining, 0, MidpointRounding.AwayFromZero);
-                roundOff = Math.Round(rounded - preRemaining, 2, MidpointRounding.AwayFromZero);
-                grandRounded = rounded;
-            }
-            else
-            {
-                // Use stored total roundoff when available. If it's zero but order is fully paid
-                // and payments exist, compute an implied roundoff as TotalAmount - PaidSum.
-                try { roundOff = Model.TotalRoundoff; } catch { roundOff = 0M; }
-                paidPreRoundComputed = paidPreRoundFallback;
-                if (roundOff == 0m && Model.RemainingAmount == 0m && paidPreRoundFallback > 0m)
-                {
-                    roundOff = Math.Round(total - paidPreRoundFallback, 2, MidpointRounding.AwayFromZero);
-                }
-                grandRounded = Math.Round(total + roundOff, 0, MidpointRounding.AwayFromZero);
-            }
+            var total = Model.TotalAmount; // exact grand total before rounding
+            // Standard rule: round ON TOTAL, not on remaining, then Amount To Pay = RoundedTotal - Paid
+            var totalRounded = Math.Round(total, 0, MidpointRounding.AwayFromZero);
+            var roundOff = Math.Round(totalRounded - total, 2, MidpointRounding.AwayFromZero);
+            var paid = Model.PaidAmount;
+            var toProcessNow = Math.Max(0M, totalRounded - paid);
         }
         <div class="row"><div>Sub Total</div><div class="right">₹@subtotal.ToString("F2")</div></div>
-        <div class="row"><div>Payment Amount</div><div class="right">₹@paidPreRoundComputed.ToString("F2")</div></div>
         <div class="row"><div>CGST @cgstPercent% </div><div class="right">₹@cgstAmt.ToString("F2")</div></div>
         <div class="row"><div>SGST @sgstPercent% </div><div class="right">₹@sgstAmt.ToString("F2")</div></div>
         @if (discount > 0)
         {
             <div class="row"><div>Discount</div><div class="right">-₹@discount.ToString("F2")</div></div>
         }
-    <div class="row"><div>Round off</div><div class="right">₹@roundOff.ToString("+0.00;-0.00;0.00")</div></div>
-    <div class="row bold"><div style="font-size:15px;">Grand Total</div><div class="right" style="font-size:16px;">₹@grandRounded.ToString("F0")</div></div>
+        <div class="row"><div>Round off</div><div class="right">₹@roundOff.ToString("+0.00;-0.00;0.00")</div></div>
+        <div class="row bold"><div style="font-size:15px;">Grand Total</div><div class="right" style="font-size:16px;">₹@totalRounded.ToString("F0")</div></div>
+        @if (toProcessNow > 0)
+        {
+            <div class="row"><div>Payment Amount</div><div class="right">₹@toProcessNow.ToString("F0")</div></div>
+        }
     </div>
 
     @* Optional debug block: append ?debug=1 to the print URL to display raw numeric values for troubleshooting *@
