@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Data.SqlClient;
 using RestaurantManagementSystem.Models;
+using RestaurantManagementSystem.ViewModels;
 using System.Data;
 
 namespace RestaurantManagementSystem.Controllers
@@ -886,6 +887,112 @@ namespace RestaurantManagementSystem.Controllers
             {
                 Console.WriteLine($"Error loading menu report data: {ex.Message}");
                 viewModel.Summary = new MenuSummary();
+            }
+        }
+
+        // Collection Register Report
+        public async Task<IActionResult> CollectionRegister()
+        {
+            ViewData["Title"] = "Order Wise Payment Method Wise Collection Register";
+            var model = new CollectionRegisterViewModel
+            {
+                Filter = new CollectionRegisterFilter
+                {
+                    FromDate = DateTime.Today,
+                    ToDate = DateTime.Today
+                }
+            };
+            await LoadPaymentMethodsAsync(model);
+            await LoadCollectionRegisterDataAsync(model);
+            return View(model);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> CollectionRegister(CollectionRegisterFilter filter)
+        {
+            ViewData["Title"] = "Order Wise Payment Method Wise Collection Register";
+            var model = new CollectionRegisterViewModel { Filter = filter };
+            await LoadPaymentMethodsAsync(model);
+            await LoadCollectionRegisterDataAsync(model);
+            return View(model);
+        }
+
+        private async Task LoadPaymentMethodsAsync(CollectionRegisterViewModel model)
+        {
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                await connection.OpenAsync();
+                using var command = new SqlCommand("SELECT Id, Name FROM PaymentMethods WHERE IsActive = 1 ORDER BY Name", connection);
+                using var reader = await command.ExecuteReaderAsync();
+                
+                model.PaymentMethods.Add(new SelectListItem { Value = "", Text = "ALL Payment Methods" });
+                while (await reader.ReadAsync())
+                {
+                    model.PaymentMethods.Add(new SelectListItem
+                    {
+                        Value = reader.GetInt32(0).ToString(),
+                        Text = reader.GetString(1)
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading payment methods: {ex.Message}");
+            }
+        }
+
+        private async Task LoadCollectionRegisterDataAsync(CollectionRegisterViewModel model)
+        {
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                await connection.OpenAsync();
+                using var command = new SqlCommand("usp_GetCollectionRegister", connection)
+                { CommandType = CommandType.StoredProcedure };
+                
+                command.Parameters.AddWithValue("@FromDate", (object?)model.Filter.FromDate?.Date ?? DBNull.Value);
+                command.Parameters.AddWithValue("@ToDate", (object?)model.Filter.ToDate?.Date ?? DBNull.Value);
+                command.Parameters.AddWithValue("@PaymentMethodId", (object?)model.Filter.PaymentMethodId ?? DBNull.Value);
+
+                using var reader = await command.ExecuteReaderAsync();
+
+                // Read detail rows
+                while (await reader.ReadAsync())
+                {
+                    var row = new CollectionRegisterRow
+                    {
+                        OrderNo = reader.GetString(reader.GetOrdinal("OrderNo")),
+                        TableNo = reader.GetString(reader.GetOrdinal("TableNo")),
+                        Username = reader.GetString(reader.GetOrdinal("Username")),
+                        ActualBillAmount = reader.GetDecimal(reader.GetOrdinal("ActualBillAmount")),
+                        DiscountAmount = reader.GetDecimal(reader.GetOrdinal("DiscountAmount")),
+                        RoundOffAmount = reader.GetDecimal(reader.GetOrdinal("RoundOffAmount")),
+                        ReceiptAmount = reader.GetDecimal(reader.GetOrdinal("ReceiptAmount")),
+                        PaymentMethod = reader.GetString(reader.GetOrdinal("PaymentMethod")),
+                        Details = reader.GetString(reader.GetOrdinal("Details")),
+                        PaymentDate = reader.GetDateTime(reader.GetOrdinal("PaymentDate"))
+                    };
+                    model.Rows.Add(row);
+                }
+
+                // Calculate summary
+                model.Summary.TotalTransactions = model.Rows.Count;
+                model.Summary.TotalActualAmount = model.Rows.Sum(r => r.ActualBillAmount);
+                model.Summary.TotalDiscount = model.Rows.Sum(r => r.DiscountAmount);
+                model.Summary.TotalRoundOff = model.Rows.Sum(r => r.RoundOffAmount);
+                model.Summary.TotalReceiptAmount = model.Rows.Sum(r => r.ReceiptAmount);
+                
+                // Set payment method name for display
+                if (model.Filter.PaymentMethodId.HasValue)
+                {
+                    var selectedMethod = model.PaymentMethods.FirstOrDefault(pm => pm.Value == model.Filter.PaymentMethodId.ToString());
+                    model.Filter.PaymentMethodName = selectedMethod?.Text ?? "ALL";
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading collection register: {ex.Message}");
             }
         }
     }

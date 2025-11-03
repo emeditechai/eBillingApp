@@ -1,0 +1,43 @@
+using Microsoft.AspNetCore.Mvc.Rendering;
+
+namespace RestaurantManagementSystem.ViewModels
+{
+    public class CollectionRegisterViewModel
+    {
+        public CollectionRegisterFilter Filter { get; set; } = new CollectionRegisterFilter();
+        public List<SelectListItem> PaymentMethods { get; set; } = new List<SelectListItem>();
+        public List<CollectionRegisterRow> Rows { get; set; } = new List<CollectionRegisterRow>();
+        public CollectionRegisterSummary Summary { get; set; } = new CollectionRegisterSummary();
+    }
+
+    public class CollectionRegisterFilter
+    {
+        public DateTime? FromDate { get; set; }
+        public DateTime? ToDate { get; set; }
+        public int? PaymentMethodId { get; set; }
+        public string PaymentMethodName { get; set; } = "ALL";
+    }
+
+    public class CollectionRegisterRow
+    {
+        public string OrderNo { get; set; }
+        public string TableNo { get; set; }
+        public string Username { get; set; }
+        public decimal ActualBillAmount { get; set; }
+        public decimal DiscountAmount { get; set; }
+        public decimal RoundOffAmount { get; set; }
+        public decimal ReceiptAmount { get; set; }
+        public string PaymentMethod { get; set; }
+        public string Details { get; set; }
+        public DateTime PaymentDate { get; set; }
+    }
+
+    public class CollectionRegisterSummary
+    {
+        public int TotalTransactions { get; set; }
+        public decimal TotalActualAmount { get; set; }
+        public decimal TotalDiscount { get; set; }
+        public decimal TotalRoundOff { get; set; }
+        public decimal TotalReceiptAmount { get; set; }
+    }
+}

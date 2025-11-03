@@ -124,6 +124,14 @@
 			"isBackground": false,
 			"problemMatcher": [],
 			"group": "build"
+		},
+		{
+			"label": "Build Collection Register Report",
+			"type": "shell",
+			"command": "dotnet build RestaurantManagementSystem/RestaurantManagementSystem/RestaurantManagementSystem.csproj",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
 		}
 	]
 }
