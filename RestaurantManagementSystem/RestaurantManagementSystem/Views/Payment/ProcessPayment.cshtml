@@ -126,56 +126,10 @@
                                 <input asp-for="Amount" class="form-control form-control-lg shadow-sm" placeholder="Enter amount" />
                             </div>
                             <span asp-validation-for="Amount" class="text-danger"></span>
-                            <div class="quick-amounts mt-3">
-                                <div class="d-flex flex-wrap gap-2">
-                                    <button type="button" class="btn btn-outline-primary quick-amount px-3 py-2 rounded-pill" data-amount="@Math.Round(Model.RemainingAmount, 2)">
-                                        <i class="fas fa-check-circle me-1"></i> Full Amount (₹@Math.Round(Model.RemainingAmount, 2))
-                                    </button>
-                                    <button type="button" class="btn btn-outline-primary quick-amount px-3 py-2 rounded-pill" data-amount="@Math.Round(Model.RemainingAmount / 2, 2)">
-                                        <i class="fas fa-adjust me-1"></i> Half (₹@Math.Round(Model.RemainingAmount / 2, 2))
-                                    </button>
-                                </div>
-                                <div class="d-flex flex-wrap gap-2 mt-2">
-                                    <button type="button" class="btn btn-outline-secondary quick-amount px-3 py-2" data-amount="10.00">₹10.00</button>
-                                    <button type="button" class="btn btn-outline-secondary quick-amount px-3 py-2" data-amount="20.00">₹20.00</button>
-                                    <button type="button" class="btn btn-outline-secondary quick-amount px-3 py-2" data-amount="50.00">₹50.00</button>
-                                    <button type="button" class="btn btn-outline-secondary quick-amount px-3 py-2" data-amount="100.00">₹100.00</button>
-                                </div>
-                            </div>
                         </div>
 
-                        <!-- Tip Amount Section -->
-                        <h5 class="mb-3 fw-semibold">4. Add Tip (Optional)</h5>
-                        <div class="mb-4">
-                            <div class="input-group input-group-lg mb-3">
-                                <span class="input-group-text bg-light fw-bold">₹</span>
-                                <input asp-for="TipAmount" class="form-control form-control-lg shadow-sm" placeholder="Tip amount" />
-                            </div>
-                            <span asp-validation-for="TipAmount" class="text-danger"></span>
-                            
-                            <div class="tip-suggestions mt-3">
-                                <p class="text-muted mb-2">Suggested tip amounts:</p>
-                                <div class="d-flex flex-wrap gap-2">
-                                    <button type="button" class="btn btn-outline-success quick-tip px-4 py-2 position-relative" data-percent="15">
-                                        <span class="fw-bold">15%</span>
-                                        <small class="d-block tip-preview" id="tip15"></small>
-                                    </button>
-                                    <button type="button" class="btn btn-outline-success quick-tip px-4 py-2 position-relative" data-percent="18">
-                                        <span class="fw-bold">18%</span>
-                                        <small class="d-block tip-preview" id="tip18"></small>
-                                    </button>
-                                    <button type="button" class="btn btn-outline-success quick-tip px-4 py-2 position-relative" data-percent="20">
-                                        <span class="fw-bold">20%</span>
-                                        <small class="d-block tip-preview" id="tip20"></small>
-                                    </button>
-                                    <button type="button" class="btn btn-outline-success quick-tip px-4 py-2 position-relative" data-percent="25">
-                                        <span class="fw-bold">25%</span>
-                                        <small class="d-block tip-preview" id="tip25"></small>
-                                    </button>
-                                    <button type="button" class="btn btn-outline-secondary quick-tip px-3 py-2" data-amount="0">No Tip</button>
-                                </div>
-                            </div>
-                        </div>
+                        <!-- Hidden Tip Amount (for backend compatibility) -->
+                        <input type="hidden" asp-for="TipAmount" value="0" />
                         
                         <!-- Card Information Section -->
                         <div id="cardPaymentFields" style="display: none;" class="card bg-light rounded-3 p-3 mb-4">
@@ -235,7 +189,7 @@
                         </div>
                         
                         <!-- Additional Notes Section -->
-                        <h5 class="mb-3 fw-semibold">5. Additional Notes (Optional)</h5>
+                        <h5 class="mb-3 fw-semibold">4. Additional Notes (Optional)</h5>
                         <div class="mb-4">
                             <div class="form-floating">
                                 <textarea asp-for="Notes" class="form-control shadow-sm" rows="3" style="min-height: 100px;" placeholder="Enter notes"></textarea>
@@ -257,10 +211,6 @@
                                 <div class="row mb-2">
                                     <div class="col-6">Discount:</div>
                                     <div class="col-6 text-end text-danger">-₹<span id="summaryDiscount">0.00</span></div>
-                                </div>
-                                <div class="row mb-2">
-                                    <div class="col-6">Tip Amount:</div>
-                                    <div class="col-6 text-end">₹<span id="summaryTip">0.00</span></div>
                                 </div>
                                 <div class="row mb-2">
                                     <div class="col-6">Roundoff Adjustment:</div>
@@ -521,7 +471,6 @@
             }
             // Initial computations
             updatePaymentSummary();
-            calculateTipPreviews();
             // Ensure split header target reflects same calculation at load as single tab
             if ($('#splitPane').length) { setTimeout(function(){ if (typeof computeSplitTarget === 'function') computeSplitTarget(); }, 0); }
             
@@ -609,67 +558,10 @@
                 }
             });
             
-            // Quick amount buttons
-            $('.quick-amount').click(function() {
-                var amount = $(this).data('amount');
-                $('#Amount').val(amount.toFixed(2));
-                manualAmountOverride = true;
-                
-                // Visual feedback
-                $('.quick-amount').removeClass('active');
-                $(this).addClass('active');
-                
-                // Recalculate tip previews
-                calculateTipPreviews();
-                
-                // Update payment summary
+            // Update payment summary when amount or discount changes
+            $('#Amount, #DiscountAmount').on('input', function() {
                 updatePaymentSummary();
             });
-            
-            // Quick tip buttons
-            $('.quick-tip').click(function() {
-                var amount = parseFloat($('#Amount').val()) || 0;
-                
-                // Visual feedback
-                $('.quick-tip').removeClass('active');
-                $(this).addClass('active');
-                
-                if ($(this).data('percent')) {
-                    var percent = $(this).data('percent');
-                    var tipAmount = amount * (percent / 100);
-                    $('#TipAmount').val(tipAmount.toFixed(2));
-                } else {
-                    $('#TipAmount').val($(this).data('amount').toFixed(2));
-                }
-                
-                // Update payment summary
-                updatePaymentSummary();
-            });
-            
-            // Update payment summary when amount or tip changes
-            $('#Amount, #TipAmount, #DiscountAmount').on('input', function() {
-                updatePaymentSummary();
-                
-                // Recalculate tip previews if amount changed
-                if ($(this).attr('id') === 'Amount') {
-                    calculateTipPreviews();
-                }
-            });
-            
-            // Calculate and display tip percentages
-            function calculateTipPreviews() {
-                var amount = parseFloat($('#Amount').val()) || 0;
-                
-                if (amount > 0) {
-                    $('#tip15').text('₹' + (amount * 0.15).toFixed(2));
-                    $('#tip18').text('₹' + (amount * 0.18).toFixed(2));
-                    $('#tip20').text('₹' + (amount * 0.20).toFixed(2));
-                    $('#tip25').text('₹' + (amount * 0.25).toFixed(2));
-                    $('.tip-preview').show();
-                } else {
-                    $('.tip-preview').hide();
-                }
-            }
             
             // Track original remaining and paid; we'll recompute remaining after discount using the same
             // rounding rules as the Payment page (subtotal -> discount -> GST -> tip -> round to whole rupee)
@@ -681,7 +573,6 @@
             $('#Amount').on('input', function(){
                 manualAmountOverride = true;
                 updatePaymentSummary();
-                calculateTipPreviews();
             });
 
             // Consistent rounding helpers (match Payment/Index page)
@@ -693,16 +584,15 @@
                 return (val >= 0) ? Math.floor(val + 0.5) : Math.ceil(val - 0.5);
             }
 
-            // Recompute totals from Subtotal -> Discount -> GST -> Tip; then compute remaining by subtracting paid
+            // Recompute totals from Subtotal -> Discount -> GST; then compute remaining by subtracting paid
             function updatePaymentSummary() {
                 var baseSubtotal = parseFloat($('#Subtotal').val()) || 0; // pre-GST base
                 var gstPerc = parseFloat($('#GSTPercentage').val()) || 0;
                 var discount = parseFloat($('#DiscountAmount').val()) || 0; // discount on subtotal
-                var tip = parseFloat($('#TipAmount').val()) || 0;
 
                 var discountedSubtotal = baseSubtotal - discount; if (discountedSubtotal < 0) discountedSubtotal = 0;
                 var gstAmount = roundAway(discountedSubtotal * gstPerc / 100.0, 2);
-                var preRoundTotal = roundMoney(discountedSubtotal + gstAmount + tip);
+                var preRoundTotal = roundMoney(discountedSubtotal + gstAmount);
 
                 // Remaining after considering previous payments
                 var newRemaining = Math.max(0, preRoundTotal - alreadyPaid);
@@ -723,7 +613,6 @@
 
                 // Update summary spans (numbers only; currency symbol is outside)
                 $('#summaryAmount').text(newRemaining.toFixed(2));
-                $('#summaryTip').text(tip.toFixed(2));
                 $('#summaryDiscount').text(discount.toFixed(2));
                 $('#summaryRoundoff').text(roundoff.toFixed(2));
                 $('#summaryTotal').text(displayedAmount.toFixed(2));
@@ -747,7 +636,6 @@
                 // Recompute summary and header
                 manualAmountOverride = false; // reset when discount changes
                 updatePaymentSummary();
-                calculateTipPreviews();
             }
 
             $('#discountEntry').on('input', recalcDiscountAndAmount);
