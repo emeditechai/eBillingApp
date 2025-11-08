@@ -437,68 +437,34 @@ END", connection))
                         }
                     }
                     
-                    // Calculate GST information before processing payment
-                    decimal gstPercentage = 5.0m; // Default
-                    decimal subtotal = 0m;
-                    decimal gstAmount = 0m;
-                    decimal cgstAmount = 0m;
-                    decimal sgstAmount = 0m;
-                    decimal amountExclGST = 0m;
-                    
-                    // Get GST percentage and order subtotal
-                    using (Microsoft.Data.SqlClient.SqlConnection gstConnection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
-                    {
-                        gstConnection.Open();
-                        
-                        // Get GST percentage from settings
-                        using (Microsoft.Data.SqlClient.SqlCommand gstCmd = new Microsoft.Data.SqlClient.SqlCommand(
-                            "SELECT DefaultGSTPercentage FROM dbo.RestaurantSettings", gstConnection))
-                        {
-                            var result = gstCmd.ExecuteScalar();
-                            if (result != null && result != DBNull.Value)
-                            {
-                                gstPercentage = Convert.ToDecimal(result);
-                            }
-                        }
-                        
-                        // Get order subtotal for GST calculation
-                        using (Microsoft.Data.SqlClient.SqlCommand subtotalCmd = new Microsoft.Data.SqlClient.SqlCommand(
-                            "SELECT Subtotal FROM Orders WHERE Id = @OrderId", gstConnection))
-                        {
-                            subtotalCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
-                            var subtotalResult = subtotalCmd.ExecuteScalar();
-                            if (subtotalResult != null && subtotalResult != DBNull.Value)
-                            {
-                                subtotal = Convert.ToDecimal(subtotalResult);
-                            }
-                        }
-                    }
-                    
-                    // Get GST percentage and order details
+                    // Get GST percentage and order details - IMPORTANT: Use persisted GST from Orders table
                     decimal paymentGstPercentage = 5.0m; // Default fallback
                     decimal orderSubtotal = 0m;
                     using (var gstConnection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
                     {
                         gstConnection.Open();
                         
-                        // Get GST percentage from settings
-                        using (var gstCmd = new Microsoft.Data.SqlClient.SqlCommand("SELECT DefaultGSTPercentage FROM dbo.RestaurantSettings", gstConnection))
+                        // Get order subtotal and persisted GST percentage (BAR orders have 20%, Foods have default %)
+                        using (var orderCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                            SELECT 
+                                ISNULL(o.Subtotal, 0) AS Subtotal,
+                                CASE 
+                                    WHEN EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'GSTPercentage')
+                                        AND o.GSTPercentage IS NOT NULL AND o.GSTPercentage > 0 
+                                    THEN o.GSTPercentage
+                                    ELSE (SELECT ISNULL(DefaultGSTPercentage, 5.0) FROM dbo.RestaurantSettings)
+                                END AS GSTPercentage
+                            FROM Orders o
+                            WHERE o.Id = @OrderId", gstConnection))
                         {
-                            var result = gstCmd.ExecuteScalar();
-                            if (result != null && result != DBNull.Value)
+                            orderCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
+                            using (var reader = orderCmd.ExecuteReader())
                             {
-                                paymentGstPercentage = Convert.ToDecimal(result);
-                            }
-                        }
-                        
-                        // Get order subtotal (amount before GST)
-                        using (var subtotalCmd = new Microsoft.Data.SqlClient.SqlCommand("SELECT Subtotal FROM Orders WHERE Id = @OrderId", gstConnection))
-                        {
-                            subtotalCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
-                            var subtotalResult = subtotalCmd.ExecuteScalar();
-                            if (subtotalResult != null && subtotalResult != DBNull.Value)
-                            {
-                                orderSubtotal = Convert.ToDecimal(subtotalResult);
+                                if (reader.Read())
+                                {
+                                    orderSubtotal = reader.GetDecimal(0);
+                                    paymentGstPercentage = reader.GetDecimal(1);
+                                }
                             }
                         }
                     }
@@ -1070,7 +1036,7 @@ END", connection))
                                 persistedTotalAmount = rd.IsDBNull(4) ? 0m : rd.GetDecimal(4);
                                 decimal persistedGSTPerc = rd.IsDBNull(5) ? 0m : rd.GetDecimal(5);
                                 
-                                // Use persisted GST percentage if available, otherwise fallback to default
+                                // Use persisted GST percentage if available (BAR=20%, Foods=10%, etc.)
                                 if (persistedGSTPerc > 0)
                                 {
                                     gstPerc = persistedGSTPerc;
@@ -1079,8 +1045,8 @@ END", connection))
                         }
                     }
                     
-                    // Fallback to default GST if not persisted
-                    if (gstPerc == 5.0m || gstPerc == 0m)
+                    // Fallback to default GST ONLY if not persisted (0 or NULL in Orders.GSTPercentage)
+                    if (gstPerc == 0m || gstPerc == 5.0m) // 5.0 is initial default, need to check if persisted
                     {
                         using (var gstCmd = new SqlCommand("SELECT DefaultGSTPercentage FROM dbo.RestaurantSettings", conn))
                         {
@@ -1088,7 +1054,24 @@ END", connection))
                             if (r != null && r != DBNull.Value) 
                             {
                                 decimal defaultGST = Convert.ToDecimal(r);
-                                if (gstPerc == 0m) gstPerc = defaultGST; // Only override if not persisted
+                                // Only use default if Orders.GSTPercentage was 0 (not persisted yet)
+                                // Read actual persisted value again to avoid overwriting valid data
+                                using (var recheckCmd = new SqlCommand("SELECT ISNULL(GSTPercentage, 0) FROM Orders WHERE Id = @OrderId", conn))
+                                {
+                                    recheckCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
+                                    var persistedCheck = recheckCmd.ExecuteScalar();
+                                    decimal actualPersisted = (persistedCheck != null && persistedCheck != DBNull.Value) ? Convert.ToDecimal(persistedCheck) : 0m;
+                                    
+                                    // Only override if truly not persisted (0 or NULL)
+                                    if (actualPersisted == 0m)
+                                    {
+                                        gstPerc = defaultGST;
+                                    }
+                                    else
+                                    {
+                                        gstPerc = actualPersisted; // Use persisted value (could be 20% for BAR, 10% for Foods, etc.)
+                                    }
+                                }
                             }
                         }
                     }

@@ -11,6 +11,7 @@ namespace RestaurantManagementSystem.Models
         public List<ServerPerformance> ServerPerformance { get; set; } = new List<ServerPerformance>();
         public List<OrderStatusData> OrderStatusData { get; set; } = new List<OrderStatusData>();
         public List<HourlySalesData> HourlySalesPattern { get; set; } = new List<HourlySalesData>();
+        public List<OrderListingData> OrderListing { get; set; } = new List<OrderListingData>();
         public List<UserSelectItem> AvailableUsers { get; set; } = new List<UserSelectItem>();
     }
 
@@ -104,5 +105,24 @@ namespace RestaurantManagementSystem.Models
         public string Username { get; set; } = "";
         
         public string DisplayName => !string.IsNullOrEmpty(Name) ? $"{Name} ({Username})" : Username;
+    }
+
+    public class OrderListingData
+    {
+        public int OrderId { get; set; }
+        public string OrderNumber { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+        public decimal BillValue { get; set; }
+        public decimal DiscountAmount { get; set; }
+        public decimal NetAmount { get; set; }
+        public decimal TaxAmount { get; set; }
+        public decimal TipAmount { get; set; }
+        public decimal TotalAmount { get; set; }
+        public int Status { get; set; }
+        public string StatusText { get; set; } = "";
+        public string ServerName { get; set; } = "";
+        
+        public string CreatedAtFormatted => CreatedAt.ToString("MMM dd, yyyy hh:mm tt");
+        public decimal DiscountPercentage => BillValue > 0 ? (DiscountAmount * 100 / BillValue) : 0;
     }
 }

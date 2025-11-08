@@ -1,25 +1,41 @@
 @model RestaurantManagementSystem.Models.GSTBreakupReportViewModel
 @{
-    ViewData["Title"] = "GST Breakup Report";
+    ViewData["Title"] = "GST Breakup Report - Indian Tax Compliance";
 }
 
 <div class="card shadow-sm mb-4">
-    <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
-        <h5 class="mb-0"><i class="fas fa-file-invoice-dollar me-2"></i>GST Breakup Report</h5>
+    <div class="card-header bg-gradient text-white d-flex align-items-center justify-content-between" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);">
+        <div>
+            <h4 class="mb-0"><i class="fas fa-file-invoice-dollar me-2"></i>GST Breakup Report</h4>
+            <small class="opacity-75">Goods and Services Tax - Indian Tax Compliance</small>
+        </div>
+        <div class="text-end">
+            <div class="small opacity-75">Report Period</div>
+            <div class="fw-bold">@(Model.Filter.StartDate?.ToString("dd MMM yyyy") ?? "Today") - @(Model.Filter.EndDate?.ToString("dd MMM yyyy") ?? "Today")</div>
+        </div>
     </div>
     <div class="card-body">
-        <form asp-action="GSTBreakup" method="post" class="row g-3 mb-3">
+        <!-- Note: Formula display -->
+        <div class="alert alert-info alert-dismissible fade show mb-3" role="alert">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Taxable Value Formula:</strong> Subtotal - Discount | 
+            <strong>GST Calculation:</strong> Taxable Value × GST% | 
+            <strong>Invoice Total:</strong> Taxable Value + Total GST
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+
+        <form asp-action="GSTBreakup" method="post" class="row g-3 mb-4">
             <div class="col-md-3">
-                <label asp-for="Filter.StartDate" class="form-label"></label>
+                <label asp-for="Filter.StartDate" class="form-label fw-semibold"></label>
                 <input asp-for="Filter.StartDate" class="form-control" type="date" />
             </div>
             <div class="col-md-3">
-                <label asp-for="Filter.EndDate" class="form-label"></label>
+                <label asp-for="Filter.EndDate" class="form-label fw-semibold"></label>
                 <input asp-for="Filter.EndDate" class="form-control" type="date" />
             </div>
-            <div class="col-md-4 d-flex align-items-end">
-                <button type="submit" class="btn btn-success me-2"><i class="fas fa-sync-alt me-1"></i>Refresh</button>
-                <button type="button" id="exportCsvBtn" class="btn btn-outline-secondary me-2"><i class="fas fa-file-csv me-1"></i>CSV</button>
+            <div class="col-md-6 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-success"><i class="fas fa-sync-alt me-1"></i>Refresh Report</button>
+                <button type="button" id="exportCsvBtn" class="btn btn-outline-secondary"><i class="fas fa-file-csv me-1"></i>Export CSV</button>
                 <button type="button" id="printBtn" class="btn btn-outline-primary"><i class="fas fa-print me-1"></i>Print</button>
             </div>
         </form>
@@ -56,79 +72,113 @@
             <div class="col-md-2 mb-3">
                 <div class="report-tile tile-cyan">
                     <div class="label">Taxable Value</div>
-                    <div class="value display-6">₹@Model.Summary.TotalTaxableValue.ToString("N2")</div>
+                    <div class="value display-6">₹@(Model.Summary.TotalTaxableValue.ToString("N2"))</div>
                 </div>
             </div>
 
             <div class="col-md-2 mb-3">
                 <div class="report-tile tile-amber">
                     <div class="label">Discount</div>
-                    <div class="value display-6">₹@Model.Summary.TotalDiscount.ToString("N2")</div>
+                    <div class="value display-6">₹@(Model.Summary.TotalDiscount.ToString("N2"))</div>
                 </div>
             </div>
 
             <div class="col-md-2 mb-3">
                 <div class="report-tile tile-green">
                     <div class="label">CGST</div>
-                    <div class="value display-6">₹@Model.Summary.TotalCGST.ToString("N2")</div>
+                    <div class="value display-6">₹@(Model.Summary.TotalCGST.ToString("N2"))</div>
                 </div>
             </div>
 
             <div class="col-md-2 mb-3">
                 <div class="report-tile tile-gray">
                     <div class="label">SGST</div>
-                    <div class="value display-6">₹@Model.Summary.TotalSGST.ToString("N2")</div>
+                    <div class="value display-6">₹@(Model.Summary.TotalSGST.ToString("N2"))</div>
                 </div>
             </div>
 
             <div class="col-md-2 mb-3">
                 <div class="report-tile tile-charcoal">
                     <div class="label">Invoice Total</div>
-                    <div class="value display-6">₹@Model.Summary.NetAmount.ToString("N2")</div>
+                    <div class="value display-6">₹@(Model.Summary.NetAmount.ToString("N2"))</div>
                 </div>
             </div>
         </div>
 
         <div class="table-responsive">
-            <table class="table table-striped table-hover" id="gstBreakupTable">
-                <thead class="table-light">
+            <table class="table table-striped table-hover table-sm" id="gstBreakupTable">
+                <thead class="table-dark">
                     <tr>
                         <th>Date/Time</th>
-                        <th>Order #</th>
-                        <th class="text-end">Taxable Value</th>
+                        <th>Invoice #</th>
+                        <th>Type</th>
+                        <th>Table</th>
+                        <th class="text-end">Subtotal</th>
                         <th class="text-end">Discount</th>
+                        <th class="text-end bg-warning bg-opacity-25">Taxable Value</th>
+                        <th class="text-end">GST %</th>
                         <th class="text-end">CGST %</th>
-                        <th class="text-end">CGST Amt</th>
+                        <th class="text-end">CGST ₹</th>
                         <th class="text-end">SGST %</th>
-                        <th class="text-end">SGST Amt</th>
-                        <th class="text-end">Total GST</th>
-                        <th class="text-end">Invoice Total</th>
+                        <th class="text-end">SGST ₹</th>
+                        <th class="text-end bg-success bg-opacity-25">Total GST</th>
+                        <th class="text-end bg-info bg-opacity-25 fw-bold">Invoice Total</th>
                     </tr>
                 </thead>
                 <tbody>
                 @if (!Model.Rows.Any())
                 {
-                    <tr><td colspan="10" class="text-center text-muted">No payments in range.</td></tr>
+                    <tr><td colspan="14" class="text-center text-muted py-4">No payments found for selected date range.</td></tr>
                 }
                 else
                 {
                     foreach (var row in Model.Rows)
                     {
+                        decimal subtotal = row.TaxableValue + row.DiscountAmount;
                         <tr>
-                            <td>@row.PaymentDateFormatted</td>
-                            <td>@row.OrderNumber</td>
-                            <td class="text-end">₹@row.TaxableValue.ToString("N2")</td>
-                            <td class="text-end text-danger">-₹@row.DiscountAmount.ToString("N2")</td>
-                            <td class="text-end">@row.CGSTPercentage.ToString("N2")%</td>
-                            <td class="text-end">₹@row.CGSTAmount.ToString("N2")</td>
-                            <td class="text-end">@row.SGSTPercentage.ToString("N2")%</td>
-                            <td class="text-end">₹@row.SGSTAmount.ToString("N2")</td>
-                            <td class="text-end fw-semibold">₹@( (row.CGSTAmount + row.SGSTAmount).ToString("N2") )</td>
-                            <td class="text-end fw-semibold">₹@row.InvoiceTotal.ToString("N2")</td>
+                            <td class="small">@row.PaymentDateFormatted</td>
+                            <td class="fw-semibold">@row.OrderNumber</td>
+                            <td>
+                                @if (row.OrderType == "Bar")
+                                {
+                                    <span class="badge bg-primary">BAR</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">Foods</span>
+                                }
+                            </td>
+                            <td>@row.TableNumber</td>
+                            <td class="text-end text-muted small">₹@(subtotal.ToString("N2"))</td>
+                            <td class="text-end text-danger small">@(row.DiscountAmount > 0 ? $"-₹{row.DiscountAmount:N2}" : "-")</td>
+                            <td class="text-end fw-bold bg-warning bg-opacity-10">₹@(row.TaxableValue.ToString("N2"))</td>
+                            <td class="text-end">
+                                <span class="badge @(row.GSTPercentage >= 20 ? "bg-danger" : "bg-info")">
+                                    @(row.GSTPercentage.ToString("N1"))%
+                                </span>
+                            </td>
+                            <td class="text-end small">@(row.CGSTPercentage.ToString("N2"))%</td>
+                            <td class="text-end">₹@(row.CGSTAmount.ToString("N2"))</td>
+                            <td class="text-end small">@(row.SGSTPercentage.ToString("N2"))%</td>
+                            <td class="text-end">₹@(row.SGSTAmount.ToString("N2"))</td>
+                            <td class="text-end fw-bold bg-success bg-opacity-10">₹@(row.TotalGST.ToString("N2"))</td>
+                            <td class="text-end fw-bold bg-info bg-opacity-10">₹@(row.InvoiceTotal.ToString("N2"))</td>
                         </tr>
                     }
                 }
                 </tbody>
+                <tfoot class="table-secondary fw-bold">
+                    <tr>
+                        <td colspan="6" class="text-end">TOTALS:</td>
+                        <td class="text-end bg-warning bg-opacity-25">₹@(Model.Summary.TotalTaxableValue.ToString("N2"))</td>
+                        <td colspan="2"></td>
+                        <td class="text-end">₹@(Model.Summary.TotalCGST.ToString("N2"))</td>
+                        <td></td>
+                        <td class="text-end">₹@(Model.Summary.TotalSGST.ToString("N2"))</td>
+                        <td class="text-end bg-success bg-opacity-25">₹@((Model.Summary.TotalCGST + Model.Summary.TotalSGST).ToString("N2"))</td>
+                        <td class="text-end bg-info bg-opacity-25">₹@(Model.Summary.NetAmount.ToString("N2"))</td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </div>

@@ -3,11 +3,45 @@
     ViewData["Title"] = "Collection Register";
 }
 
+<style>
+    .report-header-gradient {
+        background: linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%);
+        padding: 1.5rem;
+        border-radius: 0.5rem 0.5rem 0 0;
+        color: white;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .report-header-gradient h4 {
+        font-weight: 700;
+        margin: 0;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .report-header-gradient .subtitle {
+        opacity: 0.95;
+        font-size: 0.95rem;
+        margin-top: 0.25rem;
+    }
+</style>
+
 <div class="card shadow-sm mb-4">
-    <div class="card-header bg-success text-white d-flex align-items-center justify-content-between">
-        <h5 class="mb-0"><i class="fas fa-cash-register me-2"></i>Order Wise Payment Method Wise Collection Register</h5>
+    <div class="report-header-gradient">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <h4><i class="fas fa-cash-register me-2"></i>Collection Register Report</h4>
+                <div class="subtitle">Order-wise Payment Method-wise Collection Details</div>
+            </div>
+            <div class="text-end">
+                <i class="fas fa-file-invoice-dollar fa-3x opacity-50"></i>
+            </div>
+        </div>
     </div>
     <div class="card-body">
+        <div class="alert alert-info mb-4">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Report Formula:</strong> Actual Bill = Subtotal - Discount (Taxable Amount) | Receipt Amount = Actual Bill + GST + Round Off | 
+            <strong>Note:</strong> Shows individual payment records (split payments appear as separate rows)
+        </div>
+        
         <form asp-action="CollectionRegister" method="post" class="row g-3 mb-3">
             <div class="col-md-2">
                 <label asp-for="Filter.FromDate" class="form-label">From Date</label>
@@ -37,6 +71,8 @@
             .tile-purple { background: linear-gradient(135deg,#9333ea 0%,#a855f7 100%); color:#fff; }
             .tile-blue { background: linear-gradient(135deg,#3b82f6 0%,#60a5fa 100%); color:#fff; }
             .tile-orange { background: linear-gradient(135deg,#f97316 0%,#fb923c 100%); color:#fff; }
+            .tile-success { background: linear-gradient(135deg,#16a34a 0%,#22c55e 100%); color:#fff; }
+            .tile-info { background: linear-gradient(135deg,#0ea5e9 0%,#38bdf8 100%); color:#fff; }
             .tile-emerald { background: linear-gradient(135deg,#059669 0%,#10b981 100%); color:#fff; }
             
             @@media (max-width:768px) {
@@ -56,42 +92,48 @@
             <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
                 <div class="summary-tile tile-purple">
                     <div class="label">Total Transactions</div>
-                    <div class="value">@Model.Summary.TotalTransactions</div>
+                    <div class="value">@(Model.Summary.TotalTransactions)</div>
                 </div>
             </div>
-            <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
                 <div class="summary-tile tile-blue">
-                    <div class="label">Actual Bill Amount</div>
-                    <div class="value">₹@Model.Summary.TotalActualAmount.ToString("N2")</div>
+                    <div class="label">Actual Bill (Taxable)</div>
+                    <div class="value">₹@(Model.Summary.TotalActualAmount.ToString("N2"))</div>
                 </div>
             </div>
             <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
                 <div class="summary-tile tile-orange">
                     <div class="label">Total Discount</div>
-                    <div class="value">₹@Model.Summary.TotalDiscount.ToString("N2")</div>
+                    <div class="value">₹@(Model.Summary.TotalDiscount.ToString("N2"))</div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                <div class="summary-tile tile-success">
+                    <div class="label">Total GST</div>
+                    <div class="value">₹@(Model.Summary.TotalGST.ToString("N2"))</div>
                 </div>
             </div>
             <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
                 <div class="summary-tile tile-info">
                     <div class="label">Round Off</div>
-                    <div class="value">₹@Model.Summary.TotalRoundOff.ToString("+0.00;-0.00;0.00")</div>
+                    <div class="value">₹@(Model.Summary.TotalRoundOff.ToString("+0.00;-0.00;0.00"))</div>
                 </div>
             </div>
-            <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
                 <div class="summary-tile tile-emerald">
                     <div class="label">Total Collection</div>
-                    <div class="value">₹@Model.Summary.TotalReceiptAmount.ToString("N2")</div>
+                    <div class="value">₹@(Model.Summary.TotalReceiptAmount.ToString("N2"))</div>
                 </div>
             </div>
         </div>
 
         @if (Model.Rows.Any())
         {
-            <div class="alert alert-info">
-                <i class="fas fa-info-circle me-2"></i>
-                <strong>Period:</strong> @Model.Filter.FromDate?.ToString("dd-MMM-yyyy") to @Model.Filter.ToDate?.ToString("dd-MMM-yyyy") |
+            <div class="alert alert-success mb-3">
+                <i class="fas fa-filter me-2"></i>
+                <strong>Period:</strong> @(Model.Filter.FromDate?.ToString("dd-MMM-yyyy")) to @(Model.Filter.ToDate?.ToString("dd-MMM-yyyy")) |
                 <strong>Payment Method:</strong> @Model.Filter.PaymentMethodName |
-                <strong>Records:</strong> @Model.Rows.Count
+                <strong>Records:</strong> @(Model.Rows.Count)
             </div>
 
             <div class="table-responsive" id="reportContent">
@@ -104,6 +146,7 @@
                             <th>Username</th>
                             <th class="text-end">Actual Bill</th>
                             <th class="text-end">Discount</th>
+                            <th class="text-end">GST Amount</th>
                             <th class="text-end">Round Off</th>
                             <th class="text-end">Receipt Amount</th>
                             <th>Payment Method</th>
@@ -114,14 +157,15 @@
                         @foreach (var row in Model.Rows)
                         {
                             <tr>
-                                <td class="text-nowrap">@row.PaymentDate.ToString("dd-MMM-yyyy HH:mm")</td>
+                                <td class="text-nowrap">@(row.PaymentDate.ToString("dd-MMM-yyyy HH:mm"))</td>
                                 <td>@row.OrderNo</td>
                                 <td>@row.TableNo</td>
                                 <td>@row.Username</td>
-                                <td class="text-end">₹@row.ActualBillAmount.ToString("N2")</td>
-                                <td class="text-end">₹@row.DiscountAmount.ToString("N2")</td>
-                                <td class="text-end">₹@row.RoundOffAmount.ToString("+0.00;-0.00;0.00")</td>
-                                <td class="text-end fw-bold">₹@row.ReceiptAmount.ToString("N2")</td>
+                                <td class="text-end">₹@(row.ActualBillAmount.ToString("N2"))</td>
+                                <td class="text-end">₹@(row.DiscountAmount.ToString("N2"))</td>
+                                <td class="text-end text-success">₹@(row.GSTAmount.ToString("N2"))</td>
+                                <td class="text-end">₹@(row.RoundOffAmount.ToString("+0.00;-0.00;0.00"))</td>
+                                <td class="text-end fw-bold">₹@(row.ReceiptAmount.ToString("N2"))</td>
                                 <td><span class="badge bg-primary">@row.PaymentMethod</span></td>
                                 <td class="small text-muted">@row.Details</td>
                             </tr>
@@ -130,10 +174,11 @@
                     <tfoot class="table-light fw-bold">
                         <tr>
                             <td colspan="4" class="text-end">TOTAL:</td>
-                            <td class="text-end">₹@Model.Summary.TotalActualAmount.ToString("N2")</td>
-                            <td class="text-end">₹@Model.Summary.TotalDiscount.ToString("N2")</td>
-                            <td class="text-end">₹@Model.Summary.TotalRoundOff.ToString("+0.00;-0.00;0.00")</td>
-                            <td class="text-end text-success">₹@Model.Summary.TotalReceiptAmount.ToString("N2")</td>
+                            <td class="text-end">₹@(Model.Summary.TotalActualAmount.ToString("N2"))</td>
+                            <td class="text-end">₹@(Model.Summary.TotalDiscount.ToString("N2"))</td>
+                            <td class="text-end text-success">₹@(Model.Summary.TotalGST.ToString("N2"))</td>
+                            <td class="text-end">₹@(Model.Summary.TotalRoundOff.ToString("+0.00;-0.00;0.00"))</td>
+                            <td class="text-end text-success">₹@(Model.Summary.TotalReceiptAmount.ToString("N2"))</td>
                             <td colspan="2"></td>
                         </tr>
                     </tfoot>

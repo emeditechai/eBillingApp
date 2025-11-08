@@ -1,9 +1,12 @@
--- =============================================
--- Author:      Auto-generated
--- Create date: 2025-10-04
--- Description: Returns discount usage summary and detailed discounted orders
--- Parameters: @StartDate DATE, @EndDate DATE
--- =============================================
+-- =====================================================================
+-- Updated Discount Report Stored Procedure
+-- Adds StatusText column to show proper status names instead of numbers
+-- Date: 2025-11-08
+-- =====================================================================
+
+PRINT 'Updating Discount Report Stored Procedure...';
+PRINT '';
+
 IF OBJECT_ID('usp_GetDiscountReport', 'P') IS NOT NULL
     DROP PROCEDURE usp_GetDiscountReport
 GO
@@ -69,3 +72,10 @@ BEGIN
     ORDER BY o.CreatedAt DESC;
 END
 GO
+
+PRINT '✓ Discount Report stored procedure updated successfully';
+PRINT '  - StatusText column added (Pending/Paid/Cancelled/Completed/Refunded)';
+PRINT '  - Status badges will now show proper text instead of numbers';
+PRINT '';
+PRINT 'Deployment completed successfully!';
+PRINT '========================================';

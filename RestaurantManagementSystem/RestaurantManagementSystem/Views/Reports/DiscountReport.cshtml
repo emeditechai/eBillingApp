@@ -3,11 +3,45 @@
     ViewData["Title"] = "Discount Report";
 }
 
+<style>
+    .report-header-gradient {
+        background: linear-gradient(135deg, #dc2626 0%, #ef4444 50%, #f87171 100%);
+        padding: 1.5rem;
+        border-radius: 0.5rem 0.5rem 0 0;
+        color: white;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .report-header-gradient h4 {
+        font-weight: 700;
+        margin: 0;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .report-header-gradient .subtitle {
+        opacity: 0.95;
+        font-size: 0.95rem;
+        margin-top: 0.25rem;
+    }
+</style>
+
 <div class="card shadow-sm mb-4">
-    <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
-        <h5 class="mb-0"><i class="fas fa-percentage me-2"></i>Discount Report</h5>
+    <div class="report-header-gradient">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <h4><i class="fas fa-percentage me-2"></i>Discount Analysis Report</h4>
+                <div class="subtitle">Order-wise Discount Tracking & Analysis</div>
+            </div>
+            <div class="text-end">
+                <i class="fas fa-tags fa-3x opacity-50"></i>
+            </div>
+        </div>
     </div>
     <div class="card-body">
+        <div class="alert alert-info mb-4">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Report Metrics:</strong> Net Amount = Subtotal - Discount | Discount % = (Discount ÷ Subtotal) × 100 | 
+            <strong>Shows:</strong> All orders with discount applied during selected period
+        </div>
+        
         <form asp-action="DiscountReport" method="post" class="row g-3 mb-3">
             <div class="col-md-3">
                 <label asp-for="Filter.StartDate" class="form-label"></label>
@@ -17,118 +51,152 @@
                 <label asp-for="Filter.EndDate" class="form-label"></label>
                 <input asp-for="Filter.EndDate" class="form-control" type="date" />
             </div>
-            <div class="col-md-3 d-flex align-items-end">
-                <button type="submit" class="btn btn-success me-2"><i class="fas fa-sync-alt me-1"></i>Refresh</button>
-                <button type="button" id="exportCsvBtn" class="btn btn-outline-secondary"><i class="fas fa-file-csv me-1"></i>CSV</button>
+            <div class="col-md-6 d-flex align-items-end">
+                <button type="submit" class="btn btn-danger me-2"><i class="fas fa-sync-alt me-1"></i>Refresh</button>
+                <button type="button" id="exportCsvBtn" class="btn btn-outline-secondary me-2"><i class="fas fa-file-csv me-1"></i>Export CSV</button>
+                <button type="button" id="printBtn" class="btn btn-outline-primary"><i class="fas fa-print me-1"></i>Print</button>
             </div>
         </form>
 
         <style>
-            /* Uniform, report-specific tile styles to add color, contrast and consistent sizing */
-            .report-tile {
-                padding: 1.25rem;
-                border-radius: .6rem;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-                height: 150px; /* fixed height so all tiles are uniform */
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                gap: .25rem;
+            .summary-tile { padding: 1rem; border-radius: .5rem; box-shadow: 0 2px 6px rgba(0,0,0,0.08); height:120px; display:flex; flex-direction:column; justify-content:center; }
+            .summary-tile .label { font-size:.85rem; font-weight:600; opacity:.9; margin-bottom:.25rem; }
+            .summary-tile .value { font-weight:700; font-size:1.6rem; line-height:1.1; }
+            .tile-red { background: linear-gradient(135deg,#dc2626 0%,#ef4444 100%); color:#fff; }
+            .tile-green { background: linear-gradient(135deg,#16a34a 0%,#22c55e 100%); color:#fff; }
+            .tile-amber { background: linear-gradient(135deg,#f59e0b 0%,#fbbf24 100%); color:#fff; }
+            .tile-rose { background: linear-gradient(135deg,#e11d48 0%,#f43f5e 100%); color:#fff; }
+            .tile-cyan { background: linear-gradient(135deg,#06b6d4 0%,#22d3ee 100%); color:#fff; }
+            .tile-slate { background: linear-gradient(135deg,#475569 0%,#64748b 100%); color:#fff; }
+            
+            @@media (max-width:768px) {
+                .summary-tile { height:100px; padding:.8rem; }
+                .summary-tile .value { font-size:1.3rem; }
             }
-            .report-tile .label {
-                opacity: .95;
-                font-size: .95rem;
-            }
-            .report-tile .value {
-                font-weight: 800;
-                font-size: 2.1rem;
-                line-height: 1;
-            }
-            /* ensure Bootstrap display-6 doesn't override our sizing */
-            .report-tile .value.display-6 { font-size: 2.1rem; font-weight:800; }
-
-            /* responsive tweaks: reduce height & font-size on small screens */
-            @@media (max-width: 768px) {
-                .report-tile { height: 120px; padding: 1rem; }
-                .report-tile .value { font-size: 1.6rem; }
+            
+            @@media print {
+                .no-print { display: none !important; }
+                .card { border: none !important; box-shadow: none !important; }
+                .table { font-size: 10pt; }
             }
         </style>
 
         <div class="row mb-4">
-            <div class="col-md-2 mb-3">
-                <div class="report-tile bg-primary text-white">
+            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                <div class="summary-tile tile-red">
                     <div class="label">Discounted Orders</div>
-                    <div class="value display-6">@Model.Summary.TotalDiscountedOrders</div>
+                    <div class="value">@(Model.Summary.TotalDiscountedOrders)</div>
                 </div>
             </div>
-            <div class="col-md-2 mb-3">
-                <div class="report-tile bg-success text-white">
+            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                <div class="summary-tile tile-green">
                     <div class="label">Total Discount</div>
-                    <div class="value display-6">₹@Model.Summary.TotalDiscountAmount.ToString("N2")</div>
+                    <div class="value">₹@(Model.Summary.TotalDiscountAmount.ToString("N2"))</div>
                 </div>
             </div>
-            <div class="col-md-2 mb-3">
-                <div class="report-tile bg-warning text-dark">
+            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                <div class="summary-tile tile-amber">
                     <div class="label">Avg Discount</div>
-                    <div class="value display-6">₹@Model.Summary.AvgDiscountPerOrder.ToString("N2")</div>
+                    <div class="value">₹@(Model.Summary.AvgDiscountPerOrder.ToString("N2"))</div>
                 </div>
             </div>
-            <div class="col-md-2 mb-3">
-                <div class="report-tile bg-danger text-white">
+            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                <div class="summary-tile tile-rose">
                     <div class="label">Max Discount</div>
-                    <div class="value display-6">₹@Model.Summary.MaxDiscount.ToString("N2")</div>
+                    <div class="value">₹@(Model.Summary.MaxDiscount.ToString("N2"))</div>
                 </div>
             </div>
-            <div class="col-md-2 mb-3">
-                <div class="report-tile bg-info text-dark">
+            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                <div class="summary-tile tile-cyan">
                     <div class="label">Gross Before</div>
-                    <div class="value display-6">₹@Model.Summary.TotalGrossBeforeDiscount.ToString("N0")</div>
+                    <div class="value">₹@(Model.Summary.TotalGrossBeforeDiscount.ToString("N0"))</div>
                 </div>
             </div>
-            <div class="col-md-2 mb-3">
-                <div class="report-tile bg-secondary text-white">
+            <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                <div class="summary-tile tile-slate">
                     <div class="label">Discount % Gross</div>
-                    <div class="value display-6">@Model.Summary.DiscountPercentageOfGross.ToString("N2")%</div>
+                    <div class="value">@(Model.Summary.DiscountPercentageOfGross.ToString("N2"))%</div>
                 </div>
             </div>
         </div>
 
-        <div class="table-responsive">
-            <table class="table table-striped table-hover" id="discountReportTable">
-                <thead class="table-light">
+        <div class="table-responsive" id="reportContent">
+            <table class="table table-striped table-hover table-sm" id="discountReportTable">
+                <thead class="table-danger">
                     <tr>
                         <th>Date/Time</th>
                         <th>Order #</th>
-                        <th>Server</th>
-                        <th class="text-end">Gross</th>
-                        <th class="text-end text-danger">Discount</th>
-                        <th class="text-end">Net</th>
+                        <th>Bill By</th>
+                        <th class="text-end">Subtotal</th>
+                        <th class="text-end text-danger">Discount Amt</th>
+                        <th class="text-end text-danger">Discount %</th>
+                        <th class="text-end">Net Amount</th>
                         <th class="text-end">Tip</th>
-                        <th class="text-end">Status</th>
+                        <th class="text-center">Status</th>
                     </tr>
                 </thead>
                 <tbody>
                 @if (!Model.Rows.Any())
                 {
-                    <tr><td colspan="8" class="text-center text-muted">No discounted orders in range.</td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-4"><i class="fas fa-inbox me-2"></i>No discounted orders found in the selected date range.</td></tr>
                 }
                 else
                 {
                     foreach (var row in Model.Rows)
                     {
                         <tr>
-                            <td>@row.CreatedAtFormatted</td>
-                            <td><a asp-controller="Order" asp-action="Details" asp-route-id="@row.OrderId">@row.OrderNumber</a></td>
+                            <td class="text-nowrap">@(row.CreatedAtFormatted)</td>
+                            <td><a asp-controller="Order" asp-action="Details" asp-route-id="@row.OrderId" class="text-decoration-none">@row.OrderNumber</a></td>
                             <td>@row.ServerDisplay</td>
-                            <td class="text-end">₹@row.GrossAmount.ToString("N2")</td>
-                            <td class="text-end text-danger">-₹@row.DiscountAmount.ToString("N2")</td>
-                            <td class="text-end fw-semibold">₹@row.TotalAmount.ToString("N2")</td>
-                            <td class="text-end">₹@row.TipAmount.ToString("N2")</td>
-                            <td class="text-end">@row.Status</td>
+                            <td class="text-end">₹@(row.Subtotal.ToString("N2"))</td>
+                            <td class="text-end text-danger fw-bold">₹@(row.DiscountAmount.ToString("N2"))</td>
+                            <td class="text-end text-danger fw-bold">@(row.DiscountPercentage.ToString("N1"))%</td>
+                            <td class="text-end fw-semibold">₹@(row.TotalAmount.ToString("N2"))</td>
+                            <td class="text-end">₹@(row.TipAmount.ToString("N2"))</td>
+                            <td class="text-center">
+                                @if (row.StatusText == "Paid")
+                                {
+                                    <span class="badge bg-success">Paid</span>
+                                }
+                                else if (row.StatusText == "Pending")
+                                {
+                                    <span class="badge bg-warning text-dark">Pending</span>
+                                }
+                                else if (row.StatusText == "Completed")
+                                {
+                                    <span class="badge bg-info text-white">Completed</span>
+                                }
+                                else if (row.StatusText == "Cancelled")
+                                {
+                                    <span class="badge bg-danger">Cancelled</span>
+                                }
+                                else if (row.StatusText == "Refunded")
+                                {
+                                    <span class="badge bg-secondary">Refunded</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">@row.StatusText</span>
+                                }
+                            </td>
                         </tr>
                     }
                 }
                 </tbody>
+                @if (Model.Rows.Any())
+                {
+                    <tfoot class="table-light fw-bold">
+                        <tr>
+                            <td colspan="3" class="text-end">TOTAL:</td>
+                            <td class="text-end">₹@(Model.Rows.Sum(r => r.Subtotal).ToString("N2"))</td>
+                            <td class="text-end text-danger">₹@(Model.Summary.TotalDiscountAmount.ToString("N2"))</td>
+                            <td class="text-end text-danger">@(Model.Summary.DiscountPercentageOfGross.ToString("N1"))%</td>
+                            <td class="text-end">₹@(Model.Rows.Sum(r => r.TotalAmount).ToString("N2"))</td>
+                            <td class="text-end">₹@(Model.Rows.Sum(r => r.TipAmount).ToString("N2"))</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                }
             </table>
         </div>
     </div>
@@ -137,15 +205,47 @@
 @section Scripts {
     <script>
         document.getElementById('exportCsvBtn').addEventListener('click', function () {
-            const rows = Array.from(document.querySelectorAll('#discountReportTable tr'));
-            const csv = rows.map(r => Array.from(r.children).map(c => '"' + c.innerText.replace(/"/g,'""') + '"').join(',')).join('\n');
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'discount_report.csv';
-            a.click();
-            URL.revokeObjectURL(url);
+            const table = document.getElementById('discountReportTable');
+            let csv = [];
+            
+            // Header
+            const headerCells = table.querySelectorAll('thead th');
+            let headerRow = [];
+            headerCells.forEach(cell => headerRow.push('"' + cell.textContent.trim() + '"'));
+            csv.push(headerRow.join(','));
+            
+            // Body
+            const rows = table.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                let rowData = [];
+                cells.forEach(cell => {
+                    let text = cell.textContent.trim().replace(/"/g, '""');
+                    rowData.push('"' + text + '"');
+                });
+                csv.push(rowData.join(','));
+            });
+            
+            // Footer
+            const footerCells = table.querySelectorAll('tfoot td');
+            if (footerCells.length > 0) {
+                let footerRow = [];
+                footerCells.forEach(cell => footerRow.push('"' + cell.textContent.trim() + '"'));
+                csv.push(footerRow.join(','));
+            }
+            
+            // Download
+            const csvContent = csv.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'DiscountReport_' + new Date().toISOString().split('T')[0] + '.csv';
+            link.click();
+            URL.revokeObjectURL(link.href);
+        });
+        
+        document.getElementById('printBtn').addEventListener('click', function() {
+            window.print();
         });
     </script>
 }

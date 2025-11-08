@@ -38,14 +38,19 @@ namespace RestaurantManagementSystem.Models
     {
         public DateTime PaymentDate { get; set; }
         public string OrderNumber { get; set; } = string.Empty;
-        public decimal TaxableValue { get; set; } // Amount excluding GST after discount
+        public decimal TaxableValue { get; set; } // Order Subtotal - Discount (base for GST calculation)
         public decimal DiscountAmount { get; set; }
+        public decimal GSTPercentage { get; set; } // Total GST % (e.g., 20% for BAR, 10% for Foods)
         public decimal CGSTPercentage { get; set; }
         public decimal CGSTAmount { get; set; }
         public decimal SGSTPercentage { get; set; }
         public decimal SGSTAmount { get; set; }
         public decimal TotalGST => CGSTAmount + SGSTAmount;
-        public decimal InvoiceTotal { get; set; } // TaxableValue + TotalGST
+        public decimal InvoiceTotal { get; set; } // Taxable Value + Total GST
+        
+        // Indian GST Compliance Fields
+        public string OrderType { get; set; } = string.Empty; // BAR or Foods
+        public string TableNumber { get; set; } = string.Empty;
 
         public string PaymentDateFormatted => PaymentDate.ToString("yyyy-MM-dd HH:mm");
     }

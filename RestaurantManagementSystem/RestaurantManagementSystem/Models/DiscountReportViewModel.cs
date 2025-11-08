@@ -50,8 +50,12 @@ namespace RestaurantManagementSystem.Models
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
         public int Status { get; set; }
+        public string StatusText { get; set; } = string.Empty;
 
         public string ServerDisplay => !string.IsNullOrWhiteSpace(FirstName) ? $"{FirstName} {LastName}" : Username;
         public string CreatedAtFormatted => CreatedAt.ToString("yyyy-MM-dd HH:mm");
+        
+        // Discount Percentage = (DiscountAmount / Subtotal) * 100
+        public decimal DiscountPercentage => Subtotal > 0 ? (DiscountAmount * 100m / Subtotal) : 0m;
     }
 }

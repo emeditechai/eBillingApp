@@ -377,6 +377,7 @@ namespace RestaurantManagementSystem.Controllers
                 viewModel.ServerPerformance.Clear();
                 viewModel.OrderStatusData.Clear();
                 viewModel.HourlySalesPattern.Clear();
+                viewModel.OrderListing.Clear();
 
                 using var reader = await command.ExecuteReaderAsync();
                 
@@ -481,6 +482,29 @@ namespace RestaurantManagementSystem.Controllers
                             OrderCount = reader.GetInt32("OrderCount"),
                             HourlySales = reader.GetDecimal("HourlySales"),
                             AvgOrderValue = reader.GetDecimal("AvgOrderValue")
+                        });
+                    }
+                }
+                
+                // Read Order Listing (Seventh Result Set)
+                if (await reader.NextResultAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        viewModel.OrderListing.Add(new OrderListingData
+                        {
+                            OrderId = reader.GetInt32("OrderId"),
+                            OrderNumber = reader.GetString("OrderNumber"),
+                            CreatedAt = reader.GetDateTime("CreatedAt"),
+                            BillValue = reader.GetDecimal("BillValue"),
+                            DiscountAmount = reader.GetDecimal("DiscountAmount"),
+                            NetAmount = reader.GetDecimal("NetAmount"),
+                            TaxAmount = reader.GetDecimal("TaxAmount"),
+                            TipAmount = reader.GetDecimal("TipAmount"),
+                            TotalAmount = reader.GetDecimal("TotalAmount"),
+                            Status = reader.GetInt32("Status"),
+                            StatusText = reader.GetString("StatusText"),
+                            ServerName = reader.GetString("ServerName")
                         });
                     }
                 }
@@ -701,7 +725,8 @@ namespace RestaurantManagementSystem.Controllers
                             Username = reader.IsDBNull(reader.GetOrdinal("Username")) ? string.Empty : reader.GetString(reader.GetOrdinal("Username")),
                             FirstName = reader.IsDBNull(reader.GetOrdinal("FirstName")) ? string.Empty : reader.GetString(reader.GetOrdinal("FirstName")),
                             LastName = reader.IsDBNull(reader.GetOrdinal("LastName")) ? string.Empty : reader.GetString(reader.GetOrdinal("LastName")),
-                            Status = reader.GetInt32(reader.GetOrdinal("Status"))
+                            Status = reader.GetInt32(reader.GetOrdinal("Status")),
+                            StatusText = reader.GetString(reader.GetOrdinal("StatusText"))
                         });
                     }
                 }
@@ -764,11 +789,14 @@ namespace RestaurantManagementSystem.Controllers
                             OrderNumber = reader.IsDBNull(reader.GetOrdinal("OrderNumber")) ? string.Empty : reader.GetString(reader.GetOrdinal("OrderNumber")),
                             TaxableValue = reader.IsDBNull(reader.GetOrdinal("TaxableValue")) ? 0 : reader.GetDecimal(reader.GetOrdinal("TaxableValue")),
                             DiscountAmount = reader.IsDBNull(reader.GetOrdinal("DiscountAmount")) ? 0 : reader.GetDecimal(reader.GetOrdinal("DiscountAmount")),
+                            GSTPercentage = reader.IsDBNull(reader.GetOrdinal("GSTPercentage")) ? 0 : reader.GetDecimal(reader.GetOrdinal("GSTPercentage")),
                             CGSTPercentage = reader.IsDBNull(reader.GetOrdinal("CGSTPercentage")) ? 0 : reader.GetDecimal(reader.GetOrdinal("CGSTPercentage")),
                             CGSTAmount = reader.IsDBNull(reader.GetOrdinal("CGSTAmount")) ? 0 : reader.GetDecimal(reader.GetOrdinal("CGSTAmount")),
                             SGSTPercentage = reader.IsDBNull(reader.GetOrdinal("SGSTPercentage")) ? 0 : reader.GetDecimal(reader.GetOrdinal("SGSTPercentage")),
                             SGSTAmount = reader.IsDBNull(reader.GetOrdinal("SGSTAmount")) ? 0 : reader.GetDecimal(reader.GetOrdinal("SGSTAmount")),
-                            InvoiceTotal = reader.IsDBNull(reader.GetOrdinal("InvoiceTotal")) ? 0 : reader.GetDecimal(reader.GetOrdinal("InvoiceTotal"))
+                            InvoiceTotal = reader.IsDBNull(reader.GetOrdinal("InvoiceTotal")) ? 0 : reader.GetDecimal(reader.GetOrdinal("InvoiceTotal")),
+                            OrderType = reader.IsDBNull(reader.GetOrdinal("OrderType")) ? string.Empty : reader.GetString(reader.GetOrdinal("OrderType")),
+                            TableNumber = reader.IsDBNull(reader.GetOrdinal("TableNumber")) ? string.Empty : reader.GetString(reader.GetOrdinal("TableNumber"))
                         });
                     }
                 }
@@ -1057,6 +1085,7 @@ namespace RestaurantManagementSystem.Controllers
                         Username = reader.GetString(reader.GetOrdinal("Username")),
                         ActualBillAmount = reader.GetDecimal(reader.GetOrdinal("ActualBillAmount")),
                         DiscountAmount = reader.GetDecimal(reader.GetOrdinal("DiscountAmount")),
+                        GSTAmount = reader.GetDecimal(reader.GetOrdinal("GSTAmount")),
                         RoundOffAmount = reader.GetDecimal(reader.GetOrdinal("RoundOffAmount")),
                         ReceiptAmount = reader.GetDecimal(reader.GetOrdinal("ReceiptAmount")),
                         PaymentMethod = reader.GetString(reader.GetOrdinal("PaymentMethod")),
@@ -1070,6 +1099,7 @@ namespace RestaurantManagementSystem.Controllers
                 model.Summary.TotalTransactions = model.Rows.Count;
                 model.Summary.TotalActualAmount = model.Rows.Sum(r => r.ActualBillAmount);
                 model.Summary.TotalDiscount = model.Rows.Sum(r => r.DiscountAmount);
+                model.Summary.TotalGST = model.Rows.Sum(r => r.GSTAmount);
                 model.Summary.TotalRoundOff = model.Rows.Sum(r => r.RoundOffAmount);
                 model.Summary.TotalReceiptAmount = model.Rows.Sum(r => r.ReceiptAmount);
                 
