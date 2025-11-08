@@ -190,6 +190,13 @@ namespace RestaurantManagementSystem.Services
                                 ord = reader.GetOrdinal("TakeAwayGSTPercentage");
                                 s.TakeAwayGSTPercentage = reader.IsDBNull(ord) ? 0m : reader.GetDecimal(ord);
 
+                                // BarGSTPerc column (new)
+                                if (ColumnExists(reader, "BarGSTPerc"))
+                                {
+                                    ord = reader.GetOrdinal("BarGSTPerc");
+                                    s.BarGSTPerc = reader.IsDBNull(ord) ? 5.00m : reader.GetDecimal(ord);
+                                }
+
                                 ord = reader.GetOrdinal("IsDefaultGSTRequired");
                                 s.IsDefaultGSTRequired = !reader.IsDBNull(ord) && reader.GetBoolean(ord);
 
@@ -274,6 +281,7 @@ CREATE TABLE [dbo].[RestaurantSettings](
     [CurrencySymbol] NVARCHAR(50) NOT NULL DEFAULT N'₹',
     [DefaultGSTPercentage] DECIMAL(5,2) NOT NULL DEFAULT 5.00,
     [TakeAwayGSTPercentage] DECIMAL(5,2) NOT NULL DEFAULT 5.00,
+    [BarGSTPerc] DECIMAL(5,2) NOT NULL DEFAULT 5.00,
     [IsDefaultGSTRequired] BIT NOT NULL DEFAULT 1,
     [IsTakeAwayGSTRequired] BIT NOT NULL DEFAULT 1,
     [Is_TakeawayIncludedGST_Req] BIT NOT NULL DEFAULT 0,
@@ -292,9 +300,9 @@ CREATE TABLE [dbo].[RestaurantSettings](
                 // Insert a default row
                 var insertSql = @"
 INSERT INTO dbo.RestaurantSettings (
-    RestaurantName, StreetAddress, City, State, Pincode, Country, GSTCode, PhoneNumber, Email, Website, LogoPath, CurrencySymbol, DefaultGSTPercentage, TakeAwayGSTPercentage, IsDefaultGSTRequired, IsTakeAwayGSTRequired, Is_TakeawayIncludedGST_Req, IsDiscountApprovalRequired, IsCardPaymentApprovalRequired, BillFormat, CreatedAt, UpdatedAt
+    RestaurantName, StreetAddress, City, State, Pincode, Country, GSTCode, PhoneNumber, Email, Website, LogoPath, CurrencySymbol, DefaultGSTPercentage, TakeAwayGSTPercentage, BarGSTPerc, IsDefaultGSTRequired, IsTakeAwayGSTRequired, Is_TakeawayIncludedGST_Req, IsDiscountApprovalRequired, IsCardPaymentApprovalRequired, BillFormat, CreatedAt, UpdatedAt
 ) VALUES (
-    @RestaurantName, @StreetAddress, @City, @State, @Pincode, @Country, @GSTCode, @PhoneNumber, @Email, @Website, @LogoPath, @CurrencySymbol, @DefaultGSTPercentage, @TakeAwayGSTPercentage, @IsDefaultGSTRequired, @IsTakeAwayGSTRequired, @IsTakeawayIncludedGSTReq, @IsDiscountApprovalRequired, @IsCardPaymentApprovalRequired, @BillFormat, GETDATE(), GETDATE()
+    @RestaurantName, @StreetAddress, @City, @State, @Pincode, @Country, @GSTCode, @PhoneNumber, @Email, @Website, @LogoPath, @CurrencySymbol, @DefaultGSTPercentage, @TakeAwayGSTPercentage, @BarGSTPerc, @IsDefaultGSTRequired, @IsTakeAwayGSTRequired, @IsTakeawayIncludedGSTReq, @IsDiscountApprovalRequired, @IsCardPaymentApprovalRequired, @BillFormat, GETDATE(), GETDATE()
 );";
 
                 using (var cmd = new SqlCommand(insertSql, connection))
@@ -313,6 +321,7 @@ INSERT INTO dbo.RestaurantSettings (
                     cmd.Parameters.AddWithValue("@CurrencySymbol", "₹");
                     cmd.Parameters.AddWithValue("@DefaultGSTPercentage", 5.00m);
                     cmd.Parameters.AddWithValue("@TakeAwayGSTPercentage", 5.00m);
+                    cmd.Parameters.AddWithValue("@BarGSTPerc", 5.00m);
                     cmd.Parameters.AddWithValue("@IsDefaultGSTRequired", true);
                     cmd.Parameters.AddWithValue("@IsTakeAwayGSTRequired", true);
                     cmd.Parameters.AddWithValue("@IsTakeawayIncludedGSTReq", false);
@@ -365,6 +374,7 @@ INSERT INTO dbo.RestaurantSettings (
                     currentSettings.CurrencySymbol = settings.CurrencySymbol;
                     currentSettings.DefaultGSTPercentage = settings.DefaultGSTPercentage;
                     currentSettings.TakeAwayGSTPercentage = settings.TakeAwayGSTPercentage;
+                    currentSettings.BarGSTPerc = settings.BarGSTPerc;
                     currentSettings.IsDefaultGSTRequired = settings.IsDefaultGSTRequired;
                     currentSettings.IsTakeAwayGSTRequired = settings.IsTakeAwayGSTRequired;
                     currentSettings.IsTakeawayIncludedGSTReq = settings.IsTakeawayIncludedGSTReq;
@@ -413,6 +423,7 @@ BEGIN
         CurrencySymbol = @CurrencySymbol,
         DefaultGSTPercentage = @DefaultGSTPercentage,
         TakeAwayGSTPercentage = @TakeAwayGSTPercentage,
+        BarGSTPerc = @BarGSTPerc,
         IsDefaultGSTRequired = @IsDefaultGSTRequired,
         IsTakeAwayGSTRequired = @IsTakeAwayGSTRequired,
         Is_TakeawayIncludedGST_Req = @IsTakeawayIncludedGSTReq,
@@ -424,9 +435,9 @@ END
 ELSE
 BEGIN
     INSERT INTO dbo.RestaurantSettings (
-        RestaurantName, StreetAddress, City, State, Pincode, Country, GSTCode, PhoneNumber, Email, Website, LogoPath, CurrencySymbol, DefaultGSTPercentage, TakeAwayGSTPercentage, IsDefaultGSTRequired, IsTakeAwayGSTRequired, Is_TakeawayIncludedGST_Req, IsDiscountApprovalRequired, IsCardPaymentApprovalRequired, BillFormat, CreatedAt, UpdatedAt
+        RestaurantName, StreetAddress, City, State, Pincode, Country, GSTCode, PhoneNumber, Email, Website, LogoPath, CurrencySymbol, DefaultGSTPercentage, TakeAwayGSTPercentage, BarGSTPerc, IsDefaultGSTRequired, IsTakeAwayGSTRequired, Is_TakeawayIncludedGST_Req, IsDiscountApprovalRequired, IsCardPaymentApprovalRequired, BillFormat, CreatedAt, UpdatedAt
     ) VALUES (
-        @RestaurantName, @StreetAddress, @City, @State, @Pincode, @Country, @GSTCode, @PhoneNumber, @Email, @Website, @LogoPath, @CurrencySymbol, @DefaultGSTPercentage, @TakeAwayGSTPercentage, @IsDefaultGSTRequired, @IsTakeAwayGSTRequired, @IsTakeawayIncludedGSTReq, @IsDiscountApprovalRequired, @IsCardPaymentApprovalRequired, @BillFormat, GETDATE(), GETDATE()
+        @RestaurantName, @StreetAddress, @City, @State, @Pincode, @Country, @GSTCode, @PhoneNumber, @Email, @Website, @LogoPath, @CurrencySymbol, @DefaultGSTPercentage, @TakeAwayGSTPercentage, @BarGSTPerc, @IsDefaultGSTRequired, @IsTakeAwayGSTRequired, @IsTakeawayIncludedGSTReq, @IsDiscountApprovalRequired, @IsCardPaymentApprovalRequired, @BillFormat, GETDATE(), GETDATE()
     );
 END";
 
@@ -446,6 +457,7 @@ END";
                             cmd.Parameters.AddWithValue("@CurrencySymbol", (object)settings.CurrencySymbol ?? "₹");
                             cmd.Parameters.AddWithValue("@DefaultGSTPercentage", settings.DefaultGSTPercentage);
                             cmd.Parameters.AddWithValue("@TakeAwayGSTPercentage", settings.TakeAwayGSTPercentage);
+                            cmd.Parameters.AddWithValue("@BarGSTPerc", settings.BarGSTPerc);
                                 cmd.Parameters.AddWithValue("@FssaiNo", (object)settings.FssaiNo ?? DBNull.Value);
                             cmd.Parameters.AddWithValue("@IsDefaultGSTRequired", settings.IsDefaultGSTRequired);
                                 cmd.Parameters.AddWithValue("@FssaiNo", (object)settings.FssaiNo ?? DBNull.Value);
@@ -601,6 +613,21 @@ END";
                     await addKOT.ExecuteNonQueryAsync();
                 }
 
+                // Ensure BarGSTPerc column exists
+                var checkBarGST = new SqlCommand(@"
+                    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+                    WHERE TABLE_NAME = 'RestaurantSettings' 
+                    AND COLUMN_NAME = 'BarGSTPerc'
+                    AND TABLE_SCHEMA = 'dbo'", connection);
+                var barGSTExists = (int)await checkBarGST.ExecuteScalarAsync() > 0;
+                if (!barGSTExists)
+                {
+                    var addBarGST = new SqlCommand(@"
+                        ALTER TABLE [dbo].[RestaurantSettings] 
+                        ADD [BarGSTPerc] DECIMAL(5,2) NOT NULL DEFAULT 5.00", connection);
+                    await addBarGST.ExecuteNonQueryAsync();
+                }
+
                 // Normalize existing rows: replace NULLs with sensible defaults to avoid EF materialization errors
                 try
                 {
@@ -613,6 +640,7 @@ SET IsDefaultGSTRequired = ISNULL(IsDefaultGSTRequired, 1),
     IsCardPaymentApprovalRequired = ISNULL(IsCardPaymentApprovalRequired, 0),
     DefaultGSTPercentage = ISNULL(DefaultGSTPercentage, 5.00),
     TakeAwayGSTPercentage = ISNULL(TakeAwayGSTPercentage, 5.00),
+    BarGSTPerc = ISNULL(BarGSTPerc, 5.00),
     CurrencySymbol = ISNULL(CurrencySymbol, N'₹'),
     BillFormat = ISNULL(BillFormat, N'A4')
     , FssaiNo = ISNULL(FssaiNo, N'')
