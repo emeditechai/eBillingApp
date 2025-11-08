@@ -222,6 +222,10 @@ namespace RestaurantManagementSystem.Controllers
                                                     }
                                                 }
                                             }
+                                            
+                                            // Calculate and persist GST fields for the newly created order
+                                            UpdateOrderFinancials(orderId, connection, transaction);
+                                            
                                             transaction.Commit();
                                             TempData["SuccessMessage"] = $"Order {orderNumber} created successfully.";
                                             TempData["IsBarOrder"] = false; // Explicitly mark as non-bar order (from Orders navigation)
@@ -1011,6 +1015,9 @@ namespace RestaurantManagementSystem.Controllers
                                                 kitchenCommand.Parameters.AddWithValue("@OrderId", model.OrderId);
                                                 kitchenCommand.ExecuteNonQuery();
                                             }
+
+                                            // Recalculate and persist GST fields after item addition
+                                            UpdateOrderFinancials(model.OrderId, connection, transaction);
 
                                             // All good, commit
                                             transaction.Commit();
@@ -1854,6 +1861,147 @@ namespace RestaurantManagementSystem.Controllers
         }
         
         // Helper Methods
+        
+        /// <summary>
+        /// Centralized method to recalculate and persist all GST and financial fields for an order.
+        /// This ensures consistent GST calculation based on order type (BAR vs Foods) and persists
+        /// all GST metadata to the database for reliable downstream consumption.
+        /// </summary>
+        /// <param name="orderId">The order ID to update</param>
+        /// <param name="connection">Active database connection</param>
+        /// <param name="transaction">Optional transaction context</param>
+        private void UpdateOrderFinancials(int orderId, Microsoft.Data.SqlClient.SqlConnection connection, Microsoft.Data.SqlClient.SqlTransaction transaction = null)
+        {
+            try
+            {
+                // Step 1: Read current order state and detect if this is a BAR order
+                decimal subtotal = 0m;
+                decimal discountAmount = 0m;
+                decimal tipAmount = 0m;
+                bool isBarOrder = false;
+                
+                using (var readCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    SELECT 
+                        ISNULL(o.Subtotal, 0) AS Subtotal,
+                        ISNULL(o.DiscountAmount, 0) AS DiscountAmount,
+                        ISNULL(o.TipAmount, 0) AS TipAmount,
+                        CASE 
+                            WHEN EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'OrderKitchenType')
+                                AND o.OrderKitchenType = 'Bar' THEN 1
+                            WHEN EXISTS (SELECT 1 FROM KitchenTickets kt WHERE kt.OrderId = o.Id 
+                                AND (kt.KitchenStation = 'BAR' OR kt.TicketNumber LIKE 'BOT-%')) THEN 1
+                            ELSE 0
+                        END AS IsBarOrder
+                    FROM Orders o
+                    WHERE o.Id = @OrderId", connection, transaction))
+                {
+                    readCmd.Parameters.AddWithValue("@OrderId", orderId);
+                    using (var reader = readCmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            subtotal = reader.GetDecimal(0);
+                            discountAmount = reader.GetDecimal(1);
+                            tipAmount = reader.GetDecimal(2);
+                            isBarOrder = reader.GetInt32(3) == 1;
+                        }
+                        else
+                        {
+                            // Order not found - abort
+                            return;
+                        }
+                    }
+                }
+                
+                // Step 2: Get applicable GST percentage from settings (BAR vs Foods)
+                decimal gstPercentage = 5.0m; // Default fallback
+                try
+                {
+                    using (var settingsCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        SELECT 
+                            ISNULL(DefaultGSTPercentage, 5.0) AS DefaultGSTPercentage,
+                            ISNULL(BarGSTPerc, 5.0) AS BarGSTPerc
+                        FROM dbo.RestaurantSettings", connection, transaction))
+                    {
+                        using (var reader = settingsCmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                decimal defaultGst = reader.GetDecimal(0);
+                                decimal barGst = reader.GetDecimal(1);
+                                gstPercentage = isBarOrder ? barGst : defaultGst;
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // If BarGSTPerc column doesn't exist, fall back to DefaultGSTPercentage only
+                    using (var fallbackCmd = new Microsoft.Data.SqlClient.SqlCommand("SELECT ISNULL(DefaultGSTPercentage, 5.0) FROM dbo.RestaurantSettings", connection, transaction))
+                    {
+                        var result = fallbackCmd.ExecuteScalar();
+                        if (result != null && result != DBNull.Value)
+                        {
+                            gstPercentage = Convert.ToDecimal(result);
+                        }
+                    }
+                }
+                
+                // Step 3: Calculate GST on discounted subtotal
+                decimal netSubtotal = Math.Max(0m, subtotal - discountAmount);
+                decimal gstAmount = Math.Round(netSubtotal * gstPercentage / 100m, 2, MidpointRounding.AwayFromZero);
+                
+                // Step 4: Split into CGST and SGST (equal split; handle last-cent rounding)
+                decimal cgstPercentage = gstPercentage / 2m;
+                decimal sgstPercentage = gstPercentage / 2m;
+                decimal cgstAmount = Math.Round(gstAmount / 2m, 2, MidpointRounding.AwayFromZero);
+                decimal sgstAmount = gstAmount - cgstAmount; // Ensures exact sum
+                
+                // Step 5: Calculate total amount
+                decimal totalAmount = netSubtotal + gstAmount + tipAmount;
+                
+                // Step 6: Persist all calculated fields to Orders table (conditional update for schema compatibility)
+                using (var updateCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    UPDATE Orders
+                    SET 
+                        TaxAmount = @GSTAmount,
+                        TotalAmount = @TotalAmount,
+                        UpdatedAt = GETDATE()
+                    WHERE Id = @OrderId;
+                    
+                    -- Conditionally update new GST columns if they exist
+                    IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'GSTPercentage')
+                    BEGIN
+                        UPDATE Orders
+                        SET 
+                            GSTPercentage = @GSTPercentage,
+                            CGSTPercentage = @CGSTPercentage,
+                            SGSTPercentage = @SGSTPercentage,
+                            GSTAmount = @GSTAmount,
+                            CGSTAmount = @CGSTAmount,
+                            SGSTAmount = @SGSTAmount
+                        WHERE Id = @OrderId;
+                    END", connection, transaction))
+                {
+                    updateCmd.Parameters.AddWithValue("@OrderId", orderId);
+                    updateCmd.Parameters.AddWithValue("@GSTPercentage", gstPercentage);
+                    updateCmd.Parameters.AddWithValue("@CGSTPercentage", cgstPercentage);
+                    updateCmd.Parameters.AddWithValue("@SGSTPercentage", sgstPercentage);
+                    updateCmd.Parameters.AddWithValue("@GSTAmount", gstAmount);
+                    updateCmd.Parameters.AddWithValue("@CGSTAmount", cgstAmount);
+                    updateCmd.Parameters.AddWithValue("@SGSTAmount", sgstAmount);
+                    updateCmd.Parameters.AddWithValue("@TotalAmount", totalAmount);
+                    
+                    updateCmd.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't throw - allow order processing to continue even if GST persistence fails
+                System.Diagnostics.Debug.WriteLine($"UpdateOrderFinancials failed for order {orderId}: {ex.Message}");
+            }
+        }
+    
     private OrderDashboardViewModel GetOrderDashboard(DateTime? fromDate = null, DateTime? toDate = null)
         {
             var model = new OrderDashboardViewModel
@@ -2355,7 +2503,13 @@ namespace RestaurantManagementSystem.Controllers
                         o.SpecialInstructions,
                         o.CreatedAt,
                         o.UpdatedAt,
-                        o.CompletedAt,"
+                        o.CompletedAt,
+                        ISNULL(o.GSTPercentage, 0) AS GSTPercentage,
+                        ISNULL(o.CGSTPercentage, 0) AS CGSTPercentage,
+                        ISNULL(o.SGSTPercentage, 0) AS SGSTPercentage,
+                        ISNULL(o.GSTAmount, 0) AS GSTAmount,
+                        ISNULL(o.CGSTAmount, 0) AS CGSTAmount,
+                        ISNULL(o.SGSTAmount, 0) AS SGSTAmount,"
                     : @"SELECT 
                         o.Id,
                         o.OrderNumber,
@@ -2374,7 +2528,13 @@ namespace RestaurantManagementSystem.Controllers
                         o.SpecialInstructions,
                         o.CreatedAt,
                         o.CreatedAt AS UpdatedAt, -- Use CreatedAt as a fallback
-                        o.CompletedAt,";
+                        o.CompletedAt,
+                        ISNULL(o.GSTPercentage, 0) AS GSTPercentage,
+                        ISNULL(o.CGSTPercentage, 0) AS CGSTPercentage,
+                        ISNULL(o.SGSTPercentage, 0) AS SGSTPercentage,
+                        ISNULL(o.GSTAmount, 0) AS GSTAmount,
+                        ISNULL(o.CGSTAmount, 0) AS CGSTAmount,
+                        ISNULL(o.SGSTAmount, 0) AS SGSTAmount,";
 
                 using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(selectSql + @"
                         CASE 
@@ -2438,8 +2598,12 @@ namespace RestaurantManagementSystem.Controllers
                                 CreatedAt = reader.GetDateTime(15),
                                 UpdatedAt = reader.GetDateTime(16), // We've handled this in the SQL query
                                 CompletedAt = reader.IsDBNull(17) ? null : (DateTime?)reader.GetDateTime(17),
-                                TableName = reader.IsDBNull(18) ? null : reader.GetString(18),
-                                GuestName = reader.IsDBNull(19) ? null : reader.GetString(19),
+                                TableName = reader.IsDBNull(24) ? null : reader.GetString(24),
+                                GuestName = reader.IsDBNull(25) ? null : reader.GetString(25),
+                                // Read persisted GST metadata from Orders table
+                                GSTPercentage = reader.IsDBNull(18) ? 0m : reader.GetDecimal(18),
+                                CGSTAmount = reader.IsDBNull(22) ? 0m : reader.GetDecimal(22),
+                                SGSTAmount = reader.IsDBNull(23) ? 0m : reader.GetDecimal(23),
                                 Items = new List<OrderItemViewModel>(),
                                 KitchenTickets = new List<KitchenTicketViewModel>(),
                                 AvailableCourses = new List<CourseType>()
@@ -2799,22 +2963,44 @@ namespace RestaurantManagementSystem.Controllers
             }
             
             // After loading all order core data and items, compute GST dynamically using settings
+            // ONLY if GST was not already persisted (GSTPercentage = 0 means legacy order or order with no items)
             try
             {
-                // Retrieve Default GST % from settings table (fallback 0 if not present)
-                using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                if (order != null && order.GSTPercentage == 0)
                 {
-                    connection.Open();
-                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand("SELECT TOP 1 DefaultGSTPercentage FROM dbo.RestaurantSettings ORDER BY Id", connection))
+                    // Legacy order without persisted GST or new order without items
+                    // Check if this is a BAR order to use correct GST percentage
+                    bool isBarOrder = false;
+                    using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
                     {
-                        var gstObj = cmd.ExecuteScalar();
-                        decimal gstPercent = 0m;
-                        if (gstObj != null && gstObj != DBNull.Value)
+                        connection.Open();
+                        
+                        // Check OrderKitchenType or KitchenTickets to determine if BAR order
+                        using (var checkBarCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                            SELECT CASE 
+                                WHEN EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'OrderKitchenType')
+                                    AND EXISTS (SELECT 1 FROM dbo.Orders WHERE Id = @OrderId AND OrderKitchenType = 'Bar')
+                                THEN 1
+                                WHEN EXISTS (SELECT 1 FROM KitchenTickets WHERE OrderId = @OrderId AND KitchenStation = 'BAR')
+                                THEN 1
+                                ELSE 0
+                            END", connection))
                         {
-                            decimal.TryParse(gstObj.ToString(), out gstPercent);
+                            checkBarCmd.Parameters.AddWithValue("@OrderId", id);
+                            var result = checkBarCmd.ExecuteScalar();
+                            isBarOrder = result != null && Convert.ToInt32(result) == 1;
                         }
-                        if (order != null)
+                        
+                        // Retrieve appropriate GST % from settings table
+                        string gstColumn = isBarOrder ? "BarGSTPerc" : "DefaultGSTPercentage";
+                        using (var cmd = new Microsoft.Data.SqlClient.SqlCommand($"SELECT TOP 1 {gstColumn} FROM dbo.RestaurantSettings ORDER BY Id", connection))
                         {
+                            var gstObj = cmd.ExecuteScalar();
+                            decimal gstPercent = 0m;
+                            if (gstObj != null && gstObj != DBNull.Value)
+                            {
+                                decimal.TryParse(gstObj.ToString(), out gstPercent);
+                            }
                             order.GSTPercentage = gstPercent;
                             // Recalculate subtotal from items (exclude cancelled status=5)
                             var effectiveSubtotal = order.Items?.Where(i => i.Status != 5).Sum(i => i.Subtotal) ?? order.Subtotal;
@@ -2827,6 +3013,14 @@ namespace RestaurantManagementSystem.Controllers
                             order.Subtotal = effectiveSubtotal; // ensure stored value aligns
                         }
                     }
+                }
+                else if (order != null)
+                {
+                    // Modern order with persisted GST - use the stored values
+                    // Just ensure TaxAmount is in sync with GSTAmount for backward compatibility
+                    var effectiveSubtotal = order.Items?.Where(i => i.Status != 5).Sum(i => i.Subtotal) ?? order.Subtotal;
+                    order.Subtotal = effectiveSubtotal;
+                    // TaxAmount and CGSTAmount/SGSTAmount already read from database
                 }
             }
             catch (Exception ex)
@@ -3060,6 +3254,9 @@ namespace RestaurantManagementSystem.Controllers
                                 command.ExecuteNonQuery();
                             }
                             
+                            // Recalculate and persist GST fields after item modifications
+                            UpdateOrderFinancials(orderId, connection, transaction);
+                            
                             transaction.Commit();
                             return Json(new { success = true, message = "All items updated successfully." });
                         }
@@ -3115,6 +3312,9 @@ namespace RestaurantManagementSystem.Controllers
                                 command.Parameters.AddWithValue("@OrderId", orderId);
                                 command.ExecuteNonQuery();
                             }
+                            
+                            // Recalculate and persist GST fields on submit
+                            UpdateOrderFinancials(orderId, connection, transaction);
                             
                             transaction.Commit();
                         }

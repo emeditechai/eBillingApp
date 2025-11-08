@@ -276,20 +276,30 @@ namespace RestaurantManagementSystem.Controllers
                 return NotFound();
             }
             
+            // Calculate the rounded total to process (matching Payment/Index logic)
+            decimal totalAmount = paymentViewModel.TotalAmount;
+            decimal paidAmount = paymentViewModel.PaidAmount;
+            decimal roundedTotal = Math.Round(totalAmount, 0, MidpointRounding.AwayFromZero);
+            decimal remainingToProcess = Math.Max(0, roundedTotal - paidAmount);
+            
             var model = new ProcessPaymentViewModel
             {
                 OrderId = actualOrderId,
                 OrderNumber = paymentViewModel.OrderNumber,
-                TotalAmount = paymentViewModel.TotalAmount, // This now includes GST
-                RemainingAmount = paymentViewModel.RemainingAmount, // This is Total - Paid (including GST)
-                Amount = paymentViewModel.RemainingAmount, // Default to remaining amount
-                Subtotal = paymentViewModel.Subtotal, // base amount before GST
-                GSTPercentage = paymentViewModel.GSTPercentage // dynamic GST %
+                TotalAmount = totalAmount, // Precise total from database (includes GST on discounted subtotal)
+                RemainingAmount = paymentViewModel.RemainingAmount, // Precise remaining
+                Amount = remainingToProcess, // Rounded amount to process (shown to user)
+                Subtotal = paymentViewModel.Subtotal, // base amount before discount and GST
+                GSTPercentage = paymentViewModel.GSTPercentage, // persisted GST %
+                DiscountAmount = paymentViewModel.DiscountAmount // persisted discount
             };
-            // If a discount preview/value was provided from Payment Index, prefill here (additional discount)
-            if (actualDiscount.HasValue && actualDiscount.Value > 0)
+            
+            // Note: Discount is now persisted in database via ApplyDiscount endpoint
+            // The actualDiscount parameter is only used for preview (backward compat)
+            // but we prioritize the persisted value from paymentViewModel
+            if (actualDiscount.HasValue && actualDiscount.Value > 0 && paymentViewModel.DiscountAmount == 0)
             {
-                // If discountType=percent apply on subtotal; else treat as amount
+                // Only apply URL discount if no discount is persisted yet (backward compatibility)
                 if (!string.IsNullOrEmpty(actualDiscountType) && actualDiscountType.Equals("percent", StringComparison.OrdinalIgnoreCase))
                 {
                     var percentDisc = Math.Round(paymentViewModel.Subtotal * actualDiscount.Value / 100m, 2, MidpointRounding.AwayFromZero);
@@ -761,7 +771,9 @@ END", connection))
                                             }
                                         }
 
-                                        // If discount provided update order with proper GST recalculation
+                                        // If discount provided and not already persisted, update order with proper GST recalculation
+                                        // NOTE: Discount is already persisted when user clicks Apply on Payment/Index page via ApplyDiscount endpoint
+                                        // Only update if discount wasn't already applied to avoid double-application
                                         if (model.DiscountAmount > 0)
                                         {
                                             if (!reader.IsClosed) reader.Close();
@@ -777,20 +789,24 @@ END", connection))
                                                 FROM Orders 
                                                 WHERE Id = @OrderId;
                                                 
-                                                -- Calculate new values based on discount applied to subtotal
-                                                DECLARE @NewDiscountAmount DECIMAL(18,2) = @CurrentDiscount + @Disc;
-                                                DECLARE @NetSubtotal DECIMAL(18,2) = @CurrentSubtotal - @NewDiscountAmount;
-                                                DECLARE @NewGSTAmount DECIMAL(18,2) = ROUND(@NetSubtotal * @GSTPerc / 100, 2);
-                                                DECLARE @NewTotalAmount DECIMAL(18,2) = @NetSubtotal + @NewGSTAmount + @CurrentTipAmount;
-                                                
-                                                -- Update order with recalculated amounts
-                                                UPDATE Orders 
-                                                SET DiscountAmount = @NewDiscountAmount, 
-                                                    UpdatedAt = GETDATE(),
-                                                    TaxAmount = @NewGSTAmount,
-                                                    TotalAmount = @NewTotalAmount
+                                                -- Only apply discount if not already persisted (avoid double-application)
+                                                -- If discount already exists and matches, skip update
+                                                IF @CurrentDiscount = 0 OR ABS(@CurrentDiscount - @Disc) > 0.01
+                                                BEGIN
+                                                    -- Calculate new values based on discount applied to subtotal
+                                                    DECLARE @NewDiscountAmount DECIMAL(18,2) = @Disc; -- Use provided discount, not CurrentDiscount + Disc
+                                                    DECLARE @NetSubtotal DECIMAL(18,2) = @CurrentSubtotal - @NewDiscountAmount;
+                                                    DECLARE @NewGSTAmount DECIMAL(18,2) = ROUND(@NetSubtotal * @GSTPerc / 100, 2);
+                                                    DECLARE @NewTotalAmount DECIMAL(18,2) = @NetSubtotal + @NewGSTAmount + @CurrentTipAmount;
                                                     
-                                                WHERE Id = @OrderId", connection))
+                                                    -- Update order with recalculated amounts
+                                                    UPDATE Orders 
+                                                    SET DiscountAmount = @NewDiscountAmount, 
+                                                        UpdatedAt = GETDATE(),
+                                                        TaxAmount = @NewGSTAmount,
+                                                        TotalAmount = @NewTotalAmount
+                                                    WHERE Id = @OrderId
+                                                END", connection))
                                             {
                                                 discountCmd.Parameters.AddWithValue("@Disc", model.DiscountAmount);
                                                 discountCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
@@ -1018,27 +1034,61 @@ END", connection))
                     }
                 }
 
-                // Load order subtotal and GST percentage
+                // Load order subtotal, GST percentage, and persisted GST values
                 decimal gstPerc = 5.0m; // default
                 decimal orderSubtotal = 0m;
                 decimal orderTip = 0m;
+                decimal persistedGSTAmount = 0m;
+                decimal persistedDiscountAmount = 0m;
+                decimal persistedTotalAmount = 0m;
+                
                 using (var conn = new SqlConnection(_connectionString))
                 {
                     conn.Open();
-                    using (var gstCmd = new SqlCommand("SELECT DefaultGSTPercentage FROM dbo.RestaurantSettings", conn))
+                    
+                    // Read order details including persisted GST values
+                    using (var orderCmd = new SqlCommand(@"
+                        SELECT 
+                            Subtotal, 
+                            ISNULL(TipAmount, 0),
+                            ISNULL(DiscountAmount, 0),
+                            ISNULL(TaxAmount, 0),
+                            ISNULL(TotalAmount, 0),
+                            ISNULL(GSTPercentage, 0)
+                        FROM Orders 
+                        WHERE Id = @OrderId", conn))
                     {
-                        var r = gstCmd.ExecuteScalar();
-                        if (r != null && r != DBNull.Value) gstPerc = Convert.ToDecimal(r);
-                    }
-                    using (var subCmd = new SqlCommand("SELECT Subtotal, ISNULL(TipAmount,0) FROM Orders WHERE Id = @OrderId", conn))
-                    {
-                        subCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
-                        using (var rd = subCmd.ExecuteReader())
+                        orderCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
+                        using (var rd = orderCmd.ExecuteReader())
                         {
                             if (rd.Read())
                             {
                                 orderSubtotal = rd.IsDBNull(0) ? 0m : rd.GetDecimal(0);
                                 orderTip = rd.IsDBNull(1) ? 0m : rd.GetDecimal(1);
+                                persistedDiscountAmount = rd.IsDBNull(2) ? 0m : rd.GetDecimal(2);
+                                persistedGSTAmount = rd.IsDBNull(3) ? 0m : rd.GetDecimal(3);
+                                persistedTotalAmount = rd.IsDBNull(4) ? 0m : rd.GetDecimal(4);
+                                decimal persistedGSTPerc = rd.IsDBNull(5) ? 0m : rd.GetDecimal(5);
+                                
+                                // Use persisted GST percentage if available, otherwise fallback to default
+                                if (persistedGSTPerc > 0)
+                                {
+                                    gstPerc = persistedGSTPerc;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Fallback to default GST if not persisted
+                    if (gstPerc == 5.0m || gstPerc == 0m)
+                    {
+                        using (var gstCmd = new SqlCommand("SELECT DefaultGSTPercentage FROM dbo.RestaurantSettings", conn))
+                        {
+                            var r = gstCmd.ExecuteScalar();
+                            if (r != null && r != DBNull.Value) 
+                            {
+                                decimal defaultGST = Convert.ToDecimal(r);
+                                if (gstPerc == 0m) gstPerc = defaultGST; // Only override if not persisted
                             }
                         }
                     }
@@ -1050,9 +1100,35 @@ END", connection))
                 {
                     discountAmount = Math.Round(orderSubtotal * discountAmount / 100m, 2, MidpointRounding.AwayFromZero);
                 }
-                decimal discountedSubtotal = Math.Max(0, orderSubtotal - discountAmount);
-                decimal gstAmount = Math.Round(discountedSubtotal * gstPerc / 100m, 2, MidpointRounding.AwayFromZero);
-                decimal orderTotal = discountedSubtotal + gstAmount + orderTip;
+                
+                // Calculate GST amount for split proportions (needed for individual payment records)
+                decimal gstAmount;
+                
+                // Use persisted total if discount and GST are already in database (no new discount being applied)
+                decimal orderTotal;
+                if (persistedTotalAmount > 0 && persistedDiscountAmount > 0 && Math.Abs(discountAmount - persistedDiscountAmount) < 0.01m)
+                {
+                    // Discount already persisted - use stored total and GST
+                    orderTotal = persistedTotalAmount;
+                    gstAmount = persistedGSTAmount;
+                    _logger?.LogInformation("Split payment using persisted total: {Total}, GST: {GST}", orderTotal, gstAmount);
+                }
+                else if (persistedTotalAmount > 0 && discountAmount == 0 && persistedDiscountAmount == 0)
+                {
+                    // No discount, use persisted total and GST
+                    orderTotal = persistedTotalAmount;
+                    gstAmount = persistedGSTAmount > 0 ? persistedGSTAmount : Math.Round(orderSubtotal * gstPerc / 100m, 2, MidpointRounding.AwayFromZero);
+                    _logger?.LogInformation("Split payment using persisted total (no discount): {Total}, GST: {GST}", orderTotal, gstAmount);
+                }
+                else
+                {
+                    // Calculate fresh (new discount being applied or no persisted values)
+                    decimal discountedSubtotal = Math.Max(0, orderSubtotal - discountAmount);
+                    gstAmount = Math.Round(discountedSubtotal * gstPerc / 100m, 2, MidpointRounding.AwayFromZero);
+                    orderTotal = discountedSubtotal + gstAmount + orderTip;
+                    _logger?.LogInformation("Split payment calculating fresh total: subtotal={Subtotal}, discount={Discount}, GST={GST}, tip={Tip}, total={Total}", 
+                        orderSubtotal, discountAmount, gstAmount, orderTip, orderTotal);
+                }
                 
                 // Round order total to nearest rupee for split payment validation (matching client-side behavior)
                 decimal roundedOrderTotal = Math.Round(orderTotal, 0, MidpointRounding.AwayFromZero);
@@ -1082,6 +1158,7 @@ END", connection))
                 }
 
                 // Pre-update Orders for discount, GST, Total if discount applied (same logic as single flow)
+                // NOTE: Discount may already be persisted via ApplyDiscount endpoint - avoid double-application
                 if (discountAmount > 0)
                 {
                     using (var conn = new SqlConnection(_connectionString))
@@ -1097,19 +1174,24 @@ END", connection))
                                    @CurrentTipAmount = ISNULL(TipAmount, 0)
                             FROM Orders WHERE Id = @OrderId;
 
-                            DECLARE @NewDiscountAmount DECIMAL(18,2) = @CurrentDiscount + @Disc;
-                            DECLARE @NetSubtotal DECIMAL(18,2) = @CurrentSubtotal - @NewDiscountAmount;
-                            IF @NetSubtotal < 0 SET @NetSubtotal = 0;
-                            DECLARE @NewGSTAmount DECIMAL(18,2) = ROUND(@NetSubtotal * @GSTPerc / 100, 2);
-                            -- Round total amount to match split payment rounding logic (round to nearest rupee)
-                            DECLARE @NewTotalAmount DECIMAL(18,2) = ROUND(@NetSubtotal + @NewGSTAmount + @CurrentTipAmount, 0);
+                            -- Only apply discount if not already persisted (avoid double-application)
+                            -- If discount already exists and matches, skip update
+                            IF @CurrentDiscount = 0 OR ABS(@CurrentDiscount - @Disc) > 0.01
+                            BEGIN
+                                DECLARE @NewDiscountAmount DECIMAL(18,2) = @Disc; -- Use provided discount, not CurrentDiscount + Disc
+                                DECLARE @NetSubtotal DECIMAL(18,2) = @CurrentSubtotal - @NewDiscountAmount;
+                                IF @NetSubtotal < 0 SET @NetSubtotal = 0;
+                                DECLARE @NewGSTAmount DECIMAL(18,2) = ROUND(@NetSubtotal * @GSTPerc / 100, 2);
+                                -- Round total amount to match split payment rounding logic (round to nearest rupee)
+                                DECLARE @NewTotalAmount DECIMAL(18,2) = ROUND(@NetSubtotal + @NewGSTAmount + @CurrentTipAmount, 0);
 
-                            UPDATE Orders 
-                            SET DiscountAmount = @NewDiscountAmount, 
-                                UpdatedAt = GETDATE(),
-                                TaxAmount = @NewGSTAmount,
-                                TotalAmount = @NewTotalAmount
-                            WHERE Id = @OrderId;", conn))
+                                UPDATE Orders 
+                                SET DiscountAmount = @NewDiscountAmount, 
+                                    UpdatedAt = GETDATE(),
+                                    TaxAmount = @NewGSTAmount,
+                                    TotalAmount = @NewTotalAmount
+                                WHERE Id = @OrderId;
+                            END", conn))
                         {
                             discountCmd.Parameters.AddWithValue("@Disc", discountAmount);
                             discountCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
@@ -3275,35 +3357,83 @@ END", connection))
                 }
                 
                 // Fallback GST calculation if no payment GST data available
+                // PRIORITY: Read from Orders table first (persisted values), then calculate
                 if (model.GSTPercentage == 0 || (model.CGSTAmount == 0 && model.SGSTAmount == 0))
                 {
                     try
                     {
-                        using (Microsoft.Data.SqlClient.SqlCommand gstCmd = new Microsoft.Data.SqlClient.SqlCommand(
-                            "SELECT DefaultGSTPercentage FROM dbo.RestaurantSettings", connection))
+                        // Step 1: Try to read persisted GST values from Orders table
+                        bool foundPersistedGST = false;
+                        using (var orderGstCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                            SELECT 
+                                ISNULL(GSTPercentage, 0) AS GSTPercentage,
+                                ISNULL(CGSTPercentage, 0) AS CGSTPercentage,
+                                ISNULL(SGSTPercentage, 0) AS SGSTPercentage,
+                                ISNULL(GSTAmount, 0) AS GSTAmount,
+                                ISNULL(CGSTAmount, 0) AS CGSTAmount,
+                                ISNULL(SGSTAmount, 0) AS SGSTAmount
+                            FROM Orders
+                            WHERE Id = @OrderId
+                            AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'GSTPercentage')", connection))
                         {
-                            var result = gstCmd.ExecuteScalar();
-                            if (result != null && result != DBNull.Value)
+                            orderGstCmd.Parameters.AddWithValue("@OrderId", orderId);
+                            using (var gstReader = orderGstCmd.ExecuteReader())
                             {
-                                model.GSTPercentage = Convert.ToDecimal(result);
-                            }
-                            else
-                            {
-                                model.GSTPercentage = 5.0m;
+                                if (gstReader.Read())
+                                {
+                                    decimal persistedGstPerc = gstReader.GetDecimal(0);
+                                    decimal persistedGstAmt = gstReader.GetDecimal(3);
+                                    decimal persistedCgstAmt = gstReader.GetDecimal(4);
+                                    decimal persistedSgstAmt = gstReader.GetDecimal(5);
+                                    
+                                    // If we have valid persisted GST data, use it
+                                    if (persistedGstPerc > 0 && persistedGstAmt > 0)
+                                    {
+                                        model.GSTPercentage = persistedGstPerc;
+                                        model.CGSTAmount = persistedCgstAmt;
+                                        model.SGSTAmount = persistedSgstAmt;
+                                        
+                                        // Update TaxAmount to match persisted GST
+                                        if (model.TaxAmount == 0 || Math.Abs(model.TaxAmount - persistedGstAmt) > 0.01m)
+                                        {
+                                            model.TaxAmount = persistedGstAmt;
+                                        }
+                                        
+                                        foundPersistedGST = true;
+                                    }
+                                }
                             }
                         }
                         
-                        decimal gstAmount = model.TaxAmount > 0 ? model.TaxAmount : 
-                            Math.Round(model.Subtotal * model.GSTPercentage / 100m, 2, MidpointRounding.AwayFromZero);
-                        
-                        // Update TaxAmount if it was 0 (calculated GST)
-                        if (model.TaxAmount == 0 && gstAmount > 0)
+                        // Step 2: If no persisted GST found, fall back to runtime calculation from settings
+                        if (!foundPersistedGST)
                         {
-                            model.TaxAmount = gstAmount;
+                            using (Microsoft.Data.SqlClient.SqlCommand gstCmd = new Microsoft.Data.SqlClient.SqlCommand(
+                                "SELECT DefaultGSTPercentage FROM dbo.RestaurantSettings", connection))
+                            {
+                                var result = gstCmd.ExecuteScalar();
+                                if (result != null && result != DBNull.Value)
+                                {
+                                    model.GSTPercentage = Convert.ToDecimal(result);
+                                }
+                                else
+                                {
+                                    model.GSTPercentage = 5.0m;
+                                }
+                            }
+                            
+                            decimal gstAmount = model.TaxAmount > 0 ? model.TaxAmount : 
+                                Math.Round(model.Subtotal * model.GSTPercentage / 100m, 2, MidpointRounding.AwayFromZero);
+                            
+                            // Update TaxAmount if it was 0 (calculated GST)
+                            if (model.TaxAmount == 0 && gstAmount > 0)
+                            {
+                                model.TaxAmount = gstAmount;
+                            }
+                            
+                            model.CGSTAmount = Math.Round(gstAmount / 2m, 2, MidpointRounding.AwayFromZero);
+                            model.SGSTAmount = gstAmount - model.CGSTAmount;
                         }
-                        
-                        model.CGSTAmount = Math.Round(gstAmount / 2m, 2, MidpointRounding.AwayFromZero);
-                        model.SGSTAmount = gstAmount - model.CGSTAmount;
                         
                         // Recalculate total amount to include GST
                         model.TotalAmount = model.Subtotal + model.TaxAmount - model.DiscountAmount + model.TipAmount;
@@ -3880,6 +4010,294 @@ END", connection))
             var encryptedToken = _encryptionService.EncryptParameters(parameters);
             // Return relative URL path
             return $"/Payment/ProcessPayment?token={Uri.EscapeDataString(encryptedToken)}";
+        }
+
+        /// <summary>
+        /// Apply discount to an order and persist it to the database with GST recalculation
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public JsonResult ApplyDiscount(int orderId, decimal discount, string discountType = "amount")
+        {
+            try
+            {
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (var transaction = connection.BeginTransaction())
+                    {
+                        try
+                        {
+                            // Step 1: Read current order subtotal and existing discount
+                            decimal subtotal = 0m;
+                            decimal existingDiscount = 0m;
+                            
+                            using (var readCmd = new SqlCommand(@"
+                                SELECT ISNULL(Subtotal, 0), ISNULL(DiscountAmount, 0)
+                                FROM Orders
+                                WHERE Id = @OrderId", connection, transaction))
+                            {
+                                readCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                using (var reader = readCmd.ExecuteReader())
+                                {
+                                    if (reader.Read())
+                                    {
+                                        subtotal = reader.GetDecimal(0);
+                                        existingDiscount = reader.GetDecimal(1);
+                                    }
+                                    else
+                                    {
+                                        return Json(new { success = false, error = "Order not found" });
+                                    }
+                                }
+                            }
+                            
+                            // Step 2: Calculate discount amount
+                            decimal discountAmount = discount;
+                            if (discountType.Equals("percent", StringComparison.OrdinalIgnoreCase))
+                            {
+                                discountAmount = Math.Round(subtotal * discount / 100m, 2, MidpointRounding.AwayFromZero);
+                            }
+                            
+                            // Combined discount (existing + new)
+                            decimal totalDiscount = Math.Min(subtotal, existingDiscount + discountAmount);
+                            
+                            // Step 3: Update Orders.DiscountAmount
+                            using (var updateCmd = new SqlCommand(@"
+                                UPDATE Orders
+                                SET DiscountAmount = @DiscountAmount,
+                                    UpdatedAt = GETDATE()
+                                WHERE Id = @OrderId", connection, transaction))
+                            {
+                                updateCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                updateCmd.Parameters.AddWithValue("@DiscountAmount", totalDiscount);
+                                updateCmd.ExecuteNonQuery();
+                            }
+                            
+                            // Step 4: Recalculate GST and totals (similar to UpdateOrderFinancials in OrderController)
+                            UpdateOrderFinancials(orderId, connection, transaction);
+                            
+                            transaction.Commit();
+                            
+                            return Json(new { 
+                                success = true, 
+                                message = "Discount applied successfully",
+                                discountAmount = totalDiscount
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            transaction.Rollback();
+                            _logger?.LogError(ex, "Error applying discount to order {OrderId}", orderId);
+                            return Json(new { success = false, error = ex.Message });
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error applying discount to order {OrderId}", orderId);
+                return Json(new { success = false, error = "Failed to apply discount" });
+            }
+        }
+
+        /// <summary>
+        /// Cancel/remove discount from an order and recalculate totals
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public JsonResult CancelDiscount(int orderId)
+        {
+            try
+            {
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (var transaction = connection.BeginTransaction())
+                    {
+                        try
+                        {
+                            // Step 1: Verify order exists
+                            using (var checkCmd = new SqlCommand(@"
+                                SELECT COUNT(*)
+                                FROM Orders
+                                WHERE Id = @OrderId", connection, transaction))
+                            {
+                                checkCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                var exists = (int)checkCmd.ExecuteScalar() > 0;
+                                if (!exists)
+                                {
+                                    return Json(new { success = false, error = "Order not found" });
+                                }
+                            }
+                            
+                            // Step 2: Remove discount (set to 0)
+                            using (var updateCmd = new SqlCommand(@"
+                                UPDATE Orders
+                                SET DiscountAmount = 0,
+                                    UpdatedAt = GETDATE()
+                                WHERE Id = @OrderId", connection, transaction))
+                            {
+                                updateCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                updateCmd.ExecuteNonQuery();
+                            }
+                            
+                            // Step 3: Recalculate GST and totals without discount
+                            UpdateOrderFinancials(orderId, connection, transaction);
+                            
+                            transaction.Commit();
+                            
+                            return Json(new { 
+                                success = true, 
+                                message = "Discount cancelled successfully"
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            transaction.Rollback();
+                            _logger?.LogError(ex, "Error cancelling discount for order {OrderId}", orderId);
+                            return Json(new { success = false, error = ex.Message });
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error cancelling discount for order {OrderId}", orderId);
+                return Json(new { success = false, error = "Failed to cancel discount" });
+            }
+        }
+
+        /// <summary>
+        /// Centralized method to recalculate and persist all GST and financial fields for an order.
+        /// (Duplicate of OrderController.UpdateOrderFinancials for Payment flow independence)
+        /// </summary>
+        private void UpdateOrderFinancials(int orderId, SqlConnection connection, SqlTransaction transaction = null)
+        {
+            try
+            {
+                // Read current order state and detect if this is a BAR order
+                decimal subtotal = 0m;
+                decimal discountAmount = 0m;
+                decimal tipAmount = 0m;
+                bool isBarOrder = false;
+                
+                using (var readCmd = new SqlCommand(@"
+                    SELECT 
+                        ISNULL(o.Subtotal, 0) AS Subtotal,
+                        ISNULL(o.DiscountAmount, 0) AS DiscountAmount,
+                        ISNULL(o.TipAmount, 0) AS TipAmount,
+                        CASE 
+                            WHEN EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'OrderKitchenType')
+                                AND o.OrderKitchenType = 'Bar' THEN 1
+                            WHEN EXISTS (SELECT 1 FROM KitchenTickets kt WHERE kt.OrderId = o.Id 
+                                AND (kt.KitchenStation = 'BAR' OR kt.TicketNumber LIKE 'BOT-%')) THEN 1
+                            ELSE 0
+                        END AS IsBarOrder
+                    FROM Orders o
+                    WHERE o.Id = @OrderId", connection, transaction))
+                {
+                    readCmd.Parameters.AddWithValue("@OrderId", orderId);
+                    using (var reader = readCmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            subtotal = reader.GetDecimal(0);
+                            discountAmount = reader.GetDecimal(1);
+                            tipAmount = reader.GetDecimal(2);
+                            isBarOrder = reader.GetInt32(3) == 1;
+                        }
+                        else
+                        {
+                            return;
+                        }
+                    }
+                }
+                
+                // Get applicable GST percentage from settings (BAR vs Foods)
+                decimal gstPercentage = 5.0m;
+                try
+                {
+                    using (var settingsCmd = new SqlCommand(@"
+                        SELECT 
+                            ISNULL(DefaultGSTPercentage, 5.0) AS DefaultGSTPercentage,
+                            ISNULL(BarGSTPerc, 5.0) AS BarGSTPerc
+                        FROM dbo.RestaurantSettings", connection, transaction))
+                    {
+                        using (var reader = settingsCmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                decimal defaultGst = reader.GetDecimal(0);
+                                decimal barGst = reader.GetDecimal(1);
+                                gstPercentage = isBarOrder ? barGst : defaultGst;
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    using (var fallbackCmd = new SqlCommand("SELECT ISNULL(DefaultGSTPercentage, 5.0) FROM dbo.RestaurantSettings", connection, transaction))
+                    {
+                        var result = fallbackCmd.ExecuteScalar();
+                        if (result != null && result != DBNull.Value)
+                        {
+                            gstPercentage = Convert.ToDecimal(result);
+                        }
+                    }
+                }
+                
+                // Calculate GST on discounted subtotal
+                decimal netSubtotal = Math.Max(0m, subtotal - discountAmount);
+                decimal gstAmount = Math.Round(netSubtotal * gstPercentage / 100m, 2, MidpointRounding.AwayFromZero);
+                
+                // Split into CGST and SGST
+                decimal cgstPercentage = gstPercentage / 2m;
+                decimal sgstPercentage = gstPercentage / 2m;
+                decimal cgstAmount = Math.Round(gstAmount / 2m, 2, MidpointRounding.AwayFromZero);
+                decimal sgstAmount = gstAmount - cgstAmount;
+                
+                // Calculate total amount
+                decimal totalAmount = netSubtotal + gstAmount + tipAmount;
+                
+                // Persist all calculated fields
+                using (var updateCmd = new SqlCommand(@"
+                    UPDATE Orders
+                    SET 
+                        TaxAmount = @GSTAmount,
+                        TotalAmount = @TotalAmount,
+                        UpdatedAt = GETDATE()
+                    WHERE Id = @OrderId;
+                    
+                    IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'GSTPercentage')
+                    BEGIN
+                        UPDATE Orders
+                        SET 
+                            GSTPercentage = @GSTPercentage,
+                            CGSTPercentage = @CGSTPercentage,
+                            SGSTPercentage = @SGSTPercentage,
+                            GSTAmount = @GSTAmount,
+                            CGSTAmount = @CGSTAmount,
+                            SGSTAmount = @SGSTAmount
+                        WHERE Id = @OrderId;
+                    END", connection, transaction))
+                {
+                    updateCmd.Parameters.AddWithValue("@OrderId", orderId);
+                    updateCmd.Parameters.AddWithValue("@GSTPercentage", gstPercentage);
+                    updateCmd.Parameters.AddWithValue("@CGSTPercentage", cgstPercentage);
+                    updateCmd.Parameters.AddWithValue("@SGSTPercentage", sgstPercentage);
+                    updateCmd.Parameters.AddWithValue("@GSTAmount", gstAmount);
+                    updateCmd.Parameters.AddWithValue("@CGSTAmount", cgstAmount);
+                    updateCmd.Parameters.AddWithValue("@SGSTAmount", sgstAmount);
+                    updateCmd.Parameters.AddWithValue("@TotalAmount", totalAmount);
+                    
+                    updateCmd.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"UpdateOrderFinancials failed for order {orderId}: {ex.Message}");
+            }
         }
 
         /// <summary>

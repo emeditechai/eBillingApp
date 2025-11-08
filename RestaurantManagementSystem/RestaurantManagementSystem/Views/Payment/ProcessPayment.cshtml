@@ -101,6 +101,14 @@
                         <!-- Discount Section (moved before payment amount) -->
                         <h5 class="mb-3 fw-semibold">2. Discount (Optional)</h5>
                         <div class="mb-4">
+                            @if (Model.DiscountAmount > 0)
+                            {
+                                <div class="alert alert-info mb-3">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    <strong>Discount Applied:</strong> ₹@Model.DiscountAmount.ToString("F2") 
+                                    <span class="text-muted">(Pre-filled below, modify if needed)</span>
+                                </div>
+                            }
                             <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
                                 <div class="btn-group" role="group" aria-label="Discount Type">
                                     <input type="radio" class="btn-check" name="discountMode" id="discountModeAmount" value="amount" checked>
@@ -110,7 +118,7 @@
                                 </div>
                                 <div class="input-group input-group-lg" style="max-width:320px;">
                                     <span id="discountPrefix" class="input-group-text bg-light fw-bold">₹</span>
-                                    <input type="number" min="0" step="0.01" id="discountEntry" class="form-control form-control-lg shadow-sm" placeholder="Enter discount" />
+                                    <input type="number" min="0" step="0.01" id="discountEntry" class="form-control form-control-lg shadow-sm" placeholder="Enter discount" value="@(Model.DiscountAmount > 0 ? Model.DiscountAmount.ToString("F2") : "")" />
                                 </div>
                                 <small class="text-muted">Applies to remaining balance; payment amount auto-adjusts.</small>
                             </div>
@@ -270,6 +278,14 @@
 
                                 <!-- Discount on order (optional) -->
                                 <h5 class="mb-3 fw-semibold">Discount (Optional)</h5>
+                                @if (Model.DiscountAmount > 0)
+                                {
+                                    <div class="alert alert-info mb-3">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        <strong>Discount Applied:</strong> ₹@Model.DiscountAmount.ToString("F2") 
+                                        <span class="text-muted">(You can modify it below if needed)</span>
+                                    </div>
+                                }
                                 <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
                                     <div class="btn-group" role="group" aria-label="Discount Type">
                                         <input type="radio" class="btn-check" name="DiscountType" id="splitDiscAmount" value="amount" checked>
@@ -279,7 +295,7 @@
                                     </div>
                                     <div class="input-group input-group-lg" style="max-width:320px;">
                                         <span id="splitDiscountPrefix" class="input-group-text bg-light fw-bold">₹</span>
-                                        <input type="number" min="0" step="0.01" name="DiscountAmount" id="splitDiscountEntry" class="form-control form-control-lg shadow-sm" placeholder="Enter discount" />
+                                        <input type="number" min="0" step="0.01" name="DiscountAmount" id="splitDiscountEntry" class="form-control form-control-lg shadow-sm" placeholder="Enter discount" value="@(Model.DiscountAmount > 0 ? Model.DiscountAmount.ToString("F2") : "")" />
                                     </div>
                                     <small class="text-muted">Applied once on subtotal; GST recalculated (existing flow).</small>
                                 </div>
@@ -389,12 +405,31 @@
                 // Use same math as single-payment: subtotal -> discount -> GST -> minus alreadyPaid, then round to rupee for display
                 var baseSubtotal = parseFloat($('#Subtotal').val()) || 0;
                 var gstPerc = parseFloat($('#GSTPercentage').val()) || 0;
+                
+                // Check if there's already a persisted discount from Payment/Index page
+                var persistedDiscount = parseFloat($('#DiscountAmount').val()) || 0;
+                
+                // Get user entry from split discount field
                 var mode = $('input[name="DiscountType"]:checked').val() || 'amount';
                 var entry = parseFloat($('#splitDiscountEntry').val());
                 if (isNaN(entry) || entry < 0) entry = 0;
+                
                 var discountAmt = 0;
-                if (mode === 'percent') { if (entry > 100) entry = 100; discountAmt = baseSubtotal * (entry/100.0); }
-                else { discountAmt = entry; }
+                
+                // If there's a persisted discount and NO new entry, use persisted
+                // If there's a new entry, use that (it will replace persisted in backend)
+                if (entry > 0) {
+                    if (mode === 'percent') { 
+                        if (entry > 100) entry = 100; 
+                        discountAmt = baseSubtotal * (entry/100.0); 
+                    } else { 
+                        discountAmt = entry; 
+                    }
+                } else if (persistedDiscount > 0) {
+                    // Use already persisted discount if no new entry
+                    discountAmt = persistedDiscount;
+                }
+                
                 if (discountAmt > baseSubtotal) discountAmt = baseSubtotal;
                 var discountedSubtotal = baseSubtotal - discountAmt;
                 var gstAmount = roundAway(discountedSubtotal * gstPerc / 100.0, 2);
@@ -455,7 +490,7 @@
 
             // Initialize with one row and auto amount on first load of split tab
             setTimeout(function(){
-                // Seed discount on split tab from server-provided discount, if any
+                // Show persisted discount in split tab for user visibility
                 var serverDisc = parseFloat('@Model.DiscountAmount');
                 if (!isNaN(serverDisc) && serverDisc > 0 && !$('#splitDiscountEntry').val()) {
                     $('#splitDiscountEntry').val(serverDisc.toFixed(2));
