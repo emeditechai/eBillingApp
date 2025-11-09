@@ -134,10 +134,237 @@ namespace RestaurantManagementSystem.Controllers
             return View(model);
         }
 
-        public IActionResult Financial()
+        [Authorize(Roles = "Administrator,Manager")]
+        [HttpGet]
+        public async Task<IActionResult> Financial()
         {
             ViewData["Title"] = "Financial Summary";
-            return View();
+            
+            var viewModel = new FinancialSummaryViewModel();
+            
+            // Load default report (last 30 days)
+            await LoadFinancialSummaryDataAsync(viewModel);
+            
+            return View(viewModel);
+        }
+
+        [Authorize(Roles = "Administrator,Manager")]
+        [HttpPost]
+        public async Task<IActionResult> Financial(FinancialSummaryFilter filter)
+        {
+            ViewData["Title"] = "Financial Summary";
+            
+            var viewModel = new FinancialSummaryViewModel
+            {
+                Filter = filter
+            };
+            
+            // Load filtered report
+            await LoadFinancialSummaryDataAsync(viewModel);
+            
+            return View(viewModel);
+        }
+
+        private async Task LoadFinancialSummaryDataAsync(FinancialSummaryViewModel viewModel)
+        {
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                using var command = new SqlCommand("usp_GetFinancialSummary", connection)
+                {
+                    CommandType = CommandType.StoredProcedure,
+                    CommandTimeout = 60
+                };
+
+                // Add parameters
+                command.Parameters.AddWithValue("@StartDate", viewModel.Filter.StartDate);
+                command.Parameters.AddWithValue("@EndDate", viewModel.Filter.EndDate);
+                command.Parameters.AddWithValue("@ComparisonPeriodDays", viewModel.Filter.ComparisonPeriodDays);
+
+                using var reader = await command.ExecuteReaderAsync();
+
+                // Result Set 1: Summary Statistics
+                if (await reader.ReadAsync())
+                {
+                    viewModel.Summary = new FinancialSummarySummary
+                    {
+                        TotalOrders = reader.GetInt32(reader.GetOrdinal("TotalOrders")),
+                        TotalRevenue = reader.GetDecimal(reader.GetOrdinal("TotalRevenue")),
+                        SubTotal = reader.GetDecimal(reader.GetOrdinal("SubTotal")),
+                        TotalTax = reader.GetDecimal(reader.GetOrdinal("TotalTax")),
+                        TotalTips = reader.GetDecimal(reader.GetOrdinal("TotalTips")),
+                        TotalDiscounts = reader.GetDecimal(reader.GetOrdinal("TotalDiscounts")),
+                        AverageOrderValue = reader.GetDecimal(reader.GetOrdinal("AverageOrderValue")),
+                        PaidAmount = reader.GetDecimal(reader.GetOrdinal("PaidAmount")),
+                        UnpaidAmount = reader.GetDecimal(reader.GetOrdinal("UnpaidAmount")),
+                        UniqueItemsSold = reader.GetInt32(reader.GetOrdinal("UniqueItemsSold")),
+                        TotalQuantitySold = reader.GetInt32(reader.GetOrdinal("TotalQuantitySold")),
+                        CashPayments = reader.GetDecimal(reader.GetOrdinal("CashPayments")),
+                        CardPayments = reader.GetDecimal(reader.GetOrdinal("CardPayments")),
+                        UPIPayments = reader.GetDecimal(reader.GetOrdinal("UPIPayments")),
+                        NetBankingPayments = reader.GetDecimal(reader.GetOrdinal("NetBankingPayments")),
+                        ComplimentaryPayments = reader.GetDecimal(reader.GetOrdinal("ComplimentaryPayments")),
+                        OtherPayments = reader.GetDecimal(reader.GetOrdinal("OtherPayments")),
+                        NetRevenue = reader.GetDecimal(reader.GetOrdinal("NetRevenue")),
+                        NetProfitMargin = reader.GetDecimal(reader.GetOrdinal("NetProfitMargin")),
+                        PeriodStartDate = reader.GetDateTime(reader.GetOrdinal("PeriodStartDate")),
+                        PeriodEndDate = reader.GetDateTime(reader.GetOrdinal("PeriodEndDate")),
+                        TotalDays = reader.GetInt32(reader.GetOrdinal("TotalDays"))
+                    };
+                }
+
+                // Result Set 2: Payment Method Breakdown
+                if (await reader.NextResultAsync())
+                {
+                    viewModel.PaymentMethods = new List<FinancialPaymentMethodBreakdown>();
+                    while (await reader.ReadAsync())
+                    {
+                        viewModel.PaymentMethods.Add(new FinancialPaymentMethodBreakdown
+                        {
+                            PaymentMethod = reader.GetString(reader.GetOrdinal("PaymentMethod")),
+                            DisplayName = reader.GetString(reader.GetOrdinal("DisplayName")),
+                            TransactionCount = reader.GetInt32(reader.GetOrdinal("TransactionCount")),
+                            TotalAmount = reader.GetDecimal(reader.GetOrdinal("TotalAmount")),
+                            AverageAmount = reader.GetDecimal(reader.GetOrdinal("AverageAmount")),
+                            Percentage = reader.GetDecimal(reader.GetOrdinal("Percentage"))
+                        });
+                    }
+                }
+
+                // Result Set 3: Daily Financial Breakdown
+                if (await reader.NextResultAsync())
+                {
+                    viewModel.DailyData = new List<DailyFinancialData>();
+                    while (await reader.ReadAsync())
+                    {
+                        viewModel.DailyData.Add(new DailyFinancialData
+                        {
+                            Date = reader.GetDateTime(reader.GetOrdinal("Date")),
+                            DayOfWeek = reader.GetString(reader.GetOrdinal("DayOfWeek")),
+                            OrderCount = reader.GetInt32(reader.GetOrdinal("OrderCount")),
+                            Revenue = reader.GetDecimal(reader.GetOrdinal("Revenue")),
+                            SubTotal = reader.GetDecimal(reader.GetOrdinal("SubTotal")),
+                            Tax = reader.GetDecimal(reader.GetOrdinal("Tax")),
+                            Tips = reader.GetDecimal(reader.GetOrdinal("Tips")),
+                            Discounts = reader.GetDecimal(reader.GetOrdinal("Discounts")),
+                            AvgOrderValue = reader.GetDecimal(reader.GetOrdinal("AvgOrderValue")),
+                            NetRevenue = reader.GetDecimal(reader.GetOrdinal("NetRevenue")),
+                            CashAmount = reader.GetDecimal(reader.GetOrdinal("CashAmount")),
+                            DigitalAmount = reader.GetDecimal(reader.GetOrdinal("DigitalAmount"))
+                        });
+                    }
+                }
+
+                // Result Set 4: Revenue by Category
+                if (await reader.NextResultAsync())
+                {
+                    viewModel.CategoryRevenues = new List<CategoryRevenue>();
+                    while (await reader.ReadAsync())
+                    {
+                        viewModel.CategoryRevenues.Add(new CategoryRevenue
+                        {
+                            Category = reader.GetString(reader.GetOrdinal("Category")),
+                            ItemCount = reader.GetInt32(reader.GetOrdinal("ItemCount")),
+                            TotalQuantity = reader.GetInt32(reader.GetOrdinal("TotalQuantity")),
+                            TotalRevenue = reader.GetDecimal(reader.GetOrdinal("TotalRevenue")),
+                            AvgPrice = reader.GetDecimal(reader.GetOrdinal("AvgPrice")),
+                            RevenuePercentage = reader.GetDecimal(reader.GetOrdinal("RevenuePercentage"))
+                        });
+                    }
+                }
+
+                // Result Set 5: Top Performing Items
+                if (await reader.NextResultAsync())
+                {
+                    viewModel.TopItems = new List<TopPerformingItem>();
+                    while (await reader.ReadAsync())
+                    {
+                        viewModel.TopItems.Add(new TopPerformingItem
+                        {
+                            MenuItemId = reader.GetInt32(reader.GetOrdinal("MenuItemId")),
+                            ItemName = reader.GetString(reader.GetOrdinal("ItemName")),
+                            Category = reader.GetString(reader.GetOrdinal("Category")),
+                            Price = reader.GetDecimal(reader.GetOrdinal("Price")),
+                            QuantitySold = reader.GetInt32(reader.GetOrdinal("QuantitySold")),
+                            TotalRevenue = reader.GetDecimal(reader.GetOrdinal("TotalRevenue")),
+                            AvgRevenue = reader.GetDecimal(reader.GetOrdinal("AvgRevenue")),
+                            OrderCount = reader.GetInt32(reader.GetOrdinal("OrderCount")),
+                            RevenueContribution = reader.GetDecimal(reader.GetOrdinal("RevenueContribution"))
+                        });
+                    }
+                }
+
+                // Result Set 6: Period Comparison
+                if (await reader.NextResultAsync())
+                {
+                    var periods = new List<PeriodData>();
+                    while (await reader.ReadAsync())
+                    {
+                        periods.Add(new PeriodData
+                        {
+                            Period = reader.GetString(reader.GetOrdinal("Period")),
+                            Orders = reader.GetInt32(reader.GetOrdinal("Orders")),
+                            Revenue = reader.GetDecimal(reader.GetOrdinal("Revenue")),
+                            AvgOrderValue = reader.GetDecimal(reader.GetOrdinal("AvgOrderValue")),
+                            Discounts = reader.GetDecimal(reader.GetOrdinal("Discounts")),
+                            Tax = reader.GetDecimal(reader.GetOrdinal("Tax"))
+                        });
+                    }
+
+                    if (periods.Count >= 2)
+                    {
+                        viewModel.Comparison = new PeriodComparison
+                        {
+                            CurrentPeriod = periods.FirstOrDefault(p => p.Period == "Current Period") ?? new PeriodData(),
+                            PreviousPeriod = periods.FirstOrDefault(p => p.Period == "Previous Period") ?? new PeriodData()
+                        };
+                    }
+                }
+
+                // Result Set 7: Hourly Revenue Pattern
+                if (await reader.NextResultAsync())
+                {
+                    viewModel.HourlyPattern = new List<HourlyRevenue>();
+                    decimal maxRevenue = 0;
+                    
+                    var tempList = new List<HourlyRevenue>();
+                    while (await reader.ReadAsync())
+                    {
+                        var hourlyData = new HourlyRevenue
+                        {
+                            Hour = reader.GetInt32(reader.GetOrdinal("Hour")),
+                            OrderCount = reader.GetInt32(reader.GetOrdinal("OrderCount")),
+                            Revenue = reader.GetDecimal(reader.GetOrdinal("Revenue")),
+                            AvgOrderValue = reader.GetDecimal(reader.GetOrdinal("AvgOrderValue"))
+                        };
+                        
+                        if (hourlyData.Revenue > maxRevenue)
+                            maxRevenue = hourlyData.Revenue;
+                        
+                        tempList.Add(hourlyData);
+                    }
+                    
+                    // Mark peak hours (top 80% of max revenue)
+                    var peakThreshold = maxRevenue * 0.8m;
+                    foreach (var hour in tempList)
+                    {
+                        hour.IsPeakHour = hour.Revenue >= peakThreshold;
+                        viewModel.HourlyPattern.Add(hour);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ViewBag.Error = $"Error loading financial summary: {ex.Message}";
+                // Initialize empty collections to avoid null reference errors
+                viewModel.PaymentMethods = new List<FinancialPaymentMethodBreakdown>();
+                viewModel.DailyData = new List<DailyFinancialData>();
+                viewModel.CategoryRevenues = new List<CategoryRevenue>();
+                viewModel.TopItems = new List<TopPerformingItem>();
+                viewModel.HourlyPattern = new List<HourlyRevenue>();
+            }
         }
 
         [HttpGet]
