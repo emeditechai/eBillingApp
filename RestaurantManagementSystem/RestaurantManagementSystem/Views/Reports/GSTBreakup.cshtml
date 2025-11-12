@@ -115,14 +115,14 @@
                         <th>Table</th>
                         <th class="text-end">Subtotal</th>
                         <th class="text-end">Discount</th>
-                        <th class="text-end bg-warning bg-opacity-25">Taxable Value</th>
+                        <th class="text-end bg-warning bg-opacity-25 text-dark">Taxable Value</th>
                         <th class="text-end">GST %</th>
                         <th class="text-end">CGST %</th>
                         <th class="text-end">CGST ₹</th>
                         <th class="text-end">SGST %</th>
                         <th class="text-end">SGST ₹</th>
-                        <th class="text-end bg-success bg-opacity-25">Total GST</th>
-                        <th class="text-end bg-info bg-opacity-25 fw-bold">Invoice Total</th>
+                        <th class="text-end bg-success bg-opacity-25 text-dark">Total GST</th>
+                        <th class="text-end bg-info bg-opacity-25 fw-bold text-dark">Invoice Total</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -151,7 +151,7 @@
                             <td>@row.TableNumber</td>
                             <td class="text-end text-muted small">₹@(subtotal.ToString("N2"))</td>
                             <td class="text-end text-danger small">@(row.DiscountAmount > 0 ? $"-₹{row.DiscountAmount:N2}" : "-")</td>
-                            <td class="text-end fw-bold bg-warning bg-opacity-10">₹@(row.TaxableValue.ToString("N2"))</td>
+                            <td class="text-end fw-bold bg-warning bg-opacity-10 text-dark">₹@(row.TaxableValue.ToString("N2"))</td>
                             <td class="text-end">
                                 <span class="badge @(row.GSTPercentage >= 20 ? "bg-danger" : "bg-info")">
                                     @(row.GSTPercentage.ToString("N1"))%
@@ -161,8 +161,8 @@
                             <td class="text-end">₹@(row.CGSTAmount.ToString("N2"))</td>
                             <td class="text-end small">@(row.SGSTPercentage.ToString("N2"))%</td>
                             <td class="text-end">₹@(row.SGSTAmount.ToString("N2"))</td>
-                            <td class="text-end fw-bold bg-success bg-opacity-10">₹@(row.TotalGST.ToString("N2"))</td>
-                            <td class="text-end fw-bold bg-info bg-opacity-10">₹@(row.InvoiceTotal.ToString("N2"))</td>
+                            <td class="text-end fw-bold bg-success bg-opacity-10 text-dark">₹@(row.TotalGST.ToString("N2"))</td>
+                            <td class="text-end fw-bold bg-info bg-opacity-10 text-dark">₹@(row.InvoiceTotal.ToString("N2"))</td>
                         </tr>
                     }
                 }
@@ -170,13 +170,13 @@
                 <tfoot class="table-secondary fw-bold">
                     <tr>
                         <td colspan="6" class="text-end">TOTALS:</td>
-                        <td class="text-end bg-warning bg-opacity-25">₹@(Model.Summary.TotalTaxableValue.ToString("N2"))</td>
+                        <td class="text-end bg-warning bg-opacity-25 text-dark">₹@(Model.Summary.TotalTaxableValue.ToString("N2"))</td>
                         <td colspan="2"></td>
                         <td class="text-end">₹@(Model.Summary.TotalCGST.ToString("N2"))</td>
                         <td></td>
                         <td class="text-end">₹@(Model.Summary.TotalSGST.ToString("N2"))</td>
-                        <td class="text-end bg-success bg-opacity-25">₹@((Model.Summary.TotalCGST + Model.Summary.TotalSGST).ToString("N2"))</td>
-                        <td class="text-end bg-info bg-opacity-25">₹@(Model.Summary.NetAmount.ToString("N2"))</td>
+                        <td class="text-end bg-success bg-opacity-25 text-dark">₹@((Model.Summary.TotalCGST + Model.Summary.TotalSGST).ToString("N2"))</td>
+                        <td class="text-end bg-info bg-opacity-25 text-dark">₹@(Model.Summary.NetAmount.ToString("N2"))</td>
                     </tr>
                 </tfoot>
             </table>
