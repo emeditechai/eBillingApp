@@ -164,12 +164,12 @@ namespace RestaurantManagementSystem.Services
                     -- Refresh SystemAmount per cashier for the business date
                     -- Prefer Orders.CashierId; fallback to Payments.ProcessedBy when Orders.CashierId is NULL
                     UPDATE cdc
-                    SET cdc.SystemAmount = ISNULL(cashSummary.CashAmount, 0)
+                    SET cdc.SystemAmount = ISNULL(ROUND(cashSummary.CashAmount, 0), 0) -- adjust to whole rupees including roundoff
                     FROM CashierDayClose cdc
                     LEFT JOIN (
                         SELECT 
                             COALESCE(o.CashierId, p.ProcessedBy) AS CashierId,
-                            SUM(p.Amount) AS CashAmount
+                            SUM(p.Amount + ISNULL(p.RoundoffAdjustmentAmt, 0)) AS CashAmount -- include per-payment roundoff adjustments
                         FROM Orders o
                         INNER JOIN Payments p ON p.OrderId = o.Id
                         INNER JOIN PaymentMethods pm ON p.PaymentMethodId = pm.Id
