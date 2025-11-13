@@ -7,10 +7,13 @@
     <!-- Header and Breadcrumb -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center report-header">
-                <div>
-                    <h2 class="mb-1 report-page-title"><i class="fas fa-receipt me-2 text-primary"></i>GST Breakup</h2>
-                    <p class="text-secondary mb-0">Taxable value, CGST/SGST and invoice totals by order</p>
+            <div class="d-flex justify-content-between align-items-center report-header gst-pro-header rounded-3 shadow-sm px-3 py-2">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="gst-header-icon d-flex align-items-center justify-content-center rounded-2"><i class="fas fa-file-invoice-dollar fa-lg"></i></div>
+                    <div>
+                        <h1 class="gst-header-title mb-1">GST Breakup</h1>
+                        <p class="gst-header-subtitle mb-0">Taxable value, CGST / SGST and invoice totals by order</p>
+                    </div>
                 </div>
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb mb-0">
@@ -53,17 +56,22 @@
                 <label asp-for="Filter.EndDate" class="form-label fw-semibold"></label>
                 <input asp-for="Filter.EndDate" class="form-control" type="date" />
             </div>
-            <div class="col-md-6 d-flex align-items-end gap-2">
+            <div class="col-md-6 d-flex align-items-end flex-wrap gap-2">
                 <button type="submit" class="btn btn-success"><i class="fas fa-sync-alt me-1"></i>Refresh Report</button>
                 <button type="button" id="exportCsvBtn" class="btn btn-outline-secondary"><i class="fas fa-file-csv me-1"></i>Export CSV</button>
+                <button type="button" id="exportPdfBtn" class="btn btn-outline-danger"><i class="fas fa-file-pdf me-1"></i>PDF</button>
                 <button type="button" id="printBtn" class="btn btn-outline-primary"><i class="fas fa-print me-1"></i>Print</button>
             </div>
         </form>
 
         <style>
-            /* Page heading: improve visibility and separation from navbar */
-            .report-header { padding-top:.25rem; border-bottom: 1px solid #e9ecef; }
-            .report-page-title { color:#212529; font-weight:800; letter-spacing:-.2px; }
+            /* Professional page heading */
+            .report-header { border-bottom: 1px solid #e9ecef; }
+            .gst-pro-header { background: linear-gradient(90deg,#ffffff 0%, #f8fafc 60%, #eef2f7 100%); }
+            .gst-header-icon { width:56px; height:56px; background:linear-gradient(135deg,#1e3a8a,#1d4ed8); color:#fff; box-shadow:0 4px 12px rgba(29,78,216,.35); }
+            .gst-header-title { font-size:2.05rem; font-weight:800; color:#212529; letter-spacing:-.5px; }
+            .gst-header-subtitle { font-size:.95rem; color:#5a6572; font-weight:500; }
+            @@media (max-width:768px){ .gst-header-title { font-size:1.55rem; } .gst-header-icon { width:44px; height:44px; } }
             /* Uniform gradient tiles for GST Breakup summary */
             .report-tile { padding: 1.25rem; border-radius: .6rem; box-shadow: 0 2px 8px rgba(0,0,0,0.06); height:150px; display:flex; flex-direction:column; justify-content:center; gap:.25rem; }
             .report-tile .label { margin:0; font-weight:600; opacity:.95; }
@@ -212,6 +220,57 @@
 
 @section Scripts {
     <script>
+        // Utility to dynamically load a script and return a Promise that resolves when it's loaded
+        function loadScript(src, attrs = {}) {
+            return new Promise((resolve, reject) => {
+                if (document.querySelector('script[src="' + src + '"]')) return resolve();
+                const s = document.createElement('script');
+                s.src = src;
+                s.async = false;
+                Object.keys(attrs).forEach(k => s.setAttribute(k, attrs[k]));
+                s.onload = () => resolve();
+                s.onerror = (e) => reject(new Error('Failed to load ' + src));
+                document.head.appendChild(s);
+            });
+        }
+
+        async function ensurePdfLibs() {
+            // Try multiple CDN endpoints for resiliency
+            const html2canvasCandidates = [
+                { url: 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', attrs: { integrity: 'sha512-BNa5lqS2sE3cOogzAm8h1Hn0pVITNrW2N7DbStQzQd6hw2yffA9H9n1tFoZT3zh0+BTtPlqvGjNFH6G/JPrfGw==', crossorigin: 'anonymous', referrerpolicy: 'no-referrer' } },
+                { url: 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js', attrs: {} },
+                { url: 'https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js', attrs: {} }
+            ];
+
+            const jspdfCandidates = [
+                { url: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', attrs: { integrity: 'sha512-ptgLOcAfeUvl4GXgXu2fLG3gNsYch0eYRqpMfrQa6zlmKCNt2uQ6Xo8XzYx+lNEwGDbVS9KfH2sJdF8qcKmlRQ==', crossorigin: 'anonymous', referrerpolicy: 'no-referrer' } },
+                { url: 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js', attrs: {} },
+                { url: 'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js', attrs: {} }
+            ];
+
+            async function tryCandidates(list, globalCheck) {
+                if (globalCheck()) return true;
+                let lastErr = null;
+                for (const c of list) {
+                    try {
+                        await loadScript(c.url, c.attrs || {});
+                        if (globalCheck()) return true;
+                    } catch (err) {
+                        // keep trying other candidates
+                        lastErr = err;
+                        console.warn('Failed loading', c.url, err);
+                    }
+                }
+                if (lastErr) throw lastErr;
+                return false;
+            }
+
+            // Load html2canvas
+            await tryCandidates(html2canvasCandidates, () => typeof window.html2canvas !== 'undefined');
+            // Load jsPDF
+            await tryCandidates(jspdfCandidates, () => (typeof window.jspdf !== 'undefined' && window.jspdf.jsPDF) || typeof window.jsPDF !== 'undefined');
+        }
+
         document.getElementById('exportCsvBtn').addEventListener('click', function () {
             const rows = Array.from(document.querySelectorAll('#gstBreakupTable tr'));
             const csv = rows.map(r => Array.from(r.children).map(c => '"' + c.innerText.replace(/"/g,'""') + '"').join(',')).join('\n');
@@ -232,6 +291,43 @@
             win.document.write('</body></html>');
             win.print();
             win.close();
+        });
+
+        // PDF export using html2canvas + jsPDF — ensure libs are loaded first
+        document.getElementById('exportPdfBtn').addEventListener('click', async function() {
+            try {
+                await ensurePdfLibs();
+
+                // jsPDF may be exported as window.jspdf (UMD) which contains jsPDF property, or older window.jsPDF
+                let jsPDFCtor = null;
+                if (window.jspdf && window.jspdf.jsPDF) jsPDFCtor = window.jspdf.jsPDF;
+                else if (window.jsPDF) jsPDFCtor = window.jsPDF;
+
+                if (!jsPDFCtor) { alert('PDF engine not loaded'); return; }
+
+                const doc = new jsPDFCtor('p','pt','a4');
+                const header = document.querySelector('.gst-pro-header');
+                const table = document.getElementById('gstBreakupTable');
+                const chunks = [];
+                if (header) chunks.push(header);
+                if (table) chunks.push(table);
+
+                let y = 20;
+                for (const el of chunks) {
+                    const canvas = await html2canvas(el, { scale: 2 });
+                    const img = canvas.toDataURL('image/png');
+                    const pageWidth = doc.internal.pageSize.getWidth() - 40;
+                    const ratio = canvas.width / canvas.height;
+                    const imgHeight = pageWidth / ratio;
+                    if (y + imgHeight > doc.internal.pageSize.getHeight() - 20) { doc.addPage(); y = 20; }
+                    doc.addImage(img, 'PNG', 20, y, pageWidth, imgHeight);
+                    y += imgHeight + 15;
+                }
+                doc.save('gst_breakup_report.pdf');
+            } catch (err) {
+                console.error(err);
+                alert('Failed to generate PDF: ' + (err && err.message ? err.message : err));
+            }
         });
     </script>
 }
