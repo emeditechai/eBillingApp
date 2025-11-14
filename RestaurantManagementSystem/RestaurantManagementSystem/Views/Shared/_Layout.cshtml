@@ -94,9 +94,16 @@
     <header>
     <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-dark bg-gradient mb-3 fixed-top" style="position:fixed; top:0; left:0; right:0; width:100%; background-color: #1a3c5b; border-bottom: 3px solid #f8b133; box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index:1050;">
             <div class="container-fluid">
-                <a class="navbar-brand fw-bold" asp-area="" asp-controller="Home" asp-action="Index" style="color: #ffffff;">
-                    <i class="fas fa-utensils me-1"></i>Restaurant Management
-                </a>
+                <div class="d-flex flex-column align-items-start brand-stack">
+                    <a class="navbar-brand fw-bold mb-0" asp-area="" asp-controller="Home" asp-action="Index" style="color: #ffffff;">
+                        <i class="fas fa-utensils me-1"></i>Restaurant Management
+                    </a>
+                    <button type="button" class="btn btn-sm btn-outline-light mt-1 py-0 px-2 d-flex align-items-center gap-1 help-trigger"
+                            data-bs-toggle="modal" data-bs-target="#appHelpModal" title="Help & Shortcuts"
+                            style="font-size:.65rem; line-height:1.2; border-radius:14px;">
+                        <i class="fas fa-question-circle"></i> Help
+                    </button>
+                </div>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
                         aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>

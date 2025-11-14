@@ -11,26 +11,34 @@
           <div class="col-lg-5 border-end" style="background:linear-gradient(180deg,#f8f9fa,#eef2ff);">
             <div class="p-4">
               <h6 class="text-uppercase fw-bold mb-2"><span class="badge bg-primary me-2">1</span>Hotkeys Overview</h6>
-              <p class="small mb-3">Accelerate daily operations. Hotkeys auto-disable when an input has focus (except Space for menu search).</p>
-              <div class="table-responsive mb-3">
-                <table class="table table-sm table-hover table-bordered align-middle bg-white">
-                  <thead class="table-primary"><tr><th style="width:150px">Hotkey</th><th>Action & Context</th></tr></thead>
+              <p class="small mb-3">Accelerate daily operations. Hotkeys auto-disable while an input is focused (except Space for menu search). Navigation = <code>Shift</code> combos, In‑page actions = <code>Ctrl</code> combos.</p>
+              <div class="table-responsive mb-4">
+                <table class="table table-sm table-bordered align-middle bg-white">
+                  <thead class="table-primary">
+                    <tr>
+                      <th style="width:130px">Shortcut</th>
+                      <th style="width:180px">Action</th>
+                      <th style="width:120px">Context</th>
+                      <th>Notes</th>
+                    </tr>
+                  </thead>
                   <tbody class="small">
-                    <tr><td><code>Shift + F</code></td><td>Create Food Order (Home)</td></tr>
-                    <tr><td><code>Shift + B</code></td><td>Create BAR Order (Home)</td></tr>
-                    <tr><td><code>Shift + K</code></td><td>Kitchen Dashboard (Home)</td></tr>
-                    <tr><td><code>Shift + T</code></td><td>Table Dashboard (Home)</td></tr>
-                    <tr><td><code>Ctrl + O</code></td><td>Submit Order Form (Create pages)</td></tr>
-                    <tr><td><code>Ctrl + S</code></td><td>Save Order (Details)</td></tr>
-                    <tr><td><code>Ctrl + F</code></td><td>Fire Items (Details)</td></tr>
-                    <tr><td><code>Ctrl + P</code></td><td>Open / Process Payment</td></tr>
-                    <tr><td><code>Shift + P</code></td><td>Print Bill (Payment Index)</td></tr>
-                    <tr><td><code>Space</code></td><td>Focus Menu Item Search (Details)</td></tr>
-                    <tr><td><code>Enter</code></td><td>Add Selected Item (Search → Qty → Confirm)</td></tr>
+                    <tr><td><code>Shift + F</code></td><td>New Food Order</td><td>Home</td><td>Opens order create form.</td></tr>
+                    <tr><td><code>Shift + B</code></td><td>New BAR Order</td><td>Home</td><td>Bar-specific create flow.</td></tr>
+                    <tr><td><code>Shift + K</code></td><td>Kitchen Dashboard</td><td>Home</td><td>Monitor KOT ticket status.</td></tr>
+                    <tr><td><code>Shift + T</code></td><td>Table Dashboard</td><td>Home</td><td>Manage seating & active tables.</td></tr>
+                    <tr><td><code>Ctrl + O</code></td><td>Submit Order Form</td><td>Create Pages</td><td>Attempts form submit; prevents multiple submissions.</td></tr>
+                    <tr><td><code>Ctrl + S</code></td><td>Save Order Draft</td><td>Details Pages</td><td>Validates & persists current items.</td></tr>
+                    <tr><td><code>Ctrl + F</code></td><td>Fire Items</td><td>Details Pages</td><td>Generates KOT / BOT tickets.</td></tr>
+                    <tr><td><code>Ctrl + P</code></td><td>Open / Process Payment</td><td>Details / Payment</td><td>Either navigates to payment or processes tender.</td></tr>
+                    <tr><td><code>Shift + P</code></td><td>Print Bill</td><td>Payment Index</td><td>Requires items fired & payment context ready.</td></tr>
+                    <tr><td><code>Space</code></td><td>Focus Menu Search</td><td>Details Pages</td><td>Skips when input already focused.</td></tr>
+                    <tr><td><code>Enter</code></td><td>Add Selected Item</td><td>Details Pages</td><td>Sequence: Select → Enter (qty) → Enter (add).</td></tr>
+                    <tr><td><code>Esc</code></td><td>Cancel / Close Modal</td><td>Global</td><td>Standard bootstrap behaviour.</td></tr>
                   </tbody>
                 </table>
               </div>
-              <div class="alert alert-info py-2 small mb-3"><strong>Tip:</strong> Combine <code>Shift</code> for navigation and <code>Ctrl</code> for in‑page actions.</div>
+              <div class="alert alert-info py-2 small mb-4"><strong>Tip:</strong> If a hotkey seems ignored, check page context or whether a form field has focus.</div>
               <h6 class="text-uppercase fw-bold mb-2"><span class="badge bg-success me-2">2</span>Adding / Extending Hotkeys</h6>
               <ol class="small mb-3 ps-3">
                 <li>Open <code>Views/Shared/_Layout.cshtml</code>.</li>
@@ -51,7 +59,7 @@
           <div class="col-lg-7">
             <div class="p-4">
               <h6 class="text-uppercase fw-bold mb-2"><span class="badge bg-warning text-dark me-2">3</span>Workflow Deep Dive</h6>
-              <p class="small mb-3">End‑to‑end operational lifecycle including Beverage Order Tickets (BOT) and Day Closing variance management.</p>
+              <p class="small mb-3">Granular life‑cycle from guest seating through reporting. Follow steps in order to maintain accurate KOT / BOT and financial reporting integrity.</p>
               <div class="accordion" id="helpWorkflowAccordion">
               <div class="accordion-item">
                 <h2 class="accordion-header" id="wfOpeningHead">
@@ -59,7 +67,10 @@
                 </h2>
                 <div id="wfOpening" class="accordion-collapse collapse show" aria-labelledby="wfOpeningHead" data-bs-parent="#helpWorkflowAccordion">
                   <div class="accordion-body small">
-                    Manager opens app → Settings → Day Closing → <strong>Open Float for Cashier</strong> (enter cashier & amount). Cashier can start taking orders. Dashboard shows pending status until closing.
+                    1. Manager login & environment health check.<br/>
+                    2. Settings → Day Closing → <strong>Open Float</strong> (assign cashier + starting amount).<br/>
+                    3. Confirm previous day closed; if not, resolve variance first.<br/>
+                    4. Cashier dashboard now shows <em>Active Session</em> enabling order intake.
                   </div>
                 </div>
               </div>
@@ -69,7 +80,11 @@
                 </h2>
                 <div id="wfService" class="accordion-collapse collapse" aria-labelledby="wfServiceHead" data-bs-parent="#helpWorkflowAccordion">
                   <div class="accordion-body small">
-                    Create orders (Shift+F). Add items rapidly: <code>Space</code> focus search → select item → <code>Enter</code> to qty → enter quantity → <code>Enter</code> to add. <code>Ctrl+S</code> save, <code>Ctrl+F</code> fire items creating Kitchen (KOT) and Beverage (BOT) tickets. Use dashboards to monitor status.
+                    <strong>Seat Guests:</strong> Assign table, party size, server.<br/>
+                    <strong>Create Order:</strong> <code>Shift+F</code>/<code>Shift+B</code> from Home. Fill guest / notes.<br/>
+                    <strong>Add Items Fast:</strong> <code>Space</code> focus search → type → arrow/select → <code>Enter</code> qty → <code>Enter</code> add.<br/>
+                    <strong>Lifecycle:</strong> Draft → Saved (<code>Ctrl+S</code>) → Fired (<code>Ctrl+F</code>) producing KOT/BOT tickets → Prepared → Served → Paid.<br/>
+                    Use Dashboards (Kitchen / BOT / Table) for real-time tracking & exceptions.
                   </div>
                 </div>
               </div>
@@ -79,7 +94,9 @@
                 </h2>
                 <div id="wfBot" class="accordion-collapse collapse" aria-labelledby="wfBotHead" data-bs-parent="#helpWorkflowAccordion">
                   <div class="accordion-body small">
-                    Fire order items → Bar items create BOT: <em>New → In Progress → Ready → Billed</em>. Use BOT dashboard for status actions (Start, Mark Ready, Mark Billed, Void). Separate from KOT for clearer beverage tracking.
+                    Fired BAR items spawn BOT tickets.<br/><em>Status chain:</em> New → In Progress → Ready → Billed.<br/>
+                    <strong>Actions:</strong> Start (begin prep), Mark Ready (notify service), Mark Billed (after payment), Void (exception).<br/>
+                    Separation from kitchen tickets enables independent timing & analytics for beverages.
                   </div>
                 </div>
               </div>
@@ -89,7 +106,12 @@
                 </h2>
                 <div id="wfClosing" class="accordion-collapse collapse" aria-labelledby="wfClosingHead" data-bs-parent="#helpWorkflowAccordion">
                   <div class="accordion-body small">
-                    Cashier counts physical cash → Settings → Day Closing → Declare denomination breakdown. System compares expected vs declared; within threshold auto-approves, else status CHECK requiring manager approval. Manager reviews variances, then <strong>Lock Day</strong> and prints EOD report.
+                    1. Stop new orders; ensure all open checks settled.<br/>
+                    2. Cashier counts physical cash & records denominations.<br/>
+                    3. System compares expected vs declared → variance threshold decides Auto vs Check.<br/>
+                    4. Manager reviews variances & approves if acceptable.<br/>
+                    5. <strong>Lock Day</strong> → Generate Collection Register, GST Breakup, Cash Closing reports.<br/>
+                    6. Archive tickets & purge transient caches.
                   </div>
                 </div>
               </div>
@@ -99,7 +121,10 @@
                 </h2>
                 <div id="wfTips" class="accordion-collapse collapse" aria-labelledby="wfTipsHead" data-bs-parent="#helpWorkflowAccordion">
                   <div class="accordion-body small">
-                    Use dashboards & reports (Customers, GST, Menu, Collection Register) for trends. Monitor high-volume low-price items for upsell. Track variances early to reduce end-of-day friction.
+                    • Leverage Menu Analysis to identify high volume / low price upsell candidates.<br/>
+                    • Customers report: watch loyalty buckets & demographics for targeted promos.<br/>
+                    • Fire early; delayed firing causes kitchen batching delays.<br/>
+                    • Resolve payment variances immediately—don’t defer to closing.
                   </div>
                 </div>
               </div>
@@ -116,6 +141,8 @@
                         <tr><td>BOT stuck In Progress</td><td>Ready not marked</td><td>Open BOT dashboard → Mark Ready</td></tr>
                         <tr><td>Day Closing blocked</td><td>Variance > threshold</td><td>Manager approval required before Lock</td></tr>
                         <tr><td>Payment link disabled</td><td>Order not saved or fired</td><td>Ctrl+S then Ctrl+F to progress</td></tr>
+                        <tr><td>Print bill fails</td><td>Bill not generated / network</td><td>Re‑process payment; check printer service</td></tr>
+                        <tr><td>Missing report data</td><td>Day not locked</td><td>Complete Day Closing & regenerate reports</td></tr>
                       </tbody>
                     </table>
                   </div>
@@ -129,6 +156,8 @@
                   <li>Use Shift hotkeys only from Dashboard/Home pages.</li>
                   <li>Fire items early to avoid KOT/BOT backlog.</li>
                   <li>Monitor low-price high-volume items for margin uplift.</li>
+                  <li>Address payment & discount approvals immediately.</li>
+                  <li>Lock day only after resolving all variances.</li>
                 </ul>
               </div>
             </div>
