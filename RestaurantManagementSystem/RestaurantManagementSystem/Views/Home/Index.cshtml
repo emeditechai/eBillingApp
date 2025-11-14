@@ -45,6 +45,27 @@
         position: relative;
         overflow: hidden;
     }
+        /* Help button (top-left to avoid overlap with brand logo on right) */
+        .dashboard-help-btn {
+            position: absolute;
+            top: 12px;
+            left: 14px;
+            z-index: 15;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255,255,255,0.22);
+            color: #fff;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255,255,255,0.35);
+            padding: 6px 12px;
+            font-size: .8rem;
+            border-radius: 30px;
+            text-decoration: none;
+            transition: background .2s, box-shadow .2s;
+        }
+        .dashboard-help-btn:hover { background: rgba(255,255,255,0.35); box-shadow: 0 2px 6px rgba(0,0,0,0.25); color:#fff; }
+        .dashboard-help-btn i { font-size: 1rem; }
     .dashboard-header .brand-logo-wrapper {
         position: absolute;
         top: 12px;
@@ -299,7 +320,10 @@
                 }
                 <span class="brand-name">@Model.RestaurantName</span>
             </div>
-            <h1><i class="fas fa-utensils me-2" aria-hidden="true"></i>@Model.RestaurantName Dashboard</h1>
+            @* Removed in favor of single consolidated Help button under navbar brand *@
+            <div class="d-flex justify-content-between align-items-start mb-2 pt-2">
+                <h1 class="me-3"><i class="fas fa-utensils me-2" aria-hidden="true"></i>@Model.RestaurantName Dashboard</h1>
+            </div>
             <p>Welcome back, <strong>@Model.UserFullName</strong>!</p>
             
             <div class="user-info">
@@ -436,6 +460,55 @@
                             }
                         </tbody>
                     </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div class="modal fade" id="appHelpModal" tabindex="-1" aria-labelledby="appHelpModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="appHelpModalLabel"><i class="fas fa-life-ring me-2"></i>Application Help & Shortcuts</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <h6 class="text-uppercase text-muted">Hot Keys</h6>
+                    <div class="table-responsive mb-3">
+                        <table class="table table-sm table-bordered align-middle">
+                            <thead class="table-light">
+                                <tr><th>Shortcut</th><th>Action</th><th>Context</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><code>Shift+F</code></td><td>Create New Order</td><td>Dashboard / Global</td></tr>
+                                <tr><td><code>Shift+T</code></td><td>Open Tables View</td><td>Dashboard / Global</td></tr>
+                                <tr><td><code>Esc</code></td><td>Close Modals / Cancel</td><td>Global</td></tr>
+                                <tr><td><code>Ctrl+S</code></td><td>Save Current Form (where supported)</td><td>Forms</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <h6 class="text-uppercase text-muted">Workflow Summary</h6>
+                    <ol class="small mb-3">
+                        <li><strong>Seat Guests</strong>: Assign table, record party size & server.</li>
+                        <li><strong>Create Order</strong>: Add items, modifiers, and notes. Use hotkeys for speed.</li>
+                        <li><strong>Send to Kitchen / Bar</strong>: Items routed by station type automatically.</li>
+                        <li><strong>Monitor Preparation</strong>: Track item status; update as prepared / served.</li>
+                        <li><strong>Apply Discounts / Complementary</strong>: Follow approval workflow if required.</li>
+                        <li><strong>Split / Merge Payments</strong>: Handle multiple tenders, ensure GST breakup visible.</li>
+                        <li><strong>Close Order</strong>: Confirm payments, print receipt, release table.</li>
+                        <li><strong>Day Closing</strong>: Run authorization, generate collection & GST reports.</li>
+                    </ol>
+                    <h6 class="text-uppercase text-muted">Tips</h6>
+                    <ul class="small mb-0">
+                        <li>Use sparklines and KPI tiles for at-a-glance performance.</li>
+                        <li>CSV / Print buttons on reports speed up data sharing.</li>
+                        <li>Watch loyalty & demographics to guide targeted promotions.</li>
+                        <li>If PDF export fails, ensure network access to CDN or contact admin.</li>
+                    </ul>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
@@ -1002,3 +1075,5 @@
         </div>
     </div>
 </div>
+
+@await Html.PartialAsync("_HelpInfo")
