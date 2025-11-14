@@ -5,14 +5,20 @@
 }
 
 <div class="container-fluid">
-    <div class="row">
+    <div class="row mb-3">
         <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2><i class="fas fa-users me-2"></i>Customer Reports</h2>
-                <nav aria-label="breadcrumb">
-                    <ol class="breadcrumb">
+            <div class="d-flex justify-content-between align-items-center report-header cust-pro-header rounded-3 shadow-sm px-3 py-2">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="cust-header-icon d-flex align-items-center justify-content-center rounded-2"><i class="fas fa-users fa-lg"></i></div>
+                    <div>
+                        <h1 class="cust-header-title mb-1">Customers</h1>
+                        <p class="cust-header-subtitle mb-0">Insights on visits, revenue, loyalty, and demographics</p>
+                    </div>
+                </div>
+                <nav aria-label="breadcrumb" class="ms-3">
+                    <ol class="breadcrumb mb-0">
                         <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Home</a></li>
-                        <li class="breadcrumb-item active">Reports</li>
+                        <li class="breadcrumb-item"><a asp-controller="Reports" asp-action="Index">Reports</a></li>
                         <li class="breadcrumb-item active">Customers</li>
                     </ol>
                 </nav>
@@ -23,18 +29,28 @@
     <form method="post" asp-action="Customers" class="row g-3 align-items-end mb-4">
         <div class="col-auto">
             <label asp-for="Filter.From" class="form-label">From</label>
-            <input asp-for="Filter.From" class="form-control" />
+            <input asp-for="Filter.From" class="form-control" type="date" />
         </div>
         <div class="col-auto">
             <label asp-for="Filter.To" class="form-label">To</label>
-            <input asp-for="Filter.To" class="form-control" />
+            <input asp-for="Filter.To" class="form-control" type="date" />
         </div>
-        <div class="col-auto">
-            <button type="submit" class="btn btn-primary">Run Report</button>
+        <div class="col d-flex justify-content-end gap-2">
+            <button type="submit" class="btn btn-success"><i class="fas fa-sync-alt me-1"></i>Refresh</button>
+            <button type="button" id="exportCustomersCsvBtn" class="btn btn-outline-secondary"><i class="fas fa-file-csv me-1"></i>CSV</button>
+            <button type="button" id="printCustomersBtn" class="btn btn-outline-primary"><i class="fas fa-print me-1"></i>Print</button>
         </div>
     </form>
 
     <style>
+        /* Professional page heading */
+        .report-header { border-bottom: 1px solid #e9ecef; }
+        .cust-pro-header { background: linear-gradient(90deg,#ffffff 0%, #f8fafc 60%, #eef2f7 100%); }
+        .cust-header-icon { width:56px; height:56px; background:linear-gradient(135deg,#0ea5e9,#2563eb); color:#fff; box-shadow:0 4px 12px rgba(37,99,235,.3); }
+        .cust-header-title { font-size:2.0rem; font-weight:800; color:#212529; letter-spacing:-.3px; }
+        .cust-header-subtitle { font-size:.95rem; color:#5a6572; font-weight:500; }
+        @@media (max-width:768px){ .cust-header-title{ font-size:1.55rem;} .cust-header-icon{ width:44px; height:44px;}}
+
         .report-tile { border-radius: 8px; color: #fff; min-height: 150px; display:block; }
         .report-tile .tile-content { height:100%; }
         .report-tile h2 { font-weight:700; }
@@ -43,6 +59,8 @@
         .tile-purple { background: linear-gradient(135deg,#9b7bff 0%,#6a4bff 100%); }
         /* table highlight */
         .table.table-sm tbody tr:hover { background-color: rgba(0,0,0,0.03); }
+        .table-sticky thead th { position: sticky; top: 0; background: #f8f9fa; z-index: 1; }
+        .kpi-sub { opacity: .9; }
     @@media (max-width: 767px) { .report-tile { min-height:120px; } }
     </style>
 
@@ -94,11 +112,21 @@
     <div class="row mt-3">
         <div class="col-lg-6">
             <div class="card mb-3">
-                <div class="card-header">Top Customers</div>
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Top Customers</span>
+                    <span class="small text-muted">Period: @Model.Filter.From?.ToString("dd MMM yyyy") – @Model.Filter.To?.ToString("dd MMM yyyy")</span>
+                </div>
                 <div class="card-body">
-                    <table class="table table-sm">
+                    <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle table-sticky" id="topCustomersTable">
                         <thead>
-                            <tr><th>Name</th><th>Phone</th><th>Visits</th><th>Revenue</th><th>LTV</th></tr>
+                            <tr>
+                                <th>Name</th>
+                                <th>Phone</th>
+                                <th class="text-end">Visits</th>
+                                <th class="text-end">Revenue</th>
+                                <th class="text-end">LTV</th>
+                            </tr>
                         </thead>
                         <tbody>
                             @foreach (var c in Model.TopCustomers)
@@ -106,13 +134,14 @@
                                 <tr>
                                     <td>@c.Name</td>
                                     <td>@c.Phone</td>
-                                    <td>@c.Visits</td>
-                                    <td>@c.Revenue.ToString("C")</td>
-                                    <td>@c.LTV.ToString("C")</td>
+                                    <td class="text-end"><span class="badge bg-secondary">@c.Visits</span></td>
+                                    <td class="text-end">@c.Revenue.ToString("C")</td>
+                                    <td class="text-end fw-semibold">@c.LTV.ToString("C")</td>
                                 </tr>
                             }
                         </tbody>
                     </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -131,12 +160,19 @@
             <div class="card mb-3">
                 <div class="card-header">Loyalty Buckets</div>
                 <div class="card-body">
-                    <ul>
+                    @{ var loyaltyTotal = Model.LoyaltyStats?.Sum(x => x.CustomerCount) ?? 0; }
+                    <div class="vstack gap-2">
                         @foreach (var b in Model.LoyaltyStats)
                         {
-                            <li>@b.Bucket: @b.CustomerCount</li>
+                            var pct = loyaltyTotal > 0 ? (int)Math.Round(b.CustomerCount * 100.0 / loyaltyTotal) : 0;
+                            <div>
+                                <div class="d-flex justify-content-between"><span>@b.Bucket</span><span class="text-muted">@b.CustomerCount (@pct%)</span></div>
+                                <div class="progress" style="height:8px;">
+                                    <div class="progress-bar bg-info" role="progressbar" style="width:@pct%" aria-valuenow="@pct" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                            </div>
                         }
-                    </ul>
+                    </div>
                 </div>
             </div>
         </div>
@@ -144,15 +180,19 @@
             <div class="card mb-3">
                 <div class="card-header">Demographics</div>
                 <div class="card-body">
-                    <table class="table table-sm">
-                        <thead><tr><th>Category</th><th>Count</th></tr></thead>
-                        <tbody>
-                            @foreach (var d in Model.Demographics)
-                            {
-                                <tr><td>@d.Category</td><td>@d.Count</td></tr>
-                            }
-                        </tbody>
-                    </table>
+                    @{ var demoTotal = Model.Demographics?.Sum(d => d.Count) ?? 0; }
+                    <div class="vstack gap-2">
+                        @foreach (var d in Model.Demographics)
+                        {
+                            var pct = demoTotal > 0 ? (int)Math.Round(d.Count * 100.0 / demoTotal) : 0;
+                            <div>
+                                <div class="d-flex justify-content-between"><span>@d.Category</span><span class="text-muted">@d.Count (@pct%)</span></div>
+                                <div class="progress" style="height:8px;">
+                                    <div class="progress-bar bg-secondary" role="progressbar" style="width:@pct%" aria-valuenow="@pct" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                            </div>
+                        }
+                    </div>
                 </div>
             </div>
         </div>
@@ -195,6 +235,32 @@
             createSparkline('customersSparkline', visitVals, '#ffffff');
             createSparkline('visitsSparkline', visitVals, '#ffffff');
             createSparkline('revenueSparkline', revenueVals, '#ffffff');
+
+            // Export Top Customers to CSV
+            const csvBtn = document.getElementById('exportCustomersCsvBtn');
+            if (csvBtn) {
+                csvBtn.addEventListener('click', function(){
+                    const rows = Array.from(document.querySelectorAll('#topCustomersTable tr'));
+                    const csv = rows.map(r => Array.from(r.children).map(c => '"' + c.innerText.replace(/"/g,'""') + '"').join(',')).join('\n');
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = 'top_customers.csv'; a.click(); URL.revokeObjectURL(url);
+                });
+            }
+
+            // Print section
+            const printBtn = document.getElementById('printCustomersBtn');
+            if (printBtn) {
+                printBtn.addEventListener('click', function(){
+                    const content = document.querySelector('.container-fluid').outerHTML;
+                    const w = window.open('', '_blank');
+                    w.document.write('<html><head><title>Customers Report</title><link rel="stylesheet" href="/lib/bootstrap/dist/css/bootstrap.min.css" /></head><body>');
+                    w.document.write(content);
+                    w.document.write('</body></html>');
+                    w.print(); w.close();
+                });
+            }
         })();
     </script>
 }
