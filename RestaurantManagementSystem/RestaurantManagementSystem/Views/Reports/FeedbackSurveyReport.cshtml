@@ -66,10 +66,10 @@
         box-shadow: 0 5px 20px rgba(0,0,0,0.08);
     }
     .data-table thead {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: #eef4ff;
     }
     .data-table thead th {
-        color: white !important;
+        color: #0b3d91 !important;
         font-weight: 700;
         text-transform: uppercase;
         font-size: 0.85rem;
@@ -388,18 +388,19 @@
         <table class="table data-table table-hover" id="feedbackTable">
             <thead>
                 <tr>
-                    <th style="color: white !important;">Date</th>
-                    <th style="color: white !important;">Guest</th>
-                    <th style="color: white !important;">Location</th>
-                    <th style="color: white !important;">Overall</th>
-                    <th style="color: white !important;">Food</th>
-                    <th style="color: white !important;">Service</th>
-                    <th style="color: white !important;">Staff</th>
-                    <th style="color: white !important;">Avg</th>
-                    <th style="color: white !important;">Survey</th>
-                    <th style="color: white !important;">Tags</th>
-                    <th style="color: white !important;">First Visit</th>
-                    <th style="color: white !important;">Actions</th>
+                    <th>Date</th>
+                    <th>Guest</th>
+                    <th>Phone</th>
+                    <th>Location</th>
+                    <th>Overall</th>
+                    <th>Food</th>
+                    <th>Service</th>
+                    <th>Staff</th>
+                    <th>Avg</th>
+                    <th>Survey</th>
+                    <th>Tags</th>
+                    <th>First Visit</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -412,6 +413,16 @@
                             @if(!string.IsNullOrEmpty(item.Email))
                             {
                                 <br/><small class="text-muted">@item.Email</small>
+                            }
+                        </td>
+                        <td>
+                            @if(!string.IsNullOrEmpty(item.Phone))
+                            {
+                                @item.Phone
+                            }
+                            else
+                            {
+                                <span class="text-muted">N/A</span>
                             }
                         </td>
                         <td>@item.Location</td>

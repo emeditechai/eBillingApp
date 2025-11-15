@@ -1592,8 +1592,8 @@ namespace RestaurantManagementSystem.Controllers
                                 {
                                     viewModel.RatingDistribution.Add(new RatingDistribution
                                     {
-                                        Rating = reader.GetInt32(reader.GetOrdinal("Rating")),
-                                        Count = reader.GetInt32(reader.GetOrdinal("Count")),
+                                        Rating = ReadInt("Rating"),
+                                        Count = ReadInt("Count"),
                                         Percentage = reader.GetDecimal(reader.GetOrdinal("Percentage"))
                                     });
                                 }
@@ -1607,7 +1607,7 @@ namespace RestaurantManagementSystem.Controllers
                                     viewModel.TopTags.Add(new TagCount
                                     {
                                         Tag = reader.GetString(reader.GetOrdinal("Tag")),
-                                        Count = reader.GetInt32(reader.GetOrdinal("Count"))
+                                        Count = ReadInt("Count")
                                     });
                                 }
                             }
