@@ -7,6 +7,8 @@ using RestaurantManagementSystem.Models.Authorization;
 using RestaurantManagementSystem.ViewModels;
 using RestaurantManagementSystem.Services;
 using System.Data;
+using System.Linq;
+using System.Security.Claims;
 
 namespace RestaurantManagementSystem.Controllers
 {
@@ -63,12 +65,19 @@ namespace RestaurantManagementSystem.Controllers
             ViewData["Title"] = "Sales Reports";
             
             var viewModel = new SalesReportViewModel();
+            var canViewAllReports = CurrentUserCanViewAllReportData();
+            var currentUserId = GetCurrentUserId();
+            ViewBag.CanViewAllSalesUsers = canViewAllReports;
+            if (!canViewAllReports)
+            {
+                viewModel.Filter.UserId = currentUserId;
+            }
             
             // Load available users for the filter dropdown
-            await LoadAvailableUsersAsync(viewModel);
+            await LoadAvailableUsersAsync(viewModel, canViewAllReports, currentUserId);
             
             // Load default report (last 30 days)
-            await LoadSalesReportDataAsync(viewModel);
+            await LoadSalesReportDataAsync(viewModel, canViewAllReports, currentUserId);
             await SetViewPermissionsAsync(MenuCodes.Sales);
             
             return View(viewModel);
@@ -84,12 +93,19 @@ namespace RestaurantManagementSystem.Controllers
             {
                 Filter = filter
             };
+            var canViewAllReports = CurrentUserCanViewAllReportData();
+            var currentUserId = GetCurrentUserId();
+            ViewBag.CanViewAllSalesUsers = canViewAllReports;
+            if (!canViewAllReports)
+            {
+                viewModel.Filter.UserId = currentUserId;
+            }
             
             // Load available users for the filter dropdown
-            await LoadAvailableUsersAsync(viewModel);
+            await LoadAvailableUsersAsync(viewModel, canViewAllReports, currentUserId);
             
             // Load report data based on filter
-            await LoadSalesReportDataAsync(viewModel);
+            await LoadSalesReportDataAsync(viewModel, canViewAllReports, currentUserId);
             await SetViewPermissionsAsync(MenuCodes.Sales);
             
             return View(viewModel);
@@ -657,12 +673,43 @@ namespace RestaurantManagementSystem.Controllers
             return File(bytes, "text/csv", "BarBOTReport.csv");
         }
 
-        private async Task LoadAvailableUsersAsync(SalesReportViewModel viewModel)
+        private async Task LoadAvailableUsersAsync(SalesReportViewModel viewModel, bool canViewAllUsers, int currentUserId)
         {
             try
             {
                 using var connection = new SqlConnection(_connectionString);
                 await connection.OpenAsync();
+                viewModel.AvailableUsers.Clear();
+
+                if (!canViewAllUsers)
+                {
+                    using var singleUserCommand = new SqlCommand(@"
+                        SELECT TOP 1 Id, 
+                               ISNULL(NULLIF(LTRIM(RTRIM(ISNULL(FirstName, '') + ' ' + ISNULL(LastName, ''))), ''), Username) AS FullName,
+                               Username
+                        FROM Users WHERE Id = @UserId", connection);
+                    singleUserCommand.Parameters.AddWithValue("@UserId", currentUserId);
+                    using var singleReader = await singleUserCommand.ExecuteReaderAsync();
+                    if (await singleReader.ReadAsync())
+                    {
+                        viewModel.AvailableUsers.Add(new UserSelectItem
+                        {
+                            Id = singleReader.GetInt32(singleReader.GetOrdinal("Id")),
+                            Name = singleReader.IsDBNull(singleReader.GetOrdinal("FullName")) ? string.Empty : singleReader.GetString(singleReader.GetOrdinal("FullName")),
+                            Username = singleReader.IsDBNull(singleReader.GetOrdinal("Username")) ? string.Empty : singleReader.GetString(singleReader.GetOrdinal("Username"))
+                        });
+                    }
+                    else
+                    {
+                        viewModel.AvailableUsers.Add(new UserSelectItem
+                        {
+                            Id = currentUserId,
+                            Name = User?.Identity?.Name ?? "Current User",
+                            Username = User?.Identity?.Name ?? "Current User"
+                        });
+                    }
+                    return;
+                }
                 
                 using var command = new SqlCommand(@"
                     SELECT DISTINCT u.Id, u.FirstName, u.LastName, u.Username 
@@ -690,7 +737,7 @@ namespace RestaurantManagementSystem.Controllers
             }
         }
 
-        private async Task LoadSalesReportDataAsync(SalesReportViewModel viewModel)
+        private async Task LoadSalesReportDataAsync(SalesReportViewModel viewModel, bool canViewAllRecords, int currentUserId)
         {
             try
             {
@@ -711,9 +758,15 @@ namespace RestaurantManagementSystem.Controllers
                 { 
                     Value = viewModel.Filter.EndDate?.Date ?? DateTime.Today 
                 });
+                int? requestedUserId = viewModel.Filter.UserId;
+                if (!canViewAllRecords)
+                {
+                    requestedUserId = currentUserId;
+                    viewModel.Filter.UserId = currentUserId;
+                }
                 command.Parameters.Add(new SqlParameter("@UserId", SqlDbType.Int) 
                 { 
-                    Value = viewModel.Filter.UserId.HasValue ? viewModel.Filter.UserId.Value : DBNull.Value 
+                    Value = requestedUserId.HasValue ? requestedUserId.Value : DBNull.Value 
                 });
                 
                 // Clear existing collections to avoid accumulation when posting back
@@ -1374,8 +1427,15 @@ namespace RestaurantManagementSystem.Controllers
                     ToDate = DateTime.Today
                 }
             };
+            var canViewAllCollections = CurrentUserCanViewAllReportData();
+            var currentUserId = GetCurrentUserId();
+            ViewBag.CanViewAllCollectionUsers = canViewAllCollections;
+            if (!canViewAllCollections)
+            {
+                model.Filter.UserId = currentUserId;
+            }
             await LoadPaymentMethodsAsync(model);
-            await LoadCollectionRegisterDataAsync(model);
+            await LoadCollectionRegisterDataAsync(model, canViewAllCollections, currentUserId);
             await SetViewPermissionsAsync(MenuCodes.Collection);
             return View(model);
         }
@@ -1386,8 +1446,15 @@ namespace RestaurantManagementSystem.Controllers
         {
             ViewData["Title"] = "Order Wise Payment Method Wise Collection Register";
             var model = new CollectionRegisterViewModel { Filter = filter };
+            var canViewAllCollections = CurrentUserCanViewAllReportData();
+            var currentUserId = GetCurrentUserId();
+            ViewBag.CanViewAllCollectionUsers = canViewAllCollections;
+            if (!canViewAllCollections)
+            {
+                model.Filter.UserId = currentUserId;
+            }
             await LoadPaymentMethodsAsync(model);
-            await LoadCollectionRegisterDataAsync(model);
+            await LoadCollectionRegisterDataAsync(model, canViewAllCollections, currentUserId);
             await SetViewPermissionsAsync(MenuCodes.Collection);
             return View(model);
         }
@@ -1417,21 +1484,44 @@ namespace RestaurantManagementSystem.Controllers
             }
         }
 
-        private async Task LoadCollectionRegisterDataAsync(CollectionRegisterViewModel model)
+        private async Task LoadCollectionRegisterDataAsync(CollectionRegisterViewModel model, bool canViewAllRecords, int currentUserId)
         {
             try
             {
                 using var connection = new SqlConnection(_connectionString);
                 await connection.OpenAsync();
+                int? requestedUserId = model.Filter.UserId;
+                if (!canViewAllRecords)
+                {
+                    requestedUserId = currentUserId;
+                    model.Filter.UserId = currentUserId;
+                }
+
+                string? scopedUserDisplayName = model.Filter.UserDisplayName;
+                if (requestedUserId.HasValue)
+                {
+                    using var userCmd = new SqlCommand(@"
+                        SELECT TOP 1 ISNULL(NULLIF(LTRIM(RTRIM(ISNULL(FirstName, '') + ' ' + ISNULL(LastName, ''))), ''), Username)
+                        FROM Users WHERE Id = @UserId", connection);
+                    userCmd.Parameters.AddWithValue("@UserId", requestedUserId.Value);
+                    var result = await userCmd.ExecuteScalarAsync();
+                    if (result != null && result != DBNull.Value)
+                    {
+                        scopedUserDisplayName = result.ToString();
+                    }
+                }
+
                 using var command = new SqlCommand("usp_GetCollectionRegister", connection)
                 { CommandType = CommandType.StoredProcedure };
                 
                 command.Parameters.AddWithValue("@FromDate", (object?)model.Filter.FromDate?.Date ?? DBNull.Value);
                 command.Parameters.AddWithValue("@ToDate", (object?)model.Filter.ToDate?.Date ?? DBNull.Value);
                 command.Parameters.AddWithValue("@PaymentMethodId", (object?)model.Filter.PaymentMethodId ?? DBNull.Value);
+                command.Parameters.AddWithValue("@UserId", (object?)requestedUserId ?? DBNull.Value);
 
                 using var reader = await command.ExecuteReaderAsync();
 
+                model.Rows.Clear();
                 // Read detail rows
                 while (await reader.ReadAsync())
                 {
@@ -1465,6 +1555,11 @@ namespace RestaurantManagementSystem.Controllers
                 {
                     var selectedMethod = model.PaymentMethods.FirstOrDefault(pm => pm.Value == model.Filter.PaymentMethodId.ToString());
                     model.Filter.PaymentMethodName = selectedMethod?.Text ?? "ALL";
+                }
+
+                if (!string.IsNullOrEmpty(scopedUserDisplayName))
+                {
+                    model.Filter.UserDisplayName = scopedUserDisplayName;
                 }
             }
             catch (Exception ex)
@@ -1508,6 +1603,38 @@ namespace RestaurantManagementSystem.Controllers
             await SetViewPermissionsAsync(MenuCodes.CashClosing);
             
             return View(viewModel);
+        }
+
+        private int GetCurrentUserId()
+        {
+            try
+            {
+                var claim = HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier);
+                if (claim != null && int.TryParse(claim.Value, out var parsedId))
+                {
+                    return parsedId;
+                }
+            }
+            catch
+            {
+                // ignore and fall through to default
+            }
+
+            return 1; // legacy fallback
+        }
+
+        private bool CurrentUserCanViewAllReportData()
+        {
+            try
+            {
+                var roles = HttpContext?.User?.FindAll(ClaimTypes.Role)?.Select(claim => claim.Value) ?? Enumerable.Empty<string>();
+                string[] privilegedRoles = ["Administrator", "FloorManager", "Floor Manager"];
+                return roles.Any(role => privilegedRoles.Any(privileged => string.Equals(role, privileged, StringComparison.OrdinalIgnoreCase)));
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         [HttpPost]

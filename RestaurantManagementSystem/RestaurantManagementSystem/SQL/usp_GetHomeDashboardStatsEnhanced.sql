@@ -6,6 +6,8 @@ IF OBJECT_ID('usp_GetHomeDashboardStatsEnhanced', 'P') IS NOT NULL
 GO
 
 CREATE PROCEDURE usp_GetHomeDashboardStatsEnhanced
+  @UserId INT = NULL,
+  @CanViewAll BIT = 0
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -24,13 +26,21 @@ BEGIN
         INNER JOIN Orders o WITH (NOLOCK) ON p.OrderId = o.Id
         WHERE o.CreatedAt >= @TodayStart 
           AND o.CreatedAt < @TodayEnd
-          AND p.Status = 1; -- Approved payments only
+          AND p.Status = 1
+          AND (
+                @CanViewAll = 1 
+                OR (@UserId IS NOT NULL AND o.UserId = @UserId)
+              ); -- Approved payments only scoped per user unless privileged
         
         -- Get today's orders count
         SELECT @TodayOrders = COUNT(*)
         FROM Orders o WITH (NOLOCK)
         WHERE o.CreatedAt >= @TodayStart 
-          AND o.CreatedAt < @TodayEnd;
+          AND o.CreatedAt < @TodayEnd
+          AND (
+                @CanViewAll = 1 
+                OR (@UserId IS NOT NULL AND o.UserId = @UserId)
+              );
         
         -- Get active tables (reserved or occupied)
         SELECT @ActiveTables = COUNT(*)

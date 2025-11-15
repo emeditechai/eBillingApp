@@ -9,7 +9,8 @@ GO
 CREATE PROCEDURE dbo.usp_GetCollectionRegister
     @FromDate DATE = NULL,
     @ToDate DATE = NULL,
-    @PaymentMethodId INT = NULL  -- NULL means ALL payment methods
+    @PaymentMethodId INT = NULL,  -- NULL means ALL payment methods
+    @UserId INT = NULL            -- NULL means all users
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -81,9 +82,10 @@ BEGIN
     INNER JOIN PaymentMethods pm ON p.PaymentMethodId = pm.Id
     LEFT JOIN OrderTables ot ON o.Id = ot.OrderId
     LEFT JOIN Tables t ON ot.TableId = t.Id
-    WHERE CAST(p.CreatedAt AS DATE) BETWEEN @FromDate AND @ToDate
-      AND p.Status = 1  -- Only approved payments
-      AND (@PaymentMethodId IS NULL OR p.PaymentMethodId = @PaymentMethodId)
+        WHERE CAST(p.CreatedAt AS DATE) BETWEEN @FromDate AND @ToDate
+            AND p.Status = 1  -- Only approved payments
+            AND (@PaymentMethodId IS NULL OR p.PaymentMethodId = @PaymentMethodId)
+            AND (@UserId IS NULL OR p.ProcessedBy = @UserId)
     ORDER BY p.CreatedAt DESC, o.OrderNumber, pm.Name;
 END
 GO

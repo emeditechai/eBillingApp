@@ -4,16 +4,45 @@
 @{
     var activeRoleName = User?.FindFirst("ActiveRoleName")?.Value ?? "Not Selected";
     var hasMultipleRoles = User?.FindFirst("HasMultipleRoles")?.Value == "true";
+    var preferredName = User?.FindFirst(ClaimTypes.GivenName)?.Value;
+    var lastName = User?.FindFirst(ClaimTypes.Surname)?.Value;
+    var userName = User?.Identity?.Name ?? "User";
+
+    var displayName = string.IsNullOrWhiteSpace(preferredName) ? userName : preferredName;
+    var initials = string.Empty;
+
+    if (!string.IsNullOrWhiteSpace(preferredName))
+    {
+        initials += preferredName.Trim()[0];
+    }
+
+    if (!string.IsNullOrWhiteSpace(lastName))
+    {
+        initials += lastName.Trim()[0];
+    }
+
+    if (string.IsNullOrWhiteSpace(initials) && !string.IsNullOrWhiteSpace(userName))
+    {
+        initials = userName.Trim()[0].ToString();
+    }
+
+    initials = initials.ToUpperInvariant();
 }
 
 <ul class="navbar-nav">
 @if (User.Identity.IsAuthenticated)
 {
     <li class="nav-item dropdown">
-        <a class="nav-link dropdown-toggle text-white" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="fas fa-user-circle compact-icon"></i>
-            @(User.FindFirst(ClaimTypes.GivenName)?.Value ?? User.Identity.Name)
-            <span class="badge bg-warning text-dark ms-2" style="font-size:0.65rem;">@activeRoleName</span>
+        <a class="nav-link dropdown-toggle text-white user-menu-trigger" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <span class="user-menu-avatar">@initials</span>
+            <span class="user-menu-details">
+                <span class="user-menu-name">@displayName</span>
+                <span class="user-menu-role">@activeRoleName</span>
+            </span>
+            @if (hasMultipleRoles)
+            {
+                <span class="user-menu-dot" title="Multiple roles available"></span>
+            }
         </a>
         <ul class="dropdown-menu dropdown-menu-end shadow-lg" aria-labelledby="navbarDropdown" style="border-top: 2px solid #f8b133; font-size: 0.85rem;">
             <li>

@@ -41,10 +41,18 @@ namespace RestaurantManagementSystem.Controllers
             
             // Get user's permissions
             var userPermissions = User.FindAll("Permission").Select(c => c.Value).ToList();
+
+            int? userIdNumeric = null;
+            if (int.TryParse(userId, out var parsedUserId))
+            {
+                userIdNumeric = parsedUserId;
+            }
+
+            var canViewAllDashboardData = UserHasFullDashboardVisibility();
             
             // Get live dashboard data from database
-            var dashboardStats = await GetDashboardStatsAsync();
-            var recentOrders = await GetRecentOrdersAsync();
+            var dashboardStats = await GetDashboardStatsAsync(userIdNumeric, canViewAllDashboardData);
+            var recentOrders = await GetRecentOrdersAsync(userIdNumeric, canViewAllDashboardData);
             
             // Get last login date from database
             DateTime? lastLoginDate = await GetLastLoginDateAsync(userId);
@@ -141,7 +149,7 @@ namespace RestaurantManagementSystem.Controllers
             return View(model);
         }
 
-        private async Task<(decimal TodaySales, int TodayOrders, int ActiveTables, int UpcomingReservations)> GetDashboardStatsAsync()
+        private async Task<(decimal TodaySales, int TodayOrders, int ActiveTables, int UpcomingReservations)> GetDashboardStatsAsync(int? userId, bool canViewAll)
         {
             // Prefer stored procedure for plan reuse and centralized logic. Using usp_GetHomeDashboardStatsEnhanced if present else fallback.
             var procedureNamePrimary = "usp_GetHomeDashboardStatsEnhanced";
@@ -157,6 +165,8 @@ namespace RestaurantManagementSystem.Controllers
                     try
                     {
                         using var command = new SqlCommand(proc, connection) { CommandType = System.Data.CommandType.StoredProcedure };
+                        command.Parameters.AddWithValue("@UserId", userId.HasValue ? userId.Value : (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@CanViewAll", canViewAll);
                         using var reader = await command.ExecuteReaderAsync();
                         if (await reader.ReadAsync())
                         {
@@ -194,7 +204,7 @@ namespace RestaurantManagementSystem.Controllers
             return reader.IsDBNull(ordinal) ? 0 : reader.GetInt32(ordinal);
         }
 
-        private async Task<List<DashboardOrderViewModel>> GetRecentOrdersAsync()
+        private async Task<List<DashboardOrderViewModel>> GetRecentOrdersAsync(int? userId, bool canViewAll)
         {
             var orders = new List<DashboardOrderViewModel>();
             
@@ -208,6 +218,8 @@ namespace RestaurantManagementSystem.Controllers
                     {
                         command.CommandType = System.Data.CommandType.StoredProcedure;
                         command.Parameters.AddWithValue("@OrderCount", 5);
+                        command.Parameters.AddWithValue("@UserId", userId.HasValue ? userId.Value : (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@CanViewAll", canViewAll);
                         
                         using (var reader = await command.ExecuteReaderAsync())
                         {
@@ -235,6 +247,20 @@ namespace RestaurantManagementSystem.Controllers
             }
             
             return orders;
+        }
+
+        private bool UserHasFullDashboardVisibility()
+        {
+            try
+            {
+                var roles = User?.FindAll(ClaimTypes.Role)?.Select(r => r.Value) ?? Enumerable.Empty<string>();
+                string[] privilegedRoles = ["Administrator", "FloorManager", "Floor Manager"];
+                return roles.Any(role => privilegedRoles.Any(privileged => string.Equals(role, privileged, StringComparison.OrdinalIgnoreCase)));
+            }
+            catch
+            {
+                return false;
+            }
         }
         
         private async Task<DateTime?> GetLastLoginDateAsync(string userIdString)

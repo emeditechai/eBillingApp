@@ -6,7 +6,9 @@ IF OBJECT_ID('usp_GetRecentOrdersForDashboard', 'P') IS NOT NULL
 GO
 
 CREATE PROCEDURE usp_GetRecentOrdersForDashboard
-    @OrderCount INT = 5 -- Default to 5 recent orders
+    @OrderCount INT = 5, -- Default to 5 recent orders
+    @UserId INT = NULL,
+    @CanViewAll BIT = 0
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -42,8 +44,12 @@ BEGIN
         INNER JOIN Tables t2 ON ot.TableId = t2.Id
         GROUP BY ot.OrderId
     ) merged ON o.Id = merged.OrderId
-    WHERE CAST(o.CreatedAt AS DATE) = CAST(GETDATE() AS DATE) -- Today's orders only
-      AND o.TotalAmount > 0 -- Exclude incomplete orders
+        WHERE CAST(o.CreatedAt AS DATE) = CAST(GETDATE() AS DATE) -- Today's orders only
+            AND o.TotalAmount > 0 -- Exclude incomplete orders
+            AND (
+                        @CanViewAll = 1 
+                        OR (@UserId IS NOT NULL AND o.UserId = @UserId)
+                    )
     ORDER BY o.CreatedAt DESC;
         
 END

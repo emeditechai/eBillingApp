@@ -6,6 +6,8 @@ IF OBJECT_ID('usp_GetHomeDashboardStats', 'P') IS NOT NULL
 GO
 
 CREATE PROCEDURE usp_GetHomeDashboardStats
+  @UserId INT = NULL,
+  @CanViewAll BIT = 0
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -20,12 +22,20 @@ BEGIN
     SELECT @TodaySales = ISNULL(SUM(o.TotalAmount), 0)
     FROM Orders o
     WHERE CAST(o.CreatedAt AS DATE) = CAST(GETDATE() AS DATE)
-      AND o.TotalAmount > 0; -- Only include orders with actual amounts
+      AND o.TotalAmount > 0
+      AND (
+            @CanViewAll = 1 
+            OR (@UserId IS NOT NULL AND o.UserId = @UserId)
+          ); -- Only include orders with actual amounts
     
     -- Get today's orders count
     SELECT @TodayOrders = COUNT(*)
     FROM Orders o
-    WHERE CAST(o.CreatedAt AS DATE) = CAST(GETDATE() AS DATE);
+    WHERE CAST(o.CreatedAt AS DATE) = CAST(GETDATE() AS DATE)
+      AND (
+            @CanViewAll = 1 
+            OR (@UserId IS NOT NULL AND o.UserId = @UserId)
+          );
     
     -- Get active tables (tables that are currently reserved or occupied)
     SELECT @ActiveTables = COUNT(*)

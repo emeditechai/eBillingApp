@@ -16,6 +16,8 @@ namespace RestaurantManagementSystem.ViewModels
         public DateTime? ToDate { get; set; }
         public int? PaymentMethodId { get; set; }
         public string PaymentMethodName { get; set; } = "ALL";
+        public int? UserId { get; set; }
+        public string UserDisplayName { get; set; } = string.Empty;
     }
 
     public class CollectionRegisterRow

@@ -1,5 +1,13 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using RestaurantManagementSystem.Filters;
+using RestaurantManagementSystem.Models.Authorization;
+using System.Linq;
+using System.Security.Claims;
+
 namespace RestaurantManagementSystem.Controllers
 {
+    [Authorize]
     public partial class OrderController : Controller
     {
         private readonly IConfiguration _configuration;
@@ -14,6 +22,7 @@ namespace RestaurantManagementSystem.Controllers
         }
         
         // Order Dashboard
+        [RequirePermission("NAV_ORDERS_DASH", PermissionAction.View)]
         public IActionResult Dashboard(DateTime? fromDate = null, DateTime? toDate = null)
         {
             var model = GetOrderDashboard(fromDate, toDate);
@@ -21,6 +30,7 @@ namespace RestaurantManagementSystem.Controllers
         }
         
         // Create New Order
+        [RequirePermission("NAV_ORDERS_CREATE", PermissionAction.Add)]
         public IActionResult Create(int? tableId = null)
         {
             var model = new CreateOrderViewModel();
@@ -94,9 +104,10 @@ namespace RestaurantManagementSystem.Controllers
             return View(model);
         }
         
-        [HttpPostAttribute]
-        [ValidateAntiForgeryTokenAttribute]
-        public IActionResult Create(CreateOrderViewModel model)
+    [HttpPostAttribute]
+    [ValidateAntiForgeryTokenAttribute]
+    [RequirePermission("NAV_ORDERS_CREATE", PermissionAction.Add)]
+    public IActionResult Create(CreateOrderViewModel model)
         {
             if (ModelState.IsValid)
             {
@@ -2062,6 +2073,8 @@ namespace RestaurantManagementSystem.Controllers
     
     private OrderDashboardViewModel GetOrderDashboard(DateTime? fromDate = null, DateTime? toDate = null)
         {
+            var canViewAllRecords = CurrentUserCanViewAllOrderData();
+            var currentUserId = GetCurrentUserId();
             var model = new OrderDashboardViewModel
             {
                 ActiveOrders = new List<OrderSummary>(),
@@ -2074,7 +2087,7 @@ namespace RestaurantManagementSystem.Controllers
                 connection.Open();
                 
                 // Get order counts and total sales for today (exclude Bar orders)
-                using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(@"
+                var orderSummarySql = @"
                     SELECT
                         SUM(CASE WHEN Status = 0 AND CAST(CreatedAt AS DATE) = CAST(GETDATE() AS DATE) THEN 1 ELSE 0 END) AS OpenCount,
                         SUM(CASE WHEN Status = 1 AND CAST(CreatedAt AS DATE) = CAST(GETDATE() AS DATE) THEN 1 ELSE 0 END) AS InProgressCount,
@@ -2083,8 +2096,19 @@ namespace RestaurantManagementSystem.Controllers
                         SUM(CASE WHEN Status = 3 AND CAST(CreatedAt AS DATE) = CAST(GETDATE() AS DATE) THEN TotalAmount ELSE 0 END) AS TotalSales,
                         SUM(CASE WHEN Status = 4 AND CAST(ISNULL(UpdatedAt, CreatedAt) AS DATE) = CAST(GETDATE() AS DATE) THEN 1 ELSE 0 END) AS CancelledCount
                     FROM Orders
-                    WHERE (OrderKitchenType != 'Bar' OR OrderKitchenType IS NULL)", connection))
+                    WHERE (OrderKitchenType != 'Bar' OR OrderKitchenType IS NULL)";
+
+                if (!canViewAllRecords)
                 {
+                    orderSummarySql += " AND UserId = @UserId";
+                }
+
+                using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(orderSummarySql, connection))
+                {
+                    if (!canViewAllRecords)
+                    {
+                        command.Parameters.AddWithValue("@UserId", currentUserId);
+                    }
                     using (Microsoft.Data.SqlClient.SqlDataReader reader = command.ExecuteReader())
                     {
                         if (reader.Read())
@@ -2100,7 +2124,7 @@ namespace RestaurantManagementSystem.Controllers
                 }
                 
                 // Get active orders (exclude Bar orders)
-                using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(@"
+                var activeOrderSql = @"
                     SELECT 
                         o.Id,
                         o.OrderNumber,
@@ -2124,9 +2148,21 @@ namespace RestaurantManagementSystem.Controllers
                     LEFT JOIN Tables t ON tt.TableId = t.Id
                     LEFT JOIN Users u ON o.UserId = u.Id
                     WHERE o.Status < 3 -- Not completed
-                    AND (o.OrderKitchenType != 'Bar' OR o.OrderKitchenType IS NULL)
-                    ORDER BY o.CreatedAt DESC", connection))
+                    AND (o.OrderKitchenType != 'Bar' OR o.OrderKitchenType IS NULL)";
+
+                if (!canViewAllRecords)
                 {
+                    activeOrderSql += " AND o.UserId = @UserId";
+                }
+
+                activeOrderSql += " ORDER BY o.CreatedAt DESC";
+
+                using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(activeOrderSql, connection))
+                {
+                    if (!canViewAllRecords)
+                    {
+                        command.Parameters.AddWithValue("@UserId", currentUserId);
+                    }
                     using (Microsoft.Data.SqlClient.SqlDataReader reader = command.ExecuteReader())
                     {
                         while (reader.Read())
@@ -2204,6 +2240,11 @@ namespace RestaurantManagementSystem.Controllers
                     AND (o.OrderKitchenType != 'Bar' OR o.OrderKitchenType IS NULL)
                 ";
 
+                if (!canViewAllRecords)
+                {
+                    completedSql += " AND o.UserId = @UserId";
+                }
+
                 if (fromDate.HasValue && toDate.HasValue)
                 {
                     completedSql += " AND CAST(o.CreatedAt AS DATE) BETWEEN @FromDate AND @ToDate";
@@ -2217,6 +2258,10 @@ namespace RestaurantManagementSystem.Controllers
 
                 using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(completedSql, connection))
                 {
+                    if (!canViewAllRecords)
+                    {
+                        command.Parameters.AddWithValue("@UserId", currentUserId);
+                    }
                     if (fromDate.HasValue && toDate.HasValue)
                     {
                         command.Parameters.AddWithValue("@FromDate", fromDate.Value.Date);
@@ -2261,7 +2306,7 @@ namespace RestaurantManagementSystem.Controllers
                 }
                 
                 // Get cancelled orders for today (filtered by cancellation date, exclude Bar orders)
-                using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(@"
+                var cancelledSql = @"
                     SELECT 
                         o.Id,
                         o.OrderNumber,
@@ -2286,9 +2331,21 @@ namespace RestaurantManagementSystem.Controllers
                     LEFT JOIN Users u ON o.UserId = u.Id
                     WHERE o.Status = 4 -- Cancelled
                     AND (o.OrderKitchenType != 'Bar' OR o.OrderKitchenType IS NULL)
-                    AND CAST(ISNULL(o.UpdatedAt, o.CreatedAt) AS DATE) = CAST(GETDATE() AS DATE) -- Filter by cancellation date
-                    ORDER BY ISNULL(o.UpdatedAt, o.CreatedAt) DESC", connection))
+                    AND CAST(ISNULL(o.UpdatedAt, o.CreatedAt) AS DATE) = CAST(GETDATE() AS DATE) -- Filter by cancellation date";
+
+                if (!canViewAllRecords)
                 {
+                    cancelledSql += " AND o.UserId = @UserId";
+                }
+
+                cancelledSql += " ORDER BY ISNULL(o.UpdatedAt, o.CreatedAt) DESC";
+
+                using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(cancelledSql, connection))
+                {
+                    if (!canViewAllRecords)
+                    {
+                        command.Parameters.AddWithValue("@UserId", currentUserId);
+                    }
                     using (Microsoft.Data.SqlClient.SqlDataReader reader = command.ExecuteReader())
                     {
                         while (reader.Read())
@@ -2329,6 +2386,20 @@ namespace RestaurantManagementSystem.Controllers
             }
             
             return model;
+        }
+
+        private bool CurrentUserCanViewAllOrderData()
+        {
+            try
+            {
+                var roles = HttpContext?.User?.FindAll(ClaimTypes.Role)?.Select(claim => claim.Value) ?? Enumerable.Empty<string>();
+                string[] privilegedRoles = ["Administrator", "FloorManager", "Floor Manager"];
+                return roles.Any(role => privilegedRoles.Any(privileged => string.Equals(role, privileged, StringComparison.OrdinalIgnoreCase)));
+            }
+            catch
+            {
+                return false;
+            }
         }
         
         /// <summary>
