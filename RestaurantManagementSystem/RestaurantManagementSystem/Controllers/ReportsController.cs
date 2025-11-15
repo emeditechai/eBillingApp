@@ -200,7 +200,6 @@ namespace RestaurantManagementSystem.Controllers
             return View(model);
         }
 
-        [Authorize(Roles = "Administrator,Manager")]
         [HttpGet]
         [RequirePermission(MenuCodes.Financial, PermissionAction.View)]
         public async Task<IActionResult> Financial()
@@ -216,7 +215,6 @@ namespace RestaurantManagementSystem.Controllers
             return View(viewModel);
         }
 
-        [Authorize(Roles = "Administrator,Manager")]
         [HttpPost]
         [RequirePermission(MenuCodes.Financial, PermissionAction.View)]
         public async Task<IActionResult> Financial(FinancialSummaryFilter filter)
