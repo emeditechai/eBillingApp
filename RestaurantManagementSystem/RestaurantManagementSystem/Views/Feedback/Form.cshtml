@@ -1,0 +1,416 @@
+@model RestaurantManagementSystem.Models.GuestFeedback
+@{
+    ViewData["Title"] = "Guest Feedback";
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"]</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css" crossorigin="anonymous" />
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</head>
+<body>
+<div class="feedback-form-wrapper">
+<div class="feedback-form-container">
+    <div class="row mb-3">
+        <div class="col">
+            <h2 class="d-flex align-items-center gap-2"><i class="fas fa-comment-dots text-primary"></i> Guest Feedback</h2>
+            <p class="text-muted mb-0">We value your experience. Please rate and share any comments.</p>
+        </div>
+    </div>
+    @if (ViewBag.Restaurant != null)
+    {
+        <div class="row mb-3">
+            <div class="col">
+                <div class="alert alert-light border d-flex flex-wrap justify-content-between align-items-center">
+                    <div class="me-3">
+                        <div class="fw-semibold">@ViewBag.Restaurant.Name</div>
+                        <div class="small text-muted">@ViewBag.Restaurant.Address</div>
+                    </div>
+                    <div class="small text-muted">
+                        @if (!string.IsNullOrWhiteSpace((string)ViewBag.Restaurant.Email))
+                        {
+                            <span class="me-3"><i class="fas fa-envelope me-1"></i>@ViewBag.Restaurant.Email</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace((string)ViewBag.Restaurant.Website))
+                        {
+                            <span><i class="fas fa-globe me-1"></i>@ViewBag.Restaurant.Website</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    <form asp-action="Submit" method="post" class="card shadow-sm">
+        <div class="card-body">
+            <div asp-validation-summary="ModelOnly" class="text-danger small"></div>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Restaurant Location</label>
+                    <input asp-for="Location" class="form-control" placeholder="e.g., Main Branch" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Visit Date</label>
+                    <input asp-for="VisitDate" type="date" class="form-control" />
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Was this your first visit?</label>
+                    <div class="d-flex align-items-center gap-3 mt-1">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="FirstVisit" id="fvYes" value="true" />
+                            <label class="form-check-label" for="fvYes">Yes</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="FirstVisit" id="fvNo" value="false" />
+                            <label class="form-check-label" for="fvNo">No</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Overall Rating <span class="text-danger">*</span></label>
+                    <div class="star-rating" data-target="OverallRating">
+                        @for (int i = 1; i <= 5; i++)
+                        {
+                            <span class="star @(Model.OverallRating >= i ? "selected" : "")" data-value="@i">&#9733;</span>
+                        }
+                    </div>
+                    <input asp-for="OverallRating" type="hidden" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Food</label>
+                    <div class="star-rating" data-target="FoodRating">
+                        @for (int i = 1; i <= 5; i++) { <span class="star @(Model.FoodRating >= i ? "selected" : "")" data-value="@i">&#9733;</span> }
+                    </div>
+                    <input asp-for="FoodRating" type="hidden" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Service</label>
+                    <div class="star-rating" data-target="ServiceRating">
+                        @for (int i = 1; i <= 5; i++) { <span class="star @(Model.ServiceRating >= i ? "selected" : "")" data-value="@i">&#9733;</span> }
+                    </div>
+                    <input asp-for="ServiceRating" type="hidden" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Cleanliness</label>
+                    <div class="star-rating" data-target="CleanlinessRating">
+                        @for (int i = 1; i <= 5; i++) { <span class="star @(Model.CleanlinessRating >= i ? "selected" : "")" data-value="@i">&#9733;</span> }
+                    </div>
+                    <input asp-for="CleanlinessRating" type="hidden" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Staff</label>
+                    <div class="star-rating" data-target="StaffRating">
+                        @for (int i = 1; i <= 5; i++) { <span class="star @(Model.StaffRating >= i ? "selected" : "")" data-value="@i">&#9733;</span> }
+                    </div>
+                    <input asp-for="StaffRating" type="hidden" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Ambience</label>
+                    <div class="star-rating" data-target="AmbienceRating">
+                        @for (int i = 1; i <= 5; i++) { <span class="star @(Model.AmbienceRating >= i ? "selected" : "")" data-value="@i">&#9733;</span> }
+                    </div>
+                    <input asp-for="AmbienceRating" type="hidden" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Value for Money</label>
+                    <div class="star-rating" data-target="ValueRating">
+                        @for (int i = 1; i <= 5; i++) { <span class="star @(Model.ValueRating >= i ? "selected" : "")" data-value="@i">&#9733;</span> }
+                    </div>
+                    <input asp-for="ValueRating" type="hidden" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Speed of Service</label>
+                    <div class="star-rating" data-target="SpeedRating">
+                        @for (int i = 1; i <= 5; i++) { <span class="star @(Model.SpeedRating >= i ? "selected" : "")" data-value="@i">&#9733;</span> }
+                    </div>
+                    <input asp-for="SpeedRating" type="hidden" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Quick Tags (select any)</label>
+                    <div class="d-flex flex-wrap gap-2 small" id="tagList">
+                        @{ var tags = new[] {"Fast Service","Friendly Staff","Delicious Food","Clean Ambience","Great Value","Needs Improvement","Slow Service","Noisy"}; }
+                        @foreach (var t in tags)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-primary tag-btn" data-tag="@t">@t</button>
+                        }
+                    </div>
+                    <input asp-for="Tags" type="hidden" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Comments</label>
+                    <textarea asp-for="Comments" class="form-control" rows="4" placeholder="Share any details or suggestions..."></textarea>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Please choose the best answer for each of the following</label>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="min-width:260px">Statement</th>
+                                    <th class="text-center">Strongly Agree</th>
+                                    <th class="text-center">Agree</th>
+                                    <th class="text-center">Neutral</th>
+                                    <th class="text-center">Disagree</th>
+                                    <th class="text-center">Strongly Disagree</th>
+                                </tr>
+                            </thead>
+                            <tbody id="likertBody">
+                                @{
+                                    var statements = new []{
+                                        "I was seated promptly",
+                                        "The host/hostess was polite",
+                                        "The server was polite",
+                                        "The server was always available",
+                                        "The menu was easy to read",
+                                        "I was satisfied with the selection of food",
+                                        "My order was taken promptly",
+                                        "My order was taken correctly",
+                                        "My order was prepared and served promptly",
+                                        "The food tasted fresh"
+                                    };
+                                }
+                                @for (int i = 0; i < statements.Length; i++)
+                                {
+                                    var key = $"q{i+1}";
+                                    <tr>
+                                        <td class="small">@statements[i]</td>
+                                        @for (int v = 5; v >= 1; v--)
+                                        {
+                                            <td class="text-center"><input type="radio" name="likert_@key" value="@v" /></td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <input asp-for="SurveyJson" type="hidden" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Name (optional)</label>
+                    <input asp-for="GuestName" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Email (optional)</label>
+                    <input asp-for="Email" type="email" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Phone (optional)</label>
+                    <input asp-for="Phone" class="form-control" />
+                </div>
+            </div>
+        </div>
+        <div class="card-footer d-flex justify-content-between align-items-center">
+            <small class="text-muted">Your privacy is respected. Contact details help us follow up if needed.</small>
+            <div>
+                <span id="surveyStatus" class="badge bg-secondary me-2" style="display:none"></span>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane me-1"></i> Submit Feedback</button>
+            </div>
+        </div>
+    </form>
+</div>
+</div>
+
+<style>
+    /* Only style the content area, not header/footer */
+    .feedback-form-wrapper {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: calc(100vh - 200px);
+        padding: 30px 0;
+    }
+    .feedback-form-container {
+        background: rgba(255,255,255,0.98);
+        border-radius: 20px;
+        padding: 40px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    h2 {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-weight: 700;
+    }
+    .card {
+        border: none;
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    .card-body {
+        background: linear-gradient(to bottom, #ffffff 0%, #f8f9ff 100%);
+    }
+    .card-footer {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+    }
+    .card-footer small {
+        color: rgba(255,255,255,0.9);
+    }
+    .alert-light {
+        background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+        border: none;
+        color: #333;
+    }
+    .star-rating .star { 
+        cursor:pointer; 
+        font-size:1.5rem; 
+        color:#ddd;
+        transition: all 0.2s;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .star-rating .star.selected, .star-rating .star.hover { 
+        color:#ffd700;
+        transform: scale(1.1);
+        text-shadow: 0 4px 8px rgba(255,215,0,0.4);
+    }
+    .tag-btn { 
+        transition: all 0.3s;
+        border-radius: 20px;
+    }
+    .tag-btn.active { 
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color:#fff; 
+        border-color:#667eea;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102,126,234,0.4);
+    }
+    .tag-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .form-label {
+        font-weight: 600;
+        color: #667eea;
+    }
+    .form-control:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102,126,234,0.25);
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        padding: 12px 30px;
+        font-weight: 600;
+        transition: all 0.3s;
+        box-shadow: 0 4px 15px rgba(102,126,234,0.4);
+    }
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102,126,234,0.6);
+    }
+    .table thead {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    .table thead th {
+        border: none;
+        font-weight: 600;
+        padding: 15px 10px;
+    }
+    .table tbody tr:hover {
+        background: linear-gradient(to right, #f8f9ff 0%, #fff 100%);
+    }
+    .badge.bg-success {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%) !important;
+        padding: 8px 15px;
+        font-weight: 600;
+        box-shadow: 0 4px 10px rgba(56,239,125,0.3);
+    }
+    input[type="radio"]:checked {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-color: #667eea;
+    }
+</style>
+
+<script>
+    // Execute when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Feedback form scripts loading...');
+            
+        document.querySelectorAll('.star-rating').forEach(function(group){
+            const target = group.getAttribute('data-target');
+            const hidden = document.querySelector(`input[name='${target}']`);
+            group.querySelectorAll('.star').forEach(star => {
+                star.addEventListener('mouseenter', () => {
+                    const val = parseInt(star.dataset.value);
+                    group.querySelectorAll('.star').forEach(s => s.classList.toggle('hover', parseInt(s.dataset.value) <= val));
+                });
+                star.addEventListener('mouseleave', () => {
+                    group.querySelectorAll('.star').forEach(s => s.classList.remove('hover'));
+                });
+                star.addEventListener('click', () => {
+                    const val = parseInt(star.dataset.value);
+                    hidden.value = val;
+                    group.querySelectorAll('.star').forEach(s => s.classList.toggle('selected', parseInt(s.dataset.value) <= val));
+                });
+            });
+        });
+        // Tags
+        const tagInput = document.querySelector('input[name="Tags"]');
+        document.querySelectorAll('.tag-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btn.classList.toggle('active');
+                const selected = Array.from(document.querySelectorAll('.tag-btn.active')).map(b => b.dataset.tag);
+                tagInput.value = selected.join(',');
+            });
+        });
+        // Update survey status badge as user answers questions
+        document.querySelectorAll('#likertBody input[type="radio"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+                const answered = document.querySelectorAll('#likertBody input[type="radio"]:checked').length;
+                const badge = document.getElementById('surveyStatus');
+                if (answered > 0) {
+                    badge.style.display = 'inline';
+                    badge.textContent = `${answered}/10 survey questions answered`;
+                    badge.className = 'badge bg-success me-2';
+                } else {
+                    badge.style.display = 'none';
+                }
+            });
+        });
+        
+        // Serialize Likert responses on submit
+        document.querySelector('form').addEventListener('submit', (e) => {
+            const obj = {};
+            let answeredCount = 0;
+            document.querySelectorAll('#likertBody tr').forEach((row, idx) => {
+                const key = `q${idx+1}`;
+                const sel = row.querySelector(`input[name="likert_${key}"]:checked`);
+                if (sel) {
+                    obj[key] = parseInt(sel.value);
+                    answeredCount++;
+                }
+            });
+            const surveyJson = JSON.stringify(obj);
+            const surveyInput = document.querySelector('input[name="SurveyJson"]');
+            
+            if (!surveyInput) {
+                console.error('ERROR: SurveyJson hidden input not found!');
+                return;
+            }
+            
+            surveyInput.value = surveyJson;
+            
+            console.log('=== FEEDBACK FORM SUBMISSION ===');
+            console.log(`Likert Survey: ${answeredCount} questions answered`, obj);
+            console.log('Survey JSON:', surveyJson);
+            console.log('Hidden input value set to:', surveyInput.value);
+            console.log('Hidden input name:', surveyInput.name);
+            console.log('Form will submit with SurveyJson');
+            
+            // Don't prevent default - let form submit naturally
+        });
+        
+        console.log('All event listeners attached successfully');
+    });
+</script>
+</body>
+</html>

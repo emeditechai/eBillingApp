@@ -1487,5 +1487,141 @@ namespace RestaurantManagementSystem.Controllers
                 ViewBag.Cashiers = new List<(int, string)>();
             }
         }
+
+        // Feedback Survey Report
+        [HttpGet]
+        public async Task<IActionResult> FeedbackSurveyReport(DateTime? fromDate, DateTime? toDate, string location, int? minRating, int? maxRating)
+        {
+            ViewData["Title"] = "Feedback Survey Report";
+            
+            var viewModel = new FeedbackSurveyReportViewModel
+            {
+                FromDate = fromDate ?? DateTime.Now.AddMonths(-1),
+                ToDate = toDate ?? DateTime.Now,
+                Location = location,
+                MinRating = minRating,
+                MaxRating = maxRating
+            };
+
+            try
+            {
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+                    
+                    using (var command = new SqlCommand("usp_GetFeedbackSurveyReport", connection))
+                    {
+                        command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.AddWithValue("@FromDate", viewModel.FromDate);
+                        command.Parameters.AddWithValue("@ToDate", viewModel.ToDate);
+                        command.Parameters.AddWithValue("@Location", (object)viewModel.Location ?? DBNull.Value);
+                        command.Parameters.AddWithValue("@MinRating", (object)viewModel.MinRating ?? DBNull.Value);
+                        command.Parameters.AddWithValue("@MaxRating", (object)viewModel.MaxRating ?? DBNull.Value);
+
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            int ReadInt(string column)
+                            {
+                                var value = reader[column];
+                                return value == DBNull.Value ? 0 : Convert.ToInt32(value);
+                            }
+
+                            int? ReadNullableInt(string column)
+                            {
+                                var ordinal = reader.GetOrdinal(column);
+                                return reader.IsDBNull(ordinal) ? (int?)null : Convert.ToInt32(reader.GetValue(ordinal));
+                            }
+
+                            // First result set: Feedback items
+                            while (await reader.ReadAsync())
+                            {
+                                viewModel.FeedbackItems.Add(new FeedbackSurveyReportItem
+                                {
+                                    Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                                    VisitDate = reader.GetDateTime(reader.GetOrdinal("VisitDate")),
+                                    Location = reader.IsDBNull(reader.GetOrdinal("Location")) ? "" : reader.GetString(reader.GetOrdinal("Location")),
+                                    IsFirstVisit = reader.IsDBNull(reader.GetOrdinal("IsFirstVisit")) ? (bool?)null : reader.GetBoolean(reader.GetOrdinal("IsFirstVisit")),
+                                    OverallRating = ReadInt("OverallRating"),
+                                    FoodRating = ReadNullableInt("FoodRating"),
+                                    ServiceRating = ReadNullableInt("ServiceRating"),
+                                    CleanlinessRating = ReadNullableInt("CleanlinessRating"),
+                                    StaffRating = ReadNullableInt("StaffRating"),
+                                    AmbienceRating = ReadNullableInt("AmbienceRating"),
+                                    ValueRating = ReadNullableInt("ValueRating"),
+                                    SpeedRating = ReadNullableInt("SpeedRating"),
+                                    Tags = reader.IsDBNull(reader.GetOrdinal("Tags")) ? "" : reader.GetString(reader.GetOrdinal("Tags")),
+                                    Comments = reader.IsDBNull(reader.GetOrdinal("Comments")) ? "" : reader.GetString(reader.GetOrdinal("Comments")),
+                                    GuestName = reader.IsDBNull(reader.GetOrdinal("GuestName")) ? "" : reader.GetString(reader.GetOrdinal("GuestName")),
+                                    Email = reader.IsDBNull(reader.GetOrdinal("Email")) ? "" : reader.GetString(reader.GetOrdinal("Email")),
+                                    Phone = reader.IsDBNull(reader.GetOrdinal("Phone")) ? "" : reader.GetString(reader.GetOrdinal("Phone")),
+                                    SurveyJson = reader.IsDBNull(reader.GetOrdinal("SurveyJson")) ? "" : reader.GetString(reader.GetOrdinal("SurveyJson")),
+                                    CreatedAt = reader.GetDateTime(reader.GetOrdinal("CreatedAt")),
+                                    AverageRating = reader.GetDecimal(reader.GetOrdinal("AverageRating")),
+                                    SurveyQuestionsAnswered = ReadInt("SurveyQuestionsAnswered")
+                                });
+                            }
+
+                            // Second result set: Summary
+                            if (await reader.NextResultAsync() && await reader.ReadAsync())
+                            {
+                                viewModel.Summary = new FeedbackSurveyReportSummary
+                                {
+                                    TotalFeedback = reader.GetInt32(reader.GetOrdinal("TotalFeedback")),
+                                    UniqueLocations = reader.GetInt32(reader.GetOrdinal("UniqueLocations")),
+                                    UniqueGuests = reader.GetInt32(reader.GetOrdinal("UniqueGuests")),
+                                    FirstTimeVisitors = reader.GetInt32(reader.GetOrdinal("FirstTimeVisitors")),
+                                    ReturningVisitors = reader.GetInt32(reader.GetOrdinal("ReturningVisitors")),
+                                    AvgOverallRating = reader.IsDBNull(reader.GetOrdinal("AvgOverallRating")) ? 0 : reader.GetDecimal(reader.GetOrdinal("AvgOverallRating")),
+                                    AvgFoodRating = reader.IsDBNull(reader.GetOrdinal("AvgFoodRating")) ? 0 : reader.GetDecimal(reader.GetOrdinal("AvgFoodRating")),
+                                    AvgServiceRating = reader.IsDBNull(reader.GetOrdinal("AvgServiceRating")) ? 0 : reader.GetDecimal(reader.GetOrdinal("AvgServiceRating")),
+                                    AvgCleanlinessRating = reader.IsDBNull(reader.GetOrdinal("AvgCleanlinessRating")) ? 0 : reader.GetDecimal(reader.GetOrdinal("AvgCleanlinessRating")),
+                                    AvgStaffRating = reader.IsDBNull(reader.GetOrdinal("AvgStaffRating")) ? 0 : reader.GetDecimal(reader.GetOrdinal("AvgStaffRating")),
+                                    AvgAmbienceRating = reader.IsDBNull(reader.GetOrdinal("AvgAmbienceRating")) ? 0 : reader.GetDecimal(reader.GetOrdinal("AvgAmbienceRating")),
+                                    AvgValueRating = reader.IsDBNull(reader.GetOrdinal("AvgValueRating")) ? 0 : reader.GetDecimal(reader.GetOrdinal("AvgValueRating")),
+                                    AvgSpeedRating = reader.IsDBNull(reader.GetOrdinal("AvgSpeedRating")) ? 0 : reader.GetDecimal(reader.GetOrdinal("AvgSpeedRating")),
+                                    FeedbackWithSurvey = reader.GetInt32(reader.GetOrdinal("FeedbackWithSurvey")),
+                                    EarliestFeedback = reader.IsDBNull(reader.GetOrdinal("EarliestFeedback")) ? (DateTime?)null : reader.GetDateTime(reader.GetOrdinal("EarliestFeedback")),
+                                    LatestFeedback = reader.IsDBNull(reader.GetOrdinal("LatestFeedback")) ? (DateTime?)null : reader.GetDateTime(reader.GetOrdinal("LatestFeedback"))
+                                };
+                            }
+
+                            // Third result set: Rating distribution
+                            if (await reader.NextResultAsync())
+                            {
+                                while (await reader.ReadAsync())
+                                {
+                                    viewModel.RatingDistribution.Add(new RatingDistribution
+                                    {
+                                        Rating = reader.GetInt32(reader.GetOrdinal("Rating")),
+                                        Count = reader.GetInt32(reader.GetOrdinal("Count")),
+                                        Percentage = reader.GetDecimal(reader.GetOrdinal("Percentage"))
+                                    });
+                                }
+                            }
+
+                            // Fourth result set: Top tags
+                            if (await reader.NextResultAsync())
+                            {
+                                while (await reader.ReadAsync())
+                                {
+                                    viewModel.TopTags.Add(new TagCount
+                                    {
+                                        Tag = reader.GetString(reader.GetOrdinal("Tag")),
+                                        Count = reader.GetInt32(reader.GetOrdinal("Count"))
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading Feedback Survey Report: {ex.Message}");
+                TempData["Error"] = $"Error loading report: {ex.Message}";
+            }
+
+            return View(viewModel);
+        }
     }
 }

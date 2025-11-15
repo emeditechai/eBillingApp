@@ -1,0 +1,570 @@
+@model RestaurantManagementSystem.Models.FeedbackSurveyReportViewModel
+@{
+    ViewData["Title"] = "Feedback Survey Report";
+}
+
+<style>
+    .report-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        border-radius: 15px;
+        margin-bottom: 30px;
+        box-shadow: 0 10px 40px rgba(102,126,234,0.3);
+    }
+    .report-header h2 {
+        color: white;
+        margin: 0;
+        font-weight: 700;
+    }
+    .filter-card {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        margin-bottom: 25px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+    }
+    .summary-card {
+        border: none;
+        border-radius: 15px;
+        overflow: hidden;
+        transition: all 0.3s;
+        margin-bottom: 20px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    }
+    .summary-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+    .summary-card .card-body {
+        padding: 20px;
+        text-align: center;
+    }
+    .summary-card .label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 10px;
+    }
+    .summary-card .value {
+        font-size: 2rem;
+        font-weight: 700;
+    }
+    /* Different colors for summary cards */
+    .card-purple { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+    .card-pink { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; }
+    .card-blue { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; }
+    .card-green { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; }
+    .card-orange { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; }
+    .card-teal { background: linear-gradient(135deg, #30cfd0 0%, #330867 100%); color: white; }
+    
+    .data-table {
+        background: white;
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+    }
+    .data-table thead {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .data-table thead th {
+        color: white !important;
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        padding: 15px 10px;
+        border: none !important;
+    }
+    .data-table tbody tr {
+        transition: all 0.2s;
+    }
+    .data-table tbody tr:hover {
+        background: linear-gradient(to right, #f8f9ff 0%, #fff 100%);
+        transform: scale(1.01);
+    }
+    .data-table tbody td {
+        padding: 12px 10px;
+        vertical-align: middle;
+    }
+    .rating-badge {
+        display: inline-block;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    .rating-5 { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; }
+    .rating-4 { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; }
+    .rating-3 { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; }
+    .rating-2 { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; }
+    .rating-1 { background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%); color: white; }
+    .tag-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        margin: 2px;
+        border-radius: 15px;
+        background: #e9ecef;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    .btn-export {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        color: white;
+        padding: 10px 25px;
+        border-radius: 25px;
+        font-weight: 600;
+        transition: all 0.3s;
+        box-shadow: 0 4px 15px rgba(102,126,234,0.4);
+    }
+    .btn-export:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102,126,234,0.6);
+        color: white;
+    }
+    .chart-container {
+        background: white;
+        padding: 25px;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+        margin-bottom: 25px;
+    }
+    .star-rating {
+        color: #ffd700;
+        font-size: 1.1rem;
+    }
+</style>
+
+<div class="report-header">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h2><i class="fas fa-poll-h me-2"></i>Feedback Survey Report</h2>
+            <p class="mb-0 mt-2 opacity-90">Detailed analysis of guest feedback and survey responses</p>
+        </div>
+        <div>
+            <button class="btn-export" onclick="window.print()">
+                <i class="fas fa-file-pdf me-2"></i>Export to PDF
+            </button>
+            <button class="btn-export ms-2" onclick="exportToExcel()">
+                <i class="fas fa-file-excel me-2"></i>Export to Excel
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="filter-card">
+    <form method="get" asp-action="FeedbackSurveyReport">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label fw-bold"><i class="fas fa-calendar me-1"></i>From Date</label>
+                <input type="date" name="fromDate" class="form-control" value="@Model.FromDate?.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold"><i class="fas fa-calendar me-1"></i>To Date</label>
+                <input type="date" name="toDate" class="form-control" value="@Model.ToDate?.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold"><i class="fas fa-map-marker-alt me-1"></i>Location</label>
+                <input type="text" name="location" class="form-control" value="@Model.Location" placeholder="Any" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold"><i class="fas fa-star me-1"></i>Min Rating</label>
+                <select name="minRating" class="form-select">
+                    <option value="">Any</option>
+                    @for(int i = 1; i <= 5; i++)
+                    {
+                        <option value="@i" selected="@(Model.MinRating == i)">@i</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold"><i class="fas fa-star me-1"></i>Max Rating</label>
+                <select name="maxRating" class="form-select">
+                    <option value="">Any</option>
+                    @for(int i = 1; i <= 5; i++)
+                    {
+                        <option value="@i" selected="@(Model.MaxRating == i)">@i</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <div class="text-end mt-3">
+            <button type="submit" class="btn-export">
+                <i class="fas fa-filter me-2"></i>Apply Filters
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-2">
+        <div class="summary-card card-purple">
+            <div class="card-body">
+                <div class="label">Total Feedback</div>
+                <div class="value">@Model.Summary.TotalFeedback</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="summary-card card-pink">
+            <div class="card-body">
+                <div class="label">Avg Rating</div>
+                <div class="value">@Model.Summary.AvgOverallRating.ToString("0.00")</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="summary-card card-blue">
+            <div class="card-body">
+                <div class="label">With Survey</div>
+                <div class="value">@Model.Summary.FeedbackWithSurvey</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="summary-card card-green">
+            <div class="card-body">
+                <div class="label">First Timers</div>
+                <div class="value">@Model.Summary.FirstTimeVisitors</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="summary-card card-orange">
+            <div class="card-body">
+                <div class="label">Returning</div>
+                <div class="value">@Model.Summary.ReturningVisitors</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="summary-card card-teal">
+            <div class="card-body">
+                <div class="label">Unique Guests</div>
+                <div class="value">@Model.Summary.UniqueGuests</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Average Ratings -->
+<div class="row g-3 mb-4">
+    <div class="col-md-12">
+        <div class="chart-container">
+            <h5 class="fw-bold mb-3"><i class="fas fa-chart-bar me-2 text-primary"></i>Average Ratings by Category</h5>
+            <div class="row text-center">
+                <div class="col-md-3 mb-3">
+                    <div class="fw-bold text-muted mb-1">Food</div>
+                    <div class="star-rating">
+                        @for(int i = 1; i <= 5; i++)
+                        {
+                            <i class="fas fa-star @(i <= Model.Summary.AvgFoodRating ? "" : "opacity-25")"></i>
+                        }
+                    </div>
+                    <div class="mt-1 fw-bold">@Model.Summary.AvgFoodRating.ToString("0.00")</div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="fw-bold text-muted mb-1">Service</div>
+                    <div class="star-rating">
+                        @for(int i = 1; i <= 5; i++)
+                        {
+                            <i class="fas fa-star @(i <= Model.Summary.AvgServiceRating ? "" : "opacity-25")"></i>
+                        }
+                    </div>
+                    <div class="mt-1 fw-bold">@Model.Summary.AvgServiceRating.ToString("0.00")</div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="fw-bold text-muted mb-1">Cleanliness</div>
+                    <div class="star-rating">
+                        @for(int i = 1; i <= 5; i++)
+                        {
+                            <i class="fas fa-star @(i <= Model.Summary.AvgCleanlinessRating ? "" : "opacity-25")"></i>
+                        }
+                    </div>
+                    <div class="mt-1 fw-bold">@Model.Summary.AvgCleanlinessRating.ToString("0.00")</div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="fw-bold text-muted mb-1">Staff</div>
+                    <div class="star-rating">
+                        @for(int i = 1; i <= 5; i++)
+                        {
+                            <i class="fas fa-star @(i <= Model.Summary.AvgStaffRating ? "" : "opacity-25")"></i>
+                        }
+                    </div>
+                    <div class="mt-1 fw-bold">@Model.Summary.AvgStaffRating.ToString("0.00")</div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="fw-bold text-muted mb-1">Ambience</div>
+                    <div class="star-rating">
+                        @for(int i = 1; i <= 5; i++)
+                        {
+                            <i class="fas fa-star @(i <= Model.Summary.AvgAmbienceRating ? "" : "opacity-25")"></i>
+                        }
+                    </div>
+                    <div class="mt-1 fw-bold">@Model.Summary.AvgAmbienceRating.ToString("0.00")</div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="fw-bold text-muted mb-1">Value</div>
+                    <div class="star-rating">
+                        @for(int i = 1; i <= 5; i++)
+                        {
+                            <i class="fas fa-star @(i <= Model.Summary.AvgValueRating ? "" : "opacity-25")"></i>
+                        }
+                    </div>
+                    <div class="mt-1 fw-bold">@Model.Summary.AvgValueRating.ToString("0.00")</div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="fw-bold text-muted mb-1">Speed</div>
+                    <div class="star-rating">
+                        @for(int i = 1; i <= 5; i++)
+                        {
+                            <i class="fas fa-star @(i <= Model.Summary.AvgSpeedRating ? "" : "opacity-25")"></i>
+                        }
+                    </div>
+                    <div class="mt-1 fw-bold">@Model.Summary.AvgSpeedRating.ToString("0.00")</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Top Tags and Rating Distribution -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="chart-container">
+            <h5 class="fw-bold mb-3"><i class="fas fa-tags me-2 text-primary"></i>Top Tags</h5>
+            @if(Model.TopTags.Any())
+            {
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach(var tag in Model.TopTags)
+                    {
+                        <span class="tag-badge">
+                            @tag.Tag <span class="badge bg-primary ms-1">@tag.Count</span>
+                        </span>
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="text-muted">No tags found</p>
+            }
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="chart-container">
+            <h5 class="fw-bold mb-3"><i class="fas fa-chart-pie me-2 text-primary"></i>Rating Distribution</h5>
+            @if(Model.RatingDistribution.Any())
+            {
+                @foreach(var dist in Model.RatingDistribution.OrderByDescending(r => r.Rating))
+                {
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="fw-bold">@dist.Rating Stars</span>
+                            <span>@dist.Count (@dist.Percentage.ToString("0.0")%)</span>
+                        </div>
+                        <div class="progress" style="height: 25px;">
+                            <div class="progress-bar rating-@dist.Rating" role="progressbar" style="width: @dist.Percentage%">
+                                @dist.Count
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <p class="text-muted">No rating data available</p>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Feedback Table -->
+<div class="chart-container">
+    <h5 class="fw-bold mb-3"><i class="fas fa-list me-2 text-primary"></i>Detailed Feedback (@Model.FeedbackItems.Count records)</h5>
+    <div class="table-responsive">
+        <table class="table data-table table-hover" id="feedbackTable">
+            <thead>
+                <tr>
+                    <th style="color: white !important;">Date</th>
+                    <th style="color: white !important;">Guest</th>
+                    <th style="color: white !important;">Location</th>
+                    <th style="color: white !important;">Overall</th>
+                    <th style="color: white !important;">Food</th>
+                    <th style="color: white !important;">Service</th>
+                    <th style="color: white !important;">Staff</th>
+                    <th style="color: white !important;">Avg</th>
+                    <th style="color: white !important;">Survey</th>
+                    <th style="color: white !important;">Tags</th>
+                    <th style="color: white !important;">First Visit</th>
+                    <th style="color: white !important;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach(var item in Model.FeedbackItems)
+                {
+                    <tr>
+                        <td>@item.VisitDate.ToString("dd MMM yyyy")</td>
+                        <td>
+                            <strong>@item.GuestName</strong>
+                            @if(!string.IsNullOrEmpty(item.Email))
+                            {
+                                <br/><small class="text-muted">@item.Email</small>
+                            }
+                        </td>
+                        <td>@item.Location</td>
+                        <td><span class="rating-badge rating-@item.OverallRating">@item.OverallRating</span></td>
+                        <td>@(item.FoodRating ?? 0)</td>
+                        <td>@(item.ServiceRating ?? 0)</td>
+                        <td>@(item.StaffRating ?? 0)</td>
+                        <td><strong>@item.AverageRating.ToString("0.00")</strong></td>
+                        <td>
+                            @if(item.SurveyQuestionsAnswered > 0)
+                            {
+                                <span class="badge bg-success">@item.SurveyQuestionsAnswered/10</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">N/A</span>
+                            }
+                        </td>
+                        <td>
+                            @if(!string.IsNullOrEmpty(item.Tags))
+                            {
+                                @foreach(var tag in item.Tags.Split(',').Take(2))
+                                {
+                                    <span class="tag-badge">@tag</span>
+                                }
+                            }
+                        </td>
+                        <td>
+                            @if(item.IsFirstVisit == true)
+                            {
+                                <span class="badge bg-info">Yes</span>
+                            }
+                            else if(item.IsFirstVisit == false)
+                            {
+                                <span class="badge bg-secondary">No</span>
+                            }
+                        </td>
+                        <td>
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-primary view-feedback-btn"
+                                    data-feedback-id="@item.Id"
+                                    data-survey='@Html.Raw(System.Net.WebUtility.HtmlEncode(item.SurveyJson ?? string.Empty))'
+                                    data-comments='@Html.Raw(System.Net.WebUtility.HtmlEncode(item.Comments ?? string.Empty))'>
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Feedback Detail Modal -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <h5 class="modal-title"><i class="fas fa-info-circle me-2"></i>Feedback Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="fw-bold mb-3">Survey Responses</h6>
+                <div id="surveyDetails" class="mb-3"></div>
+                <h6 class="fw-bold mb-3">Comments</h6>
+                <p id="commentsDetails" class="text-muted"></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const surveyQuestions = {
+        q1: "The restaurant was clean",
+        q2: "The host/hostess was polite",
+        q3: "The server was polite",
+        q4: "The server was always available",
+        q5: "The menu was easy to read",
+        q6: "I was satisfied with the selection of food",
+        q7: "My order was taken promptly",
+        q8: "My order was taken correctly",
+        q9: "My order was prepared and served promptly",
+        q10: "The food tasted fresh"
+    };
+    const responseLabels = {5: 'Strongly Agree', 4: 'Agree', 3: 'Neutral', 2: 'Disagree', 1: 'Strongly Disagree'};
+
+    function parseSurveyResponses(rawValue) {
+        if (!rawValue) {
+            return null;
+        }
+
+        const trimmed = rawValue.trim();
+        if (!trimmed || trimmed === 'null' || trimmed === '""' || trimmed === '{}') {
+            return null;
+        }
+
+        const parsers = [
+            (value) => JSON.parse(value),
+            (value) => JSON.parse(JSON.parse(value))
+        ];
+
+        for (const parser of parsers) {
+            try {
+                const parsed = parser(trimmed);
+                if (parsed && typeof parsed === 'object') {
+                    return parsed;
+                }
+            } catch { /* try next parser */ }
+        }
+
+        return null;
+    }
+
+    function viewDetails(id, surveyJson, comments) {
+        const surveyDiv = document.getElementById('surveyDetails');
+        const commentsDiv = document.getElementById('commentsDetails');
+
+        const data = parseSurveyResponses(surveyJson);
+        if (data) {
+            let html = '<div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr><th>Question</th><th class="text-center">Response</th></tr></thead><tbody>';
+            for (const [key, value] of Object.entries(data)) {
+                const question = surveyQuestions[key] || key;
+                const response = responseLabels[value] || value;
+                html += `<tr><td>${question}</td><td class="text-center"><span class="badge bg-primary">${response}</span></td></tr>`;
+            }
+            html += '</tbody></table></div>';
+            surveyDiv.innerHTML = html;
+        } else {
+            surveyDiv.innerHTML = '<p class="text-muted">No survey data available</p>';
+        }
+
+        commentsDiv.textContent = comments?.trim() ? comments : 'No comments provided';
+
+        new bootstrap.Modal(document.getElementById('detailModal')).show();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.view-feedback-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                const id = parseInt(button.dataset.feedbackId, 10);
+                const survey = button.dataset.survey || '';
+                const comments = button.dataset.comments || '';
+                viewDetails(id, survey, comments);
+            });
+        });
+    });
+
+    function exportToExcel() {
+        const table = document.getElementById('feedbackTable');
+        const wb = XLSX.utils.table_to_book(table, {sheet: "Feedback Survey Report"});
+        XLSX.writeFile(wb, 'FeedbackSurveyReport_' + new Date().toISOString().split('T')[0] + '.xlsx');
+    }
+</script>
+
+<!-- Include SheetJS for Excel export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
