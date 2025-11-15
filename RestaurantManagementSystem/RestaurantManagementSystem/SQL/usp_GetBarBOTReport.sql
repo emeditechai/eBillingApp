@@ -15,6 +15,16 @@ BEGIN
         o.OrderNumber,
         ISNULL(t.TableName, CONCAT('Table ', o.TableTurnoverId)) AS TableName,
         i.Name AS ItemName,
+        -- Display-friendly UOM if available from UOM master
+        CASE 
+            WHEN i.[UOM_Id] IS NOT NULL AND EXISTS (SELECT 1 FROM sys.objects WHERE name = 'tbl_mst_uom' AND type = 'U')
+            THEN (
+                SELECT TOP 1 CONCAT(u.UOM_Name, ' (', u.UOM_Type, ' - ', FORMAT(u.Base_Quantity_ML, 'N2'), 'ml)')
+                FROM [dbo].[tbl_mst_uom] u
+                WHERE u.UOM_Id = i.UOM_Id
+            )
+            ELSE NULL
+        END AS UOM,
         oi.Quantity,
         ISNULL(s.Name, 'Bar') AS Station,
         CASE 

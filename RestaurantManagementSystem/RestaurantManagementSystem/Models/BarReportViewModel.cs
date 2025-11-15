@@ -17,6 +17,8 @@ namespace RestaurantManagementSystem.Models
         public string OrderNumber { get; set; }
         public string TableName { get; set; }
         public string ItemName { get; set; }
+        // Unit of Measurement display, e.g., "30 ml (Peg - 30.00ml)"
+        public string UOM { get; set; }
         public int Quantity { get; set; }
         public string Station { get; set; }
         public string Status { get; set; }

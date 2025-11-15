@@ -471,7 +471,7 @@ namespace RestaurantManagementSystem.Controllers
                 using var reader = await cmd.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
                 {
-                    model.Items.Add(new BOTItem
+                    var item = new BOTItem
                     {
                         OrderId = reader.GetInt32("OrderId"),
                         OrderNumber = reader.GetString("OrderNumber"),
@@ -481,7 +481,25 @@ namespace RestaurantManagementSystem.Controllers
                         Station = reader.IsDBNull("Station") ? "" : reader.GetString("Station"),
                         Status = reader.IsDBNull("Status") ? "" : reader.GetString("Status"),
                         RequestedAt = reader.IsDBNull("RequestedAt") ? DateTime.MinValue : reader.GetDateTime("RequestedAt")
-                    });
+                    };
+
+                    // Best-effort read of UOM column if the stored procedure provides it
+                    try
+                    {
+                        // Use ordinal resolution to avoid exceptions if column absent
+                        var uomOrdinal = reader.GetOrdinal("UOM");
+                        if (uomOrdinal >= 0 && !reader.IsDBNull(uomOrdinal))
+                        {
+                            item.UOM = reader.GetString(uomOrdinal);
+                        }
+                    }
+                    catch
+                    {
+                        // Column not present yet (older DB) — leave UOM null/empty
+                        item.UOM = string.Empty;
+                    }
+
+                    model.Items.Add(item);
                 }
 
                 // Load stations list for bar items
@@ -506,7 +524,7 @@ namespace RestaurantManagementSystem.Controllers
         public async Task<IActionResult> BarExport(DateTime? from, DateTime? to, string station)
         {
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine("OrderNumber,TableName,ItemName,Quantity,Station,Status,RequestedAt");
+            sb.AppendLine("OrderNumber,TableName,ItemName,UOM,Quantity,Station,Status,RequestedAt");
 
             try
             {
@@ -521,10 +539,19 @@ namespace RestaurantManagementSystem.Controllers
                 using var reader = await cmd.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
                 {
-                    var line = string.Format("\"{0}\",\"{1}\",\"{2}\",{3},\"{4}\",\"{5}\",\"{6}\"",
+                    string uomValue = string.Empty;
+                    try
+                    {
+                        var uomOrd = reader.GetOrdinal("UOM");
+                        if (uomOrd >= 0 && !reader.IsDBNull(uomOrd)) uomValue = reader.GetString(uomOrd);
+                    }
+                    catch { /* ignore if column not present */ }
+
+                    var line = string.Format("\"{0}\",\"{1}\",\"{2}\",\"{3}\",{4},\"{5}\",\"{6}\",\"{7}\"",
                         reader.GetString(reader.GetOrdinal("OrderNumber")),
                         reader.IsDBNull(reader.GetOrdinal("TableName")) ? "" : reader.GetString(reader.GetOrdinal("TableName")),
                         reader.IsDBNull(reader.GetOrdinal("ItemName")) ? "" : reader.GetString(reader.GetOrdinal("ItemName")),
+                        uomValue,
                         reader.IsDBNull(reader.GetOrdinal("Quantity")) ? 0 : reader.GetInt32(reader.GetOrdinal("Quantity")),
                         reader.IsDBNull(reader.GetOrdinal("Station")) ? "" : reader.GetString(reader.GetOrdinal("Station")),
                         reader.IsDBNull(reader.GetOrdinal("Status")) ? "" : reader.GetString(reader.GetOrdinal("Status")),

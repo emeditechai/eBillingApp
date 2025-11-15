@@ -131,6 +131,7 @@
                                 <th>Order #</th>
                                 <th>Table</th>
                                 <th>Item</th>
+                                <th>UOM</th>
                                 <th>Qty</th>
                                 <th>Station</th>
                                 <th>Status</th>
@@ -144,6 +145,7 @@
                                     <td>@it.OrderNumber</td>
                                     <td>@it.TableName</td>
                                     <td>@it.ItemName</td>
+                                    <td>@(string.IsNullOrWhiteSpace(it.UOM) ? "" : it.UOM)</td>
                                     <td>@it.Quantity</td>
                                     <td>@it.Station</td>
                                     <td>
@@ -162,7 +164,7 @@
                             @if(!Model.Items.Any())
                             {
                                 <tr>
-                                    <td colspan="7" class="text-center">No bar items found for selected criteria</td>
+                                    <td colspan="8" class="text-center">No bar items found for selected criteria</td>
                                 </tr>
                             }
                         </tbody>
@@ -184,7 +186,8 @@
             if ($('#botTable tbody tr').length > 0 && !$('#botTable tbody tr td[colspan]').length) {
                 table = $('#botTable').DataTable({
                     "pageLength": 50, 
-                    "order": [[6, 'desc']],
+                    // Requested At is now column index 7 after adding UOM
+                    "order": [[7, 'desc']],
                     "columnDefs": [
                         { "orderable": true, "targets": "_all" }
                     ]
@@ -198,9 +201,9 @@
                 $('.status-filter').removeClass('active');
                 $(this).addClass('active');
                 if(!status) {
-                    table.column(5).search('').draw();
+                    table.column(6).search('').draw();
                 } else {
-                    table.column(5).search('^' + status + '$', true, false).draw();
+                    table.column(6).search('^' + status + '$', true, false).draw();
                 }
             });
 
