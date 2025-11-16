@@ -21,6 +21,8 @@ BEGIN
         [GuestName] NVARCHAR(100) NULL,
         [Email] NVARCHAR(150) NULL,
         [Phone] NVARCHAR(30) NULL,
+        [GuestBirthDate] DATE NULL,
+        [AnniversaryDate] DATE NULL,
         [CreatedAt] DATETIME NOT NULL DEFAULT GETDATE()
     );
     PRINT 'GuestFeedback table created.';
@@ -41,6 +43,10 @@ BEGIN
         ALTER TABLE GuestFeedback ADD [IsFirstVisit] BIT NULL;
     IF COL_LENGTH('GuestFeedback','SurveyJson') IS NULL
         ALTER TABLE GuestFeedback ADD [SurveyJson] NVARCHAR(MAX) NULL;
+    IF COL_LENGTH('GuestFeedback','GuestBirthDate') IS NULL
+        ALTER TABLE GuestFeedback ADD [GuestBirthDate] DATE NULL;
+    IF COL_LENGTH('GuestFeedback','AnniversaryDate') IS NULL
+        ALTER TABLE GuestFeedback ADD [AnniversaryDate] DATE NULL;
 END
 GO
 
@@ -65,7 +71,9 @@ CREATE PROCEDURE [dbo].[usp_SubmitGuestFeedback]
     @Comments NVARCHAR(1000) = NULL,
     @GuestName NVARCHAR(100) = NULL,
     @Email NVARCHAR(150) = NULL,
-    @Phone NVARCHAR(30) = NULL
+    @Phone NVARCHAR(30) = NULL,
+    @GuestBirthDate DATE = NULL,
+    @AnniversaryDate DATE = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -78,12 +86,12 @@ BEGIN
         VisitDate, OverallRating, FoodRating, ServiceRating, CleanlinessRating, StaffRating,
         AmbienceRating, ValueRating, SpeedRating,
         Location, IsFirstVisit, SurveyJson,
-        Tags, Comments, GuestName, Email, Phone)
+        Tags, Comments, GuestName, Email, Phone, GuestBirthDate, AnniversaryDate)
     VALUES(
         ISNULL(@VisitDate, CAST(GETDATE() AS DATE)), @OverallRating, @FoodRating, @ServiceRating, @CleanlinessRating, @StaffRating,
         @AmbienceRating, @ValueRating, @SpeedRating,
         @Location, @IsFirstVisit, @SurveyJson,
-        @Tags, @Comments, @GuestName, @Email, @Phone);
+        @Tags, @Comments, @GuestName, @Email, @Phone, @GuestBirthDate, @AnniversaryDate);
     SELECT SCOPE_IDENTITY() AS NewId;
 END
 GO
@@ -119,7 +127,7 @@ BEGIN
     SELECT TOP 50 Id, VisitDate, OverallRating, FoodRating, ServiceRating, CleanlinessRating, StaffRating,
         AmbienceRating, ValueRating, SpeedRating,
         Location, IsFirstVisit, SurveyJson,
-        Tags, Comments, GuestName, CreatedAt
+        Tags, Comments, GuestName, GuestBirthDate, AnniversaryDate, CreatedAt
     FROM GuestFeedback
     WHERE VisitDate BETWEEN @Start AND @End
     ORDER BY CreatedAt DESC;

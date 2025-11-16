@@ -22,6 +22,8 @@ namespace RestaurantManagementSystem.Models
         public string GuestName { get; set; }
         public string Email { get; set; }
         public string Phone { get; set; }
+        public DateTime? GuestBirthDate { get; set; }
+        public DateTime? AnniversaryDate { get; set; }
         public string SurveyJson { get; set; }
         public DateTime CreatedAt { get; set; }
         public decimal AverageRating { get; set; }

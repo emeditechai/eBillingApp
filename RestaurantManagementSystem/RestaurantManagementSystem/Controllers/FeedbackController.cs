@@ -84,6 +84,8 @@ namespace RestaurantManagementSystem.Controllers
                 Console.WriteLine($"SurveyJson: {model.SurveyJson}");
                 Console.WriteLine($"Tags: {model.Tags}");
                 Console.WriteLine($"Comments length: {model.Comments?.Length ?? 0}");
+                Console.WriteLine($"Guest Birth Date: {model.GuestBirthDate?.ToShortDateString() ?? "(none)"}");
+                Console.WriteLine($"Anniversary Date: {model.AnniversaryDate?.ToShortDateString() ?? "(none)"}");
 
                 using var con = new SqlConnection(_connectionString);
                 await con.OpenAsync();
@@ -130,6 +132,8 @@ namespace RestaurantManagementSystem.Controllers
                 if (availableParams.Contains("GuestName")) cmd.Parameters.AddWithValue("@GuestName", (object?)model.GuestName ?? DBNull.Value);
                 if (availableParams.Contains("Email")) cmd.Parameters.AddWithValue("@Email", (object?)model.Email ?? DBNull.Value);
                 if (availableParams.Contains("Phone")) cmd.Parameters.AddWithValue("@Phone", (object?)model.Phone ?? DBNull.Value);
+                if (availableParams.Contains("GuestBirthDate")) cmd.Parameters.AddWithValue("@GuestBirthDate", (object?)model.GuestBirthDate ?? DBNull.Value);
+                if (availableParams.Contains("AnniversaryDate")) cmd.Parameters.AddWithValue("@AnniversaryDate", (object?)model.AnniversaryDate ?? DBNull.Value);
 
                 Console.WriteLine($"Executing SP with {cmd.Parameters.Count} parameters");
                 var newId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
@@ -214,6 +218,8 @@ namespace RestaurantManagementSystem.Controllers
                             Tags = reader.IsDBNull(reader.GetOrdinal("Tags")) ? null : reader.GetString(reader.GetOrdinal("Tags")),
                             Comments = reader.IsDBNull(reader.GetOrdinal("Comments")) ? null : reader.GetString(reader.GetOrdinal("Comments")),
                             GuestName = reader.IsDBNull(reader.GetOrdinal("GuestName")) ? null : reader.GetString(reader.GetOrdinal("GuestName")),
+                            GuestBirthDate = reader.ColumnExists("GuestBirthDate") && !reader.IsDBNull(reader.GetOrdinal("GuestBirthDate")) ? (DateTime?)reader.GetDateTime(reader.GetOrdinal("GuestBirthDate")) : null,
+                            AnniversaryDate = reader.ColumnExists("AnniversaryDate") && !reader.IsDBNull(reader.GetOrdinal("AnniversaryDate")) ? (DateTime?)reader.GetDateTime(reader.GetOrdinal("AnniversaryDate")) : null,
                             // Optional extras
                             Location = reader.ColumnExists("Location") && !reader.IsDBNull(reader.GetOrdinal("Location")) ? reader.GetString(reader.GetOrdinal("Location")) : null,
                             FirstVisit = reader.ColumnExists("IsFirstVisit") && !reader.IsDBNull(reader.GetOrdinal("IsFirstVisit")) ? (bool?)reader.GetBoolean(reader.GetOrdinal("IsFirstVisit")) : null,
@@ -224,7 +230,7 @@ namespace RestaurantManagementSystem.Controllers
                 else
                 {
                     // Fallback for older DBs where the SP returns only a single result set (aggregates)
-                    using var cmdLatest = new SqlCommand("SELECT TOP 50 Id, VisitDate, OverallRating, FoodRating, ServiceRating, CleanlinessRating, StaffRating, Tags, Comments, GuestName, CreatedAt FROM GuestFeedback ORDER BY CreatedAt DESC", con);
+                    using var cmdLatest = new SqlCommand("SELECT TOP 50 Id, VisitDate, OverallRating, FoodRating, ServiceRating, CleanlinessRating, StaffRating, Tags, Comments, GuestName, GuestBirthDate, AnniversaryDate, CreatedAt FROM GuestFeedback ORDER BY CreatedAt DESC", con);
                     using var r2 = await cmdLatest.ExecuteReaderAsync();
                     while (await r2.ReadAsync())
                     {
@@ -240,6 +246,8 @@ namespace RestaurantManagementSystem.Controllers
                             Tags = r2.IsDBNull(r2.GetOrdinal("Tags")) ? null : r2.GetString(r2.GetOrdinal("Tags")),
                             Comments = r2.IsDBNull(r2.GetOrdinal("Comments")) ? null : r2.GetString(r2.GetOrdinal("Comments")),
                             GuestName = r2.IsDBNull(r2.GetOrdinal("GuestName")) ? null : r2.GetString(r2.GetOrdinal("GuestName")),
+                            GuestBirthDate = r2.ColumnExists("GuestBirthDate") && !r2.IsDBNull(r2.GetOrdinal("GuestBirthDate")) ? (DateTime?)r2.GetDateTime(r2.GetOrdinal("GuestBirthDate")) : null,
+                            AnniversaryDate = r2.ColumnExists("AnniversaryDate") && !r2.IsDBNull(r2.GetOrdinal("AnniversaryDate")) ? (DateTime?)r2.GetDateTime(r2.GetOrdinal("AnniversaryDate")) : null,
                             Location = r2.ColumnExists("Location") && !r2.IsDBNull(r2.GetOrdinal("Location")) ? r2.GetString(r2.GetOrdinal("Location")) : null,
                             FirstVisit = r2.ColumnExists("IsFirstVisit") && !r2.IsDBNull(r2.GetOrdinal("IsFirstVisit")) ? (bool?)r2.GetBoolean(r2.GetOrdinal("IsFirstVisit")) : null,
                             CreatedAt = r2.GetDateTime(r2.GetOrdinal("CreatedAt"))
@@ -249,7 +257,7 @@ namespace RestaurantManagementSystem.Controllers
                 // If aggregates indicate data but the latest list is empty (e.g., due to SP filter differences), load a best-effort latest list.
                 if (latest.Count == 0 && summary.TotalFeedback > 0)
                 {
-                    using var cmdLatest2 = new SqlCommand("SELECT TOP 50 Id, VisitDate, OverallRating, FoodRating, ServiceRating, CleanlinessRating, StaffRating, AmbienceRating, ValueRating, SpeedRating, Tags, Comments, GuestName, Location, IsFirstVisit, CreatedAt FROM GuestFeedback ORDER BY CreatedAt DESC", con);
+                    using var cmdLatest2 = new SqlCommand("SELECT TOP 50 Id, VisitDate, OverallRating, FoodRating, ServiceRating, CleanlinessRating, StaffRating, AmbienceRating, ValueRating, SpeedRating, Tags, Comments, GuestName, GuestBirthDate, AnniversaryDate, Location, IsFirstVisit, CreatedAt FROM GuestFeedback ORDER BY CreatedAt DESC", con);
                     using var r3 = await cmdLatest2.ExecuteReaderAsync();
                     while (await r3.ReadAsync())
                     {
@@ -268,6 +276,8 @@ namespace RestaurantManagementSystem.Controllers
                             Tags = r3.IsDBNull(r3.GetOrdinal("Tags")) ? null : r3.GetString(r3.GetOrdinal("Tags")),
                             Comments = r3.IsDBNull(r3.GetOrdinal("Comments")) ? null : r3.GetString(r3.GetOrdinal("Comments")),
                             GuestName = r3.IsDBNull(r3.GetOrdinal("GuestName")) ? null : r3.GetString(r3.GetOrdinal("GuestName")),
+                            GuestBirthDate = r3.ColumnExists("GuestBirthDate") && !r3.IsDBNull(r3.GetOrdinal("GuestBirthDate")) ? (DateTime?)r3.GetDateTime(r3.GetOrdinal("GuestBirthDate")) : null,
+                            AnniversaryDate = r3.ColumnExists("AnniversaryDate") && !r3.IsDBNull(r3.GetOrdinal("AnniversaryDate")) ? (DateTime?)r3.GetDateTime(r3.GetOrdinal("AnniversaryDate")) : null,
                             Location = r3.ColumnExists("Location") && !r3.IsDBNull(r3.GetOrdinal("Location")) ? r3.GetString(r3.GetOrdinal("Location")) : null,
                             FirstVisit = r3.ColumnExists("IsFirstVisit") && !r3.IsDBNull(r3.GetOrdinal("IsFirstVisit")) ? (bool?)r3.GetBoolean(r3.GetOrdinal("IsFirstVisit")) : null,
                             CreatedAt = r3.GetDateTime(r3.GetOrdinal("CreatedAt"))

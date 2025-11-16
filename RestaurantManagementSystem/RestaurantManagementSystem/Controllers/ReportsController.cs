@@ -1784,6 +1784,8 @@ namespace RestaurantManagementSystem.Controllers
                                     GuestName = reader.IsDBNull(reader.GetOrdinal("GuestName")) ? "" : reader.GetString(reader.GetOrdinal("GuestName")),
                                     Email = reader.IsDBNull(reader.GetOrdinal("Email")) ? "" : reader.GetString(reader.GetOrdinal("Email")),
                                     Phone = reader.IsDBNull(reader.GetOrdinal("Phone")) ? "" : reader.GetString(reader.GetOrdinal("Phone")),
+                                    GuestBirthDate = reader.IsDBNull(reader.GetOrdinal("GuestBirthDate")) ? (DateTime?)null : reader.GetDateTime(reader.GetOrdinal("GuestBirthDate")),
+                                    AnniversaryDate = reader.IsDBNull(reader.GetOrdinal("AnniversaryDate")) ? (DateTime?)null : reader.GetDateTime(reader.GetOrdinal("AnniversaryDate")),
                                     SurveyJson = reader.IsDBNull(reader.GetOrdinal("SurveyJson")) ? "" : reader.GetString(reader.GetOrdinal("SurveyJson")),
                                     CreatedAt = reader.GetDateTime(reader.GetOrdinal("CreatedAt")),
                                     AverageRating = reader.GetDecimal(reader.GetOrdinal("AverageRating")),

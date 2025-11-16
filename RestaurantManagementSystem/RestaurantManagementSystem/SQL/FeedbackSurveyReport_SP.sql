@@ -43,6 +43,8 @@ BEGIN
         gf.GuestName,
         gf.Email,
         gf.Phone,
+    gf.GuestBirthDate,
+    gf.AnniversaryDate,
         gf.SurveyJson,
         gf.CreatedAt,
         -- Calculate average of all ratings
