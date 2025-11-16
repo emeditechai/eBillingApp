@@ -202,7 +202,11 @@
                 <td class="text-end">₹@it.UnitPrice.ToString("F2")</td>
                 <td class="text-end subtotal-cell">₹@it.Subtotal.ToString("F2")</td>
                 <td><span class="badge bg-@(it.Status==0?"primary":it.Status==1?"warning text-dark":it.Status==2?"info":it.Status==3?"success":"secondary")">@it.StatusDisplay</span></td>
-                <td class="text-end"><button type="button" class="btn btn-outline-danger btn-sm remove-existing @(isFullyPaid ? "d-none" : "")"><i class="fas fa-times"></i></button></td>
+                <td class="text-end">
+                  @if(!isFullyPaid && it.Status == 0){
+                    <button type="button" class="btn btn-outline-danger btn-sm remove-existing"><i class="fas fa-times"></i></button>
+                  }
+                </td>
               </tr>
             }
           </tbody>
@@ -334,6 +338,10 @@
       function setSaveEnabled(enabled) {
         if (!saveBtn) return;
         saveBtn.disabled = !enabled;
+        // When there are unsaved changes, disable Payment until saved
+        if (enabled) {
+          setPaymentEnabled(false);
+        }
       }
 
       function setPaymentEnabled(enabled) {

@@ -15,6 +15,78 @@
   const selectAllFire = document.getElementById('selectAllFire');
   let tempIdCounter = -1;
 
+  // Nice confirm modal helper (falls back to window.confirm)
+  async function showConfirm(message){
+    const modalEl = document.getElementById('confirmModal');
+    // Preferred: Bootstrap modal if available
+    if(modalEl && window.bootstrap && bootstrap.Modal){
+      return new Promise((resolve)=>{
+        const msgEl = document.getElementById('confirmModalMessage');
+        if(msgEl) msgEl.textContent = message || 'Are you sure?';
+        const yesBtn = document.getElementById('confirmModalYesBtn');
+        const modal = new bootstrap.Modal(modalEl);
+        const cleanup = ()=>{
+          yesBtn?.removeEventListener('click', onYes);
+          modalEl.removeEventListener('hidden.bs.modal', onHide);
+        };
+        const onYes = ()=>{ cleanup(); modal.hide(); resolve(true); };
+        const onHide = ()=>{ cleanup(); resolve(false); };
+        yesBtn?.addEventListener('click', onYes);
+        modalEl.addEventListener('hidden.bs.modal', onHide, { once: true });
+        modal.show();
+      });
+    }
+    // Fallback: custom lightweight modal (no browser alert)
+    return new Promise((resolve)=>{
+      // Create overlay only once
+      let overlay = document.getElementById('simpleConfirmOverlay');
+      if(!overlay){
+        overlay = document.createElement('div');
+        overlay.id = 'simpleConfirmOverlay';
+        overlay.innerHTML = `
+          <div class="scf-backdrop"></div>
+          <div class="scf-dialog">
+            <div class="scf-header">Confirm</div>
+            <div class="scf-body"><span id="scfMessage"></span></div>
+            <div class="scf-footer">
+              <button id="scfNo" class="btn btn-sm btn-secondary">No</button>
+              <button id="scfYes" class="btn btn-sm btn-danger">Yes</button>
+            </div>
+          </div>`;
+        document.body.appendChild(overlay);
+        // Basic styles
+        const style = document.createElement('style');
+        style.id = 'simpleConfirmStyles';
+        style.textContent = `
+          #simpleConfirmOverlay{position:fixed;inset:0;z-index:2050;display:flex;align-items:center;justify-content:center}
+          #simpleConfirmOverlay .scf-backdrop{position:absolute;inset:0;background:rgba(0,0,0,0.45)}
+          #simpleConfirmOverlay .scf-dialog{position:relative;background:#fff;min-width:280px;max-width:90vw;border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.2);overflow:hidden}
+          #simpleConfirmOverlay .scf-header{font-weight:600;padding:.5rem .75rem;border-bottom:1px solid #e5e7eb}
+          #simpleConfirmOverlay .scf-body{padding: .75rem .75rem}
+          #simpleConfirmOverlay .scf-footer{display:flex;gap:.5rem;justify-content:flex-end;padding:.5rem .75rem;border-top:1px solid #e5e7eb}
+        `;
+        document.head.appendChild(style);
+      }
+      overlay.querySelector('#scfMessage').textContent = message || 'Are you sure?';
+      overlay.style.display = 'flex';
+      const yes = overlay.querySelector('#scfYes');
+      const no = overlay.querySelector('#scfNo');
+      const close = (val)=>{ overlay.style.display = 'none'; yes.removeEventListener('click', onYes); no.removeEventListener('click', onNo); resolve(val); };
+      const onYes = ()=> close(true);
+      const onNo = ()=> close(false);
+      yes.addEventListener('click', onYes);
+      no.addEventListener('click', onNo);
+    });
+  }
+
+  function disablePaymentButton(){
+    const paymentBtn = document.querySelector('a[href*="/Payment/Index/"]');
+    if(!paymentBtn) return;
+    paymentBtn.classList.add('btn-disabled');
+    paymentBtn.setAttribute('aria-disabled','true');
+    paymentBtn.style.pointerEvents = 'none';
+  }
+
   function getAntiForgery(){
     const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
     return tokenInput ? tokenInput.value : '';
@@ -31,6 +103,7 @@
   function recalcTotals(){
     let subtotal = 0;
     tbody.querySelectorAll('tr').forEach(tr=>{
+      if(tr.classList.contains('cancelled-row') || tr.getAttribute('data-cancelled') === 'true') return;
       const subCell = tr.querySelector('.subtotal-cell');
       if(subCell){
         subtotal += parsePrice(subCell.textContent);
@@ -87,7 +160,43 @@
     }
     const removeBtn = tr.querySelector('.remove-existing, .remove-new');
     if(removeBtn){
-      removeBtn.addEventListener('click',()=>{tr.remove(); recalcTotals();});
+      removeBtn.addEventListener('click', async ()=>{
+        // For new rows just remove; for existing, call cancel API
+        if(tr.classList.contains('existing-item-row')){
+          const id = parseInt(tr.getAttribute('data-order-item-id'),10);
+          if(!id) { tr.remove(); recalcTotals(); return; }
+          const ok = await showConfirm('Cancel this item?');
+          if(!ok) return;
+          const originalHtml = removeBtn.innerHTML; 
+          removeBtn.disabled = true; removeBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+          try{
+            const token = (document.querySelector('input[name="__RequestVerificationToken"]').value)||'';
+            const res = await fetch('/Order/CancelItem',{
+              method:'POST',
+              headers:{ 'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8', 'RequestVerificationToken': token },
+              body:`orderItemId=${encodeURIComponent(id)}`
+            });
+            const data = await res.json().catch(()=>({success:false,message:'Invalid response'}));
+            if(!res.ok || !data.success){ throw new Error(data.message||'Cancel failed'); }
+            // Mark cancelled and remove the row (billing excludes cancelled items)
+            tr.setAttribute('data-cancelled','true');
+            const subCell = tr.querySelector('.subtotal-cell');
+            if(subCell){ subCell.textContent = formatMoney(0); }
+            setTimeout(()=>{ tr.remove(); recalcTotals(); }, 150);
+            if(window.toastr){ toastr.success('Item cancelled'); }
+            // Mark page dirty: enable save, disable payment until saved
+            const saveBtnEl = document.getElementById('saveOrderBtn');
+            if(saveBtnEl){ saveBtnEl.disabled = false; }
+            disablePaymentButton();
+          }catch(err){
+            if(window.toastr){ toastr.error(err.message||'Cancel failed'); }
+            removeBtn.disabled = false; removeBtn.innerHTML = originalHtml;
+            return;
+          }
+        } else {
+          tr.remove(); recalcTotals();
+        }
+      });
     }
     const editBtn = tr.querySelector('.edit-row');
     if(editBtn){

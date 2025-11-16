@@ -1913,7 +1913,7 @@ namespace RestaurantManagementSystem.Controllers
                 
                 using (var readCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
                     SELECT 
-                        ISNULL((SELECT SUM(oi.Subtotal) FROM OrderItems oi WHERE oi.OrderId = o.Id), 0) AS SubtotalFromItems,
+                        ISNULL((SELECT SUM(oi.Subtotal) FROM OrderItems oi WHERE oi.OrderId = o.Id AND ISNULL(oi.Status,0) <> 5), 0) AS SubtotalFromItems,
                         ISNULL(o.DiscountAmount, 0) AS DiscountAmount,
                         ISNULL(o.TipAmount, 0) AS TipAmount,
                         CASE 
@@ -2068,6 +2068,109 @@ namespace RestaurantManagementSystem.Controllers
             {
                 // Log error but don't throw - allow order processing to continue even if GST persistence fails
                 System.Diagnostics.Debug.WriteLine($"UpdateOrderFinancials failed for order {orderId}: {ex.Message}");
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [ActionName("CancelItem")]
+        public IActionResult CancelOrderItem(int orderItemId)
+        {
+            if (orderItemId <= 0)
+            {
+                return Json(new { success = false, message = "Invalid item." });
+            }
+
+            try
+            {
+                using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (var transaction = connection.BeginTransaction())
+                    {
+                        try
+                        {
+                            int orderId = 0;
+                            int currentStatus = 0;
+                            using (var readCmd = new Microsoft.Data.SqlClient.SqlCommand(@"SELECT OrderId, ISNULL(Status,0) FROM OrderItems WHERE Id = @Id", connection, transaction))
+                            {
+                                readCmd.Parameters.AddWithValue("@Id", orderItemId);
+                                using (var reader = readCmd.ExecuteReader())
+                                {
+                                    if (reader.Read())
+                                    {
+                                        orderId = reader.GetInt32(0);
+                                        currentStatus = reader.GetInt32(1);
+                                    }
+                                    else
+                                    {
+                                        return Json(new { success = false, message = "Item not found." });
+                                    }
+                                }
+                            }
+
+                            // Only allow cancellation when status == 0 (New / not fired)
+                            if (currentStatus > 0 && currentStatus != 5)
+                            {
+                                return Json(new { success = false, message = "Item already fired. Use Kitchen dashboard to cancel ticket, which will revert item to New." });
+                            }
+
+                            if (currentStatus == 5)
+                            {
+                                return Json(new { success = true, message = "Item already cancelled.", alreadyCancelled = true, orderId });
+                            }
+
+                            // Detect if CancelledAt column exists on OrderItems
+                            bool hasCancelledAt = false;
+                            using (var checkCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                SELECT CASE WHEN EXISTS (
+                                    SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.OrderItems') AND name = 'CancelledAt'
+                                ) THEN 1 ELSE 0 END", connection, transaction))
+                            {
+                                hasCancelledAt = Convert.ToInt32(checkCmd.ExecuteScalar()) == 1;
+                            }
+
+                            string updateSql = hasCancelledAt
+                                ? "UPDATE OrderItems SET Status = 5, CancelledAt = GETDATE() WHERE Id = @Id"
+                                : "UPDATE OrderItems SET Status = 5 WHERE Id = @Id";
+
+                            using (var upd = new Microsoft.Data.SqlClient.SqlCommand(updateSql, connection, transaction))
+                            {
+                                upd.Parameters.AddWithValue("@Id", orderItemId);
+                                upd.ExecuteNonQuery();
+                            }
+
+                            // Optionally cancel related kitchen ticket items for this order item
+                            try
+                            {
+                                using (var ktCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                    UPDATE kti SET Status = 4
+                                    FROM KitchenTicketItems kti
+                                    WHERE kti.OrderItemId = @OrderItemId", connection, transaction))
+                                {
+                                    ktCmd.Parameters.AddWithValue("@OrderItemId", orderItemId);
+                                    ktCmd.ExecuteNonQuery();
+                                }
+                            }
+                            catch { /* ignore if table schema differs */ }
+
+                            // Recalculate financials excluding cancelled items
+                            UpdateOrderFinancials(orderId, connection, transaction);
+
+                            transaction.Commit();
+                            return Json(new { success = true, message = "Item cancelled successfully.", orderId });
+                        }
+                        catch (Exception ex)
+                        {
+                            transaction.Rollback();
+                            return Json(new { success = false, message = "Error cancelling item: " + ex.Message });
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "Error cancelling item: " + ex.Message });
             }
         }
     

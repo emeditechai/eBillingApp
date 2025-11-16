@@ -747,7 +747,7 @@ BEGIN
     BEGIN TRANSACTION;
     
     BEGIN TRY
-        -- Update the item status
+        -- Update the ticket item status and stamp times when first entering a phase
         UPDATE KitchenTicketItems
         SET 
             Status = @Status,
@@ -759,47 +759,39 @@ BEGIN
                                 WHEN @Status >= 2 AND CompletionTime IS NULL THEN GETDATE() 
                                 ELSE CompletionTime 
                              END
-        WHERE 
-            Id = @ItemId;
+        WHERE Id = @ItemId;
         
-        -- If marked as delivered/cancelled, update the order item
-        IF @Status IN (3, 4) -- Delivered or Cancelled
+        -- Delivered (3) or Cancelled (4) actions reflected on OrderItems:
+        --  Delivered -> OrderItems.Status = 3 (Completed)
+        --  Cancelled at kitchen -> REVERT OrderItems.Status to 0 (New) so cashier can decide.
+        IF @Status IN (3, 4)
         BEGIN
-            -- Update the order item status
             UPDATE oi
-            SET 
-                oi.Status = CASE 
-                                WHEN @Status = 3 THEN 3 -- Delivered = Completed
-                                WHEN @Status = 4 THEN 5 -- Cancelled
+            SET oi.Status = CASE 
+                                WHEN @Status = 3 THEN 3  -- Delivered
+                                WHEN @Status = 4 THEN 0  -- Kitchen cancel reverts to NEW
                                 ELSE oi.Status
                             END
-            FROM 
-                OrderItems oi
-            INNER JOIN 
-                KitchenTicketItems kti ON oi.Id = kti.OrderItemId
-            WHERE 
-                kti.Id = @ItemId;
+            FROM OrderItems oi
+            INNER JOIN KitchenTicketItems kti ON oi.Id = kti.OrderItemId
+            WHERE kti.Id = @ItemId;
         END
         
-        -- Check if all items in the ticket are ready (status 2 or higher)
+        -- Check if all items reached Ready or higher (>=2)
         IF @Status >= 2 AND NOT EXISTS (
-            SELECT 1
-            FROM KitchenTicketItems
-            WHERE KitchenTicketId = @TicketId AND Status < 2
+            SELECT 1 FROM KitchenTicketItems WHERE KitchenTicketId = @TicketId AND Status < 2
         )
         BEGIN
             SET @AllItemsReady = 1;
         END
         
-        -- If all items are ready, update the ticket status to ready
+        -- If all ready, bump ticket to Ready (2) and stamp completion
         IF @AllItemsReady = 1
         BEGIN
             UPDATE KitchenTickets
-            SET 
-                Status = CASE WHEN Status < 2 THEN 2 ELSE Status END,
+            SET Status = CASE WHEN Status < 2 THEN 2 ELSE Status END,
                 CompletedAt = CASE WHEN CompletedAt IS NULL THEN GETDATE() ELSE CompletedAt END
-            WHERE 
-                Id = @TicketId;
+            WHERE Id = @TicketId;
         END
         
         COMMIT TRANSACTION;
