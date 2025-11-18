@@ -95,17 +95,51 @@
                         <span class="badge" style="background: rgba(255,255,255,0.25); padding: 0.5rem 0.8rem; border-radius: 20px; font-size: 0.85rem; font-weight: 600;"><i class="fas fa-circle text-warning me-1"></i>Dirty</span>
                     </div>
                 </div>
-                <div class="card-body p-4" style="background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%); max-height: calc(100vh - 350px); overflow-y: auto;">
+                <div class="card-body p-4" style="background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%); max-height: calc(100vh - 300px); overflow-y: auto;">
                     @if (Model.UnoccupiedTables.Any())
                     {
                         var tableCount = Model.UnoccupiedTables.Count;
                         // Auto-resize cards based on table count to fit all on one screen
                         var colClass = tableCount <= 6 ? "col-xxl-2 col-xl-2 col-lg-3 col-md-4 col-sm-6" : 
-                                      tableCount <= 12 ? "col-xxl-2 col-xl-2 col-lg-2 col-md-3 col-sm-4 col-6" : 
-                                      tableCount <= 20 ? "col-xxl-1 col-xl-2 col-lg-2 col-md-3 col-sm-4 col-6" :
-                                      "col-xxl-1 col-xl-1 col-lg-2 col-md-2 col-sm-3 col-4";
+                                      tableCount <= 10 ? "col-xxl-2 col-xl-2 col-lg-2 col-md-3 col-sm-4 col-6" : 
+                                      tableCount <= 15 ? "col-xxl-1 col-xl-1 col-lg-2 col-md-3 col-sm-4 col-6" :
+                                      tableCount <= 20 ? "col-xxl-1 col-xl-1 col-lg-1 col-md-2 col-sm-3 col-4" :
+                                      "col-1";
+                        var rowGap = tableCount <= 10 ? "g-2" : tableCount <= 15 ? "g-1" : "g-1";
+                        // Fully dynamic sizing based on table count
+                        var iconSize = tableCount <= 6 ? "38px" : 
+                                      tableCount <= 10 ? "36px" : 
+                                      tableCount <= 15 ? "32px" : 
+                                      tableCount <= 20 ? "28px" : "24px";
+                        var iconFontSize = tableCount <= 6 ? "1rem" : 
+                                          tableCount <= 10 ? "0.95rem" : 
+                                          tableCount <= 15 ? "0.85rem" : 
+                                          tableCount <= 20 ? "0.75rem" : "0.7rem";
+                        var tableNameSize = tableCount <= 6 ? "1.1rem" : 
+                                           tableCount <= 10 ? "1rem" : 
+                                           tableCount <= 15 ? "0.9rem" : 
+                                           tableCount <= 20 ? "0.8rem" : "0.75rem";
+                        var cardPadding = tableCount <= 6 ? "0.6rem" : 
+                                         tableCount <= 10 ? "0.5rem" : 
+                                         tableCount <= 15 ? "0.45rem" : 
+                                         tableCount <= 20 ? "0.4rem" : "0.35rem";
+                        var badgeFontSize = tableCount <= 6 ? "0.7rem" : 
+                                           tableCount <= 10 ? "0.65rem" : 
+                                           tableCount <= 15 ? "0.6rem" : 
+                                           tableCount <= 20 ? "0.55rem" : "0.5rem";
+                        var buttonFontSize = tableCount <= 6 ? "0.75rem" : 
+                                            tableCount <= 10 ? "0.7rem" : 
+                                            tableCount <= 15 ? "0.65rem" : 
+                                            tableCount <= 20 ? "0.6rem" : "0.55rem";
+                        var buttonPadding = tableCount <= 10 ? "0.5rem 0.75rem" : 
+                                           tableCount <= 15 ? "0.45rem 0.65rem" : 
+                                           tableCount <= 20 ? "0.4rem 0.6rem" : "0.35rem 0.5rem";
+                        var sectionFontSize = tableCount <= 10 ? "0.65rem" : 
+                                             tableCount <= 15 ? "0.6rem" : "0.55rem";
+                        var capacityIconSize = tableCount <= 10 ? "0.7rem" : 
+                                              tableCount <= 15 ? "0.65rem" : "0.6rem";
                         
-                        <div class="row g-2">
+                        <div class="row @rowGap">
                             @foreach (var table in Model.UnoccupiedTables)
                             {
                                 var isAvailable = table.Status == 0;
@@ -126,37 +160,37 @@
                                 var statusText = table.StatusDisplay.ToUpper();
                                 
                                 <div class="@colClass">
-                                    <div class="card table-card border-0 position-relative @(canOrder ? "" : "table-disabled")" style="background: @bgGradient; border: 2px solid @borderColor !important; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 16px; box-shadow: 0 6px 20px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.06); @(canOrder ? "cursor: pointer;" : "opacity: 0.7; cursor: not-allowed;") overflow: hidden; height: 100%;">
+                                    <div class="card table-card border-0 position-relative @(canOrder ? "" : "table-disabled")" style="background: @bgGradient; border: 2px solid @borderColor !important; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 16px; box-shadow: 0 6px 20px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.06); @(canOrder ? "cursor: pointer;" : "opacity: 0.7; cursor: not-allowed;") overflow: hidden; aspect-ratio: 1/1;">
                                         <!-- Decorative corner accent -->
                                         <div class="position-absolute" style="top: 0; right: 0; width: 60px; height: 60px; background: @badgeGradient; opacity: 0.12; clip-path: polygon(100% 0, 100% 100%, 0 0); z-index: 1;"></div>
                                         
-                                        <div class="card-body text-center d-flex flex-column justify-content-between" style="position: relative; z-index: 2; padding: 0.75rem; min-height: 160px;">
+                                        <div class="card-body text-center d-flex flex-column justify-content-between" style="position: relative; z-index: 2; padding: @cardPadding; height: 100%;">
                                             <!-- Top Section: Icon & Table Name -->
-                                            <div class="mb-2">
-                                                <div class="table-icon-wrapper d-inline-flex align-items-center justify-content-center mb-2" style="width: 48px; height: 48px; background: @badgeGradient; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.12); transform: rotate(-4deg); transition: all 0.3s ease;">
-                                                    <i class="fas fa-utensils" style="font-size: 1.3rem; color: #ffffff; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); transform: rotate(4deg);"></i>
+                                            <div class="mb-1">
+                                                <div class="table-icon-wrapper d-inline-flex align-items-center justify-content-center mb-1" style="width: @iconSize; height: @iconSize; background: @badgeGradient; border-radius: 12px; box-shadow: 0 3px 12px rgba(0,0,0,0.12); transform: rotate(-4deg); transition: all 0.3s ease;">
+                                                    <i class="fas fa-utensils" style="font-size: @iconFontSize; color: #ffffff; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); transform: rotate(4deg);"></i>
                                                 </div>
-                                                <h3 class="table-name fw-bold mb-1" style="color: #1a1a1a; font-size: 1.4rem; letter-spacing: 0.3px; font-family: 'Segoe UI', system-ui, sans-serif; text-shadow: 0 1px 3px rgba(0,0,0,0.05);">@table.TableName</h3>
+                                                <h3 class="table-name fw-bold mb-0" style="color: #1a1a1a; font-size: @tableNameSize; letter-spacing: 0.3px; font-family: 'Segoe UI', system-ui, sans-serif; text-shadow: 0 1px 3px rgba(0,0,0,0.05);">@table.TableName</h3>
                                                 @if (!string.IsNullOrEmpty(table.Section))
                                                 {
-                                                    <div class="d-inline-block px-2 py-1 mb-1" style="background: rgba(0,0,0,0.05); border-radius: 8px; font-size: 0.75rem; color: #666; font-weight: 600;">
-                                                        <i class="fas fa-map-marker-alt me-1" style="font-size: 0.7rem;"></i>@table.Section
+                                                    <div class="d-inline-block px-2 py-1 mb-1" style="background: rgba(0,0,0,0.05); border-radius: 6px; font-size: @sectionFontSize; color: #666; font-weight: 600;">
+                                                        <i class="fas fa-map-marker-alt me-1" style="font-size: @sectionFontSize;"></i>@table.Section
                                                     </div>
                                                 }
                                             </div>
                                             
                                             <!-- Middle Section: Capacity -->
-                                            <div class="mb-2">
-                                                <div class="d-inline-flex align-items-center gap-2 px-2 py-1" style="background: rgba(0,0,0,0.04); border-radius: 10px; font-size: 0.85rem; color: #495057; font-weight: 600;">
-                                                    <i class="fas fa-users" style="color: @iconColor; font-size: 0.9rem;"></i>
+                                            <div class="mb-1">
+                                                <div class="d-inline-flex align-items-center gap-1 px-2 py-1" style="background: rgba(0,0,0,0.04); border-radius: 8px; font-size: @badgeFontSize; color: #495057; font-weight: 600;">
+                                                    <i class="fas fa-users" style="color: @iconColor; font-size: @capacityIconSize;"></i>
                                                     <span>@table.Capacity</span>
                                                 </div>
                                             </div>
                                             
                                             <!-- Status Badge -->
-                                            <div class="mb-2">
-                                                <span class="badge text-white fw-bold px-3 py-1 w-100" style="font-size: 0.75rem; border-radius: 12px; background: @badgeGradient; box-shadow: 0 3px 10px rgba(0,0,0,0.15); border: 1.5px solid rgba(255,255,255,0.3); letter-spacing: 0.4px;">
-                                                    <i class="fas @statusIcon me-1" style="font-size: 0.7rem;"></i>@statusText
+                                            <div class="mb-1">
+                                                <span class="badge text-white fw-bold px-2 py-1 w-100" style="font-size: @badgeFontSize; border-radius: 8px; background: @badgeGradient; box-shadow: 0 2px 8px rgba(0,0,0,0.15); border: 1.5px solid rgba(255,255,255,0.3); letter-spacing: 0.2px;">
+                                                    <i class="fas @statusIcon me-1" style="font-size: @badgeFontSize;"></i>@statusText
                                                 </span>
                                             </div>
                                             
@@ -165,23 +199,23 @@
                                                 @if (canOrder)
                                                 {
                                                     <a href="@Url.Action("Create", "Order", new { tableId = table.Id })" 
-                                                       class="btn fw-bold text-white create-order-btn w-100" style="background: @badgeGradient; font-size: 0.85rem; padding: 0.6rem 1rem; border-radius: 12px; border: none; box-shadow: 0 3px 12px rgba(0,0,0,0.2); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; transition: all 0.3s ease;">
-                                                        <i class="fas fa-plus me-1" style="font-size: 0.75rem;"></i>Order
+                                                       class="btn fw-bold text-white create-order-btn w-100" style="background: @badgeGradient; font-size: @buttonFontSize; padding: @buttonPadding; border-radius: 8px; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.2); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 700; transition: all 0.3s ease;">
+                                                        <i class="fas fa-plus me-1" style="font-size: @badgeFontSize;"></i>Order
                                                     </a>
                                                 }
                                                 else
                                                 {
-                                                    <button disabled class="btn fw-bold text-white w-100" style="background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); font-size: 0.85rem; padding: 0.6rem 1rem; border-radius: 12px; border: none; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; cursor: not-allowed; opacity: 0.5;">
-                                                        <i class="fas fa-lock me-1" style="font-size: 0.75rem;"></i>@table.StatusDisplay
+                                                    <button disabled class="btn fw-bold text-white w-100" style="background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); font-size: @buttonFontSize; padding: @buttonPadding; border-radius: 8px; border: none; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 700; cursor: not-allowed; opacity: 0.5;">
+                                                        <i class="fas fa-lock me-1" style="font-size: @badgeFontSize;"></i>@table.StatusDisplay
                                                     </button>
                                                 }
                                             </div>
                                         </div>
                                         
                                         <!-- Status Indicator Badge -->
-                                        <div class="position-absolute" style="top: 8px; right: 8px; z-index: 10;">
-                                            <div class="d-flex align-items-center justify-content-center" style="width: 32px; height: 32px; background: @badgeGradient; border-radius: 10px; box-shadow: 0 3px 12px rgba(0,0,0,0.25); border: 2px solid rgba(255,255,255,0.95);">
-                                                <i class="fas @statusIcon text-white" style="font-size: 0.9rem;"></i>
+                                        <div class="position-absolute" style="top: 5px; right: 5px; z-index: 10;">
+                                            <div class="d-flex align-items-center justify-content-center" style="width: 26px; height: 26px; background: @badgeGradient; border-radius: 7px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); border: 1.5px solid rgba(255,255,255,0.95);">
+                                                <i class="fas @statusIcon text-white" style="font-size: 0.7rem;"></i>
                                             </div>
                                         </div>
                                     </div>
