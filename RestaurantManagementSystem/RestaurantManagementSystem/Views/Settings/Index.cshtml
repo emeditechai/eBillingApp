@@ -7,80 +7,77 @@
 <link rel="stylesheet" href="~/css/settings-compact.css" />
 
 <div class="container-fluid px-4 settings-container">
-    <div class="d-flex align-items-center justify-content-between mb-3">
-        <div>
-            <h1 class="h4 mb-0">Restaurant Settings</h1>
-            <small class="text-muted">Configuration and parameters for your restaurant</small>
+    <div class="settings-hero">
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
+            <div>
+                <h1 class="h3 mb-1"><i class="fas fa-sliders me-2"></i>Restaurant Settings</h1>
+                <p class="lead mb-0">Manage branding, taxes, printing and operational flags</p>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <a asp-action="Edit" class="btn btn-sm btn-outline-light btn-hero">
+                    <i class="fas fa-pen-to-square me-1"></i> Edit Settings
+                </a>
+            </div>
         </div>
-        <nav aria-label="breadcrumb">
-            <ol class="breadcrumb mb-0">
-                <li class="breadcrumb-item"><a href="/Home/Index">Dashboard</a></li>
-                <li class="breadcrumb-item active" aria-current="page">Settings</li>
-            </ol>
-        </nav>
+        <div class="mt-2">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="/Home/Index">Dashboard</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Settings</li>
+                </ol>
+            </nav>
+        </div>
     </div>
 
     @if (TempData["SuccessMessage"] != null)
     {
-        <div class="alert alert-success alert-dismissible fade show">
+        <div class="alert alert-success alert-dismissible fade show shadow-sm border-0">
             <i class="fas fa-check-circle me-2"></i>
             @TempData["SuccessMessage"]
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     }
 
-    <div class="card settings-card mb-4 shadow-sm">
+    <div class="card settings-card pro-card mb-4">
+        <div class="card-header d-flex align-items-center justify-content-between py-2 px-3">
+            <h2 class="section-title">
+                <span class="icon-chip"><i class="fas fa-store"></i></span>
+                Restaurant Configuration
+            </h2>
+            <small class="meta-subtitle">Manage basic details, taxes and printing</small>
+        </div>
         <div class="card-body py-3 px-4">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <div class="d-flex align-items-center gap-2">
-                    <i class="fas fa-store fa-lg text-primary"></i>
-                    <div>
-                        <div class="fw-semibold">Restaurant Configuration</div>
-                        <small class="text-muted">Manage basic details, taxes and printing</small>
-                    </div>
-                </div>
-                <div>
-                    <a asp-action="Edit" class="btn btn-outline-primary btn-sm">
-                        <i class="fas fa-edit me-1"></i> Edit
-                    </a>
-                </div>
-            </div>
-            <div class="p-0">
             <div class="row">
                 <div class="col-md-8">
-                        <div class="row g-2 mb-3">
+                        <div class="row g-3 mb-3">
                             <div class="col-md-6">
-                                <div class="card mb-0 compact-card">
+                                <div class="card mb-0 compact-card pro-card">
+                                    <div class="card-header py-2 px-3">
+                                        <h3 class="section-title mb-0"><span class="icon-chip"><i class="fas fa-building"></i></span> Restaurant Details</h3>
+                                        <small class="meta-subtitle">Name, address and contact</small>
+                                    </div>
                                     <div class="card-body py-2 px-3">
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div>
-                                                <div class="fw-semibold">Restaurant Details</div>
-                                                <small class="text-muted">Name, address and contact</small>
-                                            </div>
-                                            <i class="fas fa-building text-secondary"></i>
-                                        </div>
-                                        <hr class="my-2" />
                                         <div class="small">
-                                            <div class="fw-bold">@Model.RestaurantName</div>
+                                            <div class="fw-bold mb-1">@Model.RestaurantName</div>
                                             <div class="text-muted">@Model.StreetAddress</div>
                                             <div class="text-muted">@Model.City, @Model.State - @Model.Pincode</div>
                                             <div class="text-muted">@Model.Country</div>
                                             <div class="mt-2">
                                                 @if (!string.IsNullOrEmpty(Model.PhoneNumber))
                                                 {
-                                                    <div><i class="fas fa-phone me-1 text-primary"></i> @Model.PhoneNumber</div>
+                                                    <div class="meta-subtitle"><i class="fas fa-phone me-1 text-primary"></i> @Model.PhoneNumber</div>
                                                 }
                                                 @if (!string.IsNullOrEmpty(Model.Email))
                                                 {
-                                                    <div><i class="fas fa-envelope me-1 text-primary"></i> @Model.Email</div>
+                                                    <div class="meta-subtitle"><i class="fas fa-envelope me-1 text-primary"></i> @Model.Email</div>
                                                 }
                                                 @if (!string.IsNullOrEmpty(Model.Website))
                                                 {
-                                                    <div><i class="fas fa-globe me-1 text-primary"></i> <a href="@Model.Website" target="_blank">@Model.Website</a></div>
+                                                    <div class="meta-subtitle"><i class="fas fa-globe me-1 text-primary"></i> <a href="@Model.Website" target="_blank">@Model.Website</a></div>
                                                 }
                                                 @if (!string.IsNullOrEmpty(Model.FssaiNo))
                                                 {
-                                                    <div class="mt-1"><span class="badge bg-light text-dark">FSSAI: @Model.FssaiNo</span></div>
+                                                    <div class="mt-2"><span class="pill pill-info">FSSAI: @Model.FssaiNo</span></div>
                                                 }
                                             </div>
                                         </div>
@@ -88,16 +85,12 @@
                                 </div>
                             </div>
                             <div class="col-md-6">
-                                <div class="card mb-0 compact-card">
+                                <div class="card mb-0 compact-card pro-card">
+                                    <div class="card-header py-2 px-3">
+                                        <h3 class="section-title mb-0"><span class="icon-chip"><i class="fas fa-receipt"></i></span> Tax Information</h3>
+                                        <small class="meta-subtitle">GST and currency</small>
+                                    </div>
                                     <div class="card-body py-2 px-3">
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div>
-                                                <div class="fw-semibold">Tax Information</div>
-                                                <small class="text-muted">GST and currency</small>
-                                            </div>
-                                            <i class="fas fa-receipt text-secondary"></i>
-                                        </div>
-                                        <hr class="my-2" />
                                         <div class="small">
                                             <div><span class="text-muted">GST Code</span> <span class="font-monospace ms-2">@Model.GSTCode</span></div>
                                             <div class="mt-1"><span class="text-muted">Currency</span> <span class="fw-semibold ms-2">@Model.CurrencySymbol</span></div>
@@ -109,52 +102,30 @@
                                 </div>
                             </div>
                         </div>
-                    
-                        <div class="card mb-3 compact-card">
+                        <div class="card mb-3 compact-card pro-card">
+                            <div class="card-header py-2 px-3">
+                                <h3 class="section-title mb-0"><span class="icon-chip"><i class="fas fa-cogs"></i></span> Parameters</h3>
+                                <small class="meta-subtitle">Operational flags</small>
+                            </div>
                             <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div>
-                                        <div class="fw-semibold">Parameters</div>
-                                        <small class="text-muted">Operational flags</small>
-                                    </div>
-                                    <i class="fas fa-cogs text-secondary"></i>
-                                </div>
-                                <hr class="my-2" />
-                                <div class="row small">
-                                    <div class="col-6 mb-1">Default GST</div>
-                                    <div class="col-6 text-end"><span class="badge @(Model.IsDefaultGSTRequired ? "bg-success" : "bg-danger")">@(Model.IsDefaultGSTRequired ? "Yes" : "No")</span></div>
-
-                                    <div class="col-6 mb-1">Take Away GST</div>
-                                    <div class="col-6 text-end"><span class="badge @(Model.IsTakeAwayGSTRequired ? "bg-success" : "bg-danger")">@(Model.IsTakeAwayGSTRequired ? "Yes" : "No")</span></div>
-
-                                    <div class="col-6 mb-1">Takeaway Included GST</div>
-                                    <div class="col-6 text-end"><span class="badge @(Model.IsTakeawayIncludedGSTReq ? "bg-success" : "bg-danger")">@(Model.IsTakeawayIncludedGSTReq ? "Yes" : "No")</span></div>
-
-                                    <div class="col-6 mb-1">Bill Format</div>
-                                    <div class="col-6 text-end"><span class="badge bg-primary">@Model.BillFormat</span></div>
-
-                                    <div class="col-6 mb-1">Discount Approval</div>
-                                    <div class="col-6 text-end"><span class="badge @(Model.IsDiscountApprovalRequired ? "bg-success" : "bg-danger")">@(Model.IsDiscountApprovalRequired ? "Yes" : "No")</span></div>
-
-                                    <div class="col-6 mb-1">Card Payment Approval</div>
-                                    <div class="col-6 text-end"><span class="badge @(Model.IsCardPaymentApprovalRequired ? "bg-success" : "bg-danger")">@(Model.IsCardPaymentApprovalRequired ? "Yes" : "No")</span></div>
-
-                                    <div class="col-6 mb-1">KOT Bill Print Required</div>
-                                    <div class="col-6 text-end"><span class="badge @(Model.IsKOTBillPrintRequired ? "bg-success" : "bg-danger")">@(Model.IsKOTBillPrintRequired ? "Yes" : "No")</span></div>
-                                </div>
+                                <ul class="list-parameters small">
+                                    <li><span>Default GST</span><span class="pill @(Model.IsDefaultGSTRequired ? "pill-yes" : "pill-no")">@(Model.IsDefaultGSTRequired ? "Yes" : "No")</span></li>
+                                    <li><span>Take Away GST</span><span class="pill @(Model.IsTakeAwayGSTRequired ? "pill-yes" : "pill-no")">@(Model.IsTakeAwayGSTRequired ? "Yes" : "No")</span></li>
+                                    <li><span>Takeaway Included GST</span><span class="pill @(Model.IsTakeawayIncludedGSTReq ? "pill-yes" : "pill-no")">@(Model.IsTakeawayIncludedGSTReq ? "Yes" : "No")</span></li>
+                                    <li><span>Bill Format</span><span class="pill pill-info">@Model.BillFormat</span></li>
+                                    <li><span>Discount Approval</span><span class="pill @(Model.IsDiscountApprovalRequired ? "pill-yes" : "pill-no")">@(Model.IsDiscountApprovalRequired ? "Yes" : "No")</span></li>
+                                    <li><span>Card Payment Approval</span><span class="pill @(Model.IsCardPaymentApprovalRequired ? "pill-yes" : "pill-no")">@(Model.IsCardPaymentApprovalRequired ? "Yes" : "No")</span></li>
+                                    <li><span>KOT Bill Print Required</span><span class="pill @(Model.IsKOTBillPrintRequired ? "pill-yes" : "pill-no")">@(Model.IsKOTBillPrintRequired ? "Yes" : "No")</span></li>
+                                </ul>
                             </div>
                         </div>
                     
-                        <div class="card mb-0 compact-card">
+                        <div class="card mb-0 compact-card pro-card">
+                            <div class="card-header py-2 px-3">
+                                <h3 class="section-title mb-0"><span class="icon-chip"><i class="fas fa-info-circle"></i></span> System Info</h3>
+                                <small class="meta-subtitle">Timestamps</small>
+                            </div>
                             <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div>
-                                        <div class="fw-semibold">System Info</div>
-                                        <small class="text-muted">Timestamps</small>
-                                    </div>
-                                    <i class="fas fa-info-circle text-secondary"></i>
-                                </div>
-                                <hr class="my-2" />
                                 <div class="small text-muted">
                                     <div>Created: @Model.CreatedAt</div>
                                     <div>Updated: @Model.UpdatedAt</div>
@@ -164,9 +135,9 @@
                 </div>
                 <div class="col-md-4">
                     <div class="settings-card h-100">
-                        <div class="card">
-                            <div class="card-body text-center py-3">
-                                <div class="fw-semibold mb-2">Restaurant Logo</div>
+                        <div class="logo-panel">
+                            <div class="text-center py-2">
+                                <div class="fw-semibold mb-1">Restaurant Logo</div>
                                 <div class="logo-container d-flex align-items-center justify-content-center">
                                     @if (!string.IsNullOrEmpty(Model.LogoPath))
                                     {
@@ -180,11 +151,11 @@
                                         </div>
                                     }
                                 </div>
+                                <div class="logo-caption mt-2">Displayed on receipts and dashboard</div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
             </div>
         </div>
     </div>
