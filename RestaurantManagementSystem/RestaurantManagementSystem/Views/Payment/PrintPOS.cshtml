@@ -48,7 +48,7 @@
         <div><strong>Name:</strong> ____________________________</div>
         <div style="display:flex; justify-content:space-between; margin-top:6px;">
             <div>Date: @DateTime.Now.ToString("dd/MM/yy")</div>
-            <div>Dine In: @Model.TableName</div>
+            <div>@Model.OrderTypeDisplay: @(Model.OrderType == 0 ? Model.TableName : "N/A")</div>
         </div>
         <div style="display:flex; justify-content:space-between; margin-top:2px;">
             <div>Time: @DateTime.Now.ToString("HH:mm")</div>

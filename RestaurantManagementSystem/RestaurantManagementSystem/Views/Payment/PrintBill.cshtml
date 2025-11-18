@@ -32,9 +32,10 @@
         <div class="col-6">
             <p><strong>Order #:</strong> @Model.OrderNumber</p>
             <p><strong>Date:</strong> @DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")</p>
+            <p><strong>Type:</strong> @Model.OrderTypeDisplay</p>
         </div>
         <div class="col-6 text-end">
-            <p><strong>Table:</strong> @Model.TableName</p>
+            <p><strong>Table:</strong> @(Model.OrderType == 0 ? Model.TableName : "N/A")</p>
             <p><strong>Status:</strong> @Model.OrderStatusDisplay</p>
         </div>
     </div>

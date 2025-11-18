@@ -21,7 +21,8 @@ BEGIN
     ISNULL(SUM(p.Amount + p.TipAmount + ISNULL(p.RoundoffAdjustmentAmt,0)), 0) AS PaidAmount,
     (o.TotalAmount - ISNULL(SUM(p.Amount + p.TipAmount + ISNULL(p.RoundoffAdjustmentAmt,0)), 0)) AS RemainingAmount,
         ISNULL(t.TableName, 'N/A') AS TableName,
-        o.Status
+        o.Status,
+        o.OrderType
     FROM 
         Orders o
     LEFT JOIN 
@@ -41,7 +42,8 @@ BEGIN
         o.DiscountAmount,
         o.TotalAmount,
         t.TableName,
-        o.Status;
+        o.Status,
+        o.OrderType;
     
     -- Get order items
     SELECT

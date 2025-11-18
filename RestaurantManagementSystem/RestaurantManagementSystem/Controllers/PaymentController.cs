@@ -3228,6 +3228,7 @@ END", connection))
                             int ordRemainingAmount = OrdinalOrMinus(reader, "RemainingAmount");
                             int ordTableName = OrdinalOrMinus(reader, "TableName");
                             int ordStatus = OrdinalOrMinus(reader, "Status");
+                            int ordOrderType = OrdinalOrMinus(reader, "OrderType");
 
                             model.OrderNumber = (ordOrderNumber >= 0 && !reader.IsDBNull(ordOrderNumber)) ? reader.GetString(ordOrderNumber) : string.Empty;
                             model.Subtotal = (ordSubtotal >= 0 && !reader.IsDBNull(ordSubtotal)) ? reader.GetDecimal(ordSubtotal) : 0m;
@@ -3249,6 +3250,15 @@ END", connection))
                                 3 => "Completed",
                                 4 => "Cancelled",
                                 _ => "Unknown"
+                            };
+                            model.OrderType = (ordOrderType >= 0 && !reader.IsDBNull(ordOrderType)) ? reader.GetInt32(ordOrderType) : 0;
+                            model.OrderTypeDisplay = model.OrderType switch
+                            {
+                                0 => "Dine In",
+                                1 => "Takeout",
+                                2 => "Delivery",
+                                3 => "Online",
+                                _ => "N/A"
                             };
                         }
                         else
