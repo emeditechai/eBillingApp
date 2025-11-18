@@ -107,7 +107,7 @@ namespace RestaurantManagementSystem.Controllers
     [HttpPostAttribute]
     [ValidateAntiForgeryTokenAttribute]
     [RequirePermission("NAV_ORDERS_CREATE", PermissionAction.Add)]
-    public IActionResult Create(CreateOrderViewModel model)
+    public async Task<IActionResult> Create(CreateOrderViewModel model)
         {
             if (ModelState.IsValid)
             {
@@ -258,6 +258,25 @@ namespace RestaurantManagementSystem.Controllers
                                             UpdateOrderFinancials(orderId, connection, transaction);
                                             
                                             transaction.Commit();
+                                            
+                                            // Log audit trail
+                                            try
+                                            {
+                                                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+                                                var userName = User.FindFirst(ClaimTypes.Name)?.Value ?? "System";
+                                                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+                                                var orderTypeText = model.OrderType switch { 0 => "Dine In", 1 => "Takeout", 2 => "Delivery", 3 => "Online", _ => "Unknown" };
+                                                var additionalInfo = $"Order Type: {orderTypeText}";
+                                                if (model.OrderType == 0 && primaryTableId.HasValue)
+                                                {
+                                                    additionalInfo += $", Table ID: {primaryTableId.Value}";
+                                                }
+                                                
+                                                await AuditTrailController.LogAuditAsync(_connectionString, orderId, orderNumber, "Create", "Order", 
+                                                    orderId, null, null, $"Order created - {orderTypeText}", userId, userName, ipAddress, null, additionalInfo);
+                                            }
+                                            catch { /* Audit logging should not break the main flow */ }
+                                            
                                             TempData["SuccessMessage"] = $"Order {orderNumber} created successfully.";
                                             TempData["IsBarOrder"] = false; // Explicitly mark as non-bar order (from Orders navigation)
                                             return RedirectToAction("Details", new { id = orderId });
@@ -959,7 +978,7 @@ namespace RestaurantManagementSystem.Controllers
         
         [HttpPostAttribute]
         [ValidateAntiForgeryTokenAttribute]
-        public IActionResult AddItem(AddOrderItemViewModel model)
+        public async Task<IActionResult> AddItem(AddOrderItemViewModel model)
         {
             if (ModelState.IsValid)
             {
@@ -1052,6 +1071,35 @@ namespace RestaurantManagementSystem.Controllers
 
                                             // All good, commit
                                             transaction.Commit();
+                                            
+                                            // Log audit trail
+                                            try
+                                            {
+                                                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+                                                var userName = User.FindFirst(ClaimTypes.Name)?.Value ?? "System";
+                                                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+                                                
+                                                // Get order number and menu item name
+                                                string orderNumber = string.Empty, menuItemName = string.Empty;
+                                                using (var auditCmd = new Microsoft.Data.SqlClient.SqlCommand("SELECT o.OrderNumber, mi.ItemName FROM Orders o LEFT JOIN MenuItems mi ON mi.Id = @MenuItemId WHERE o.Id = @OrderId", connection))
+                                                {
+                                                    auditCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
+                                                    auditCmd.Parameters.AddWithValue("@MenuItemId", model.MenuItemId);
+                                                    using (var auditReader = auditCmd.ExecuteReader())
+                                                    {
+                                                        if (auditReader.Read())
+                                                        {
+                                                            orderNumber = auditReader.IsDBNull(0) ? "" : auditReader.GetString(0);
+                                                            menuItemName = auditReader.IsDBNull(1) ? "" : auditReader.GetString(1);
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                await AuditTrailController.LogAuditAsync(_connectionString, model.OrderId, orderNumber, "Add", "OrderItem",
+                                                    null, null, $"{menuItemName} x{model.Quantity}", $"Added item to order", userId, userName, ipAddress, null, $"Quantity: {model.Quantity}");
+                                            }
+                                            catch { /* Audit logging should not break the main flow */ }
+                                            
                                             TempData["SuccessMessage"] = "Item added to order successfully.";
                                             return RedirectToAction("Details", new { id = model.OrderId });
                                         }
@@ -1226,7 +1274,7 @@ namespace RestaurantManagementSystem.Controllers
         // Fire Items to Kitchen
         [HttpPostAttribute]
         [ValidateAntiForgeryTokenAttribute]
-        public IActionResult FireItems(FireOrderItemsViewModel model)
+        public async Task<IActionResult> FireItems(FireOrderItemsViewModel model)
         {
             if (ModelState.IsValid)
             {
@@ -1500,6 +1548,21 @@ namespace RestaurantManagementSystem.Controllers
                                     
                                     // Commit the transaction
                                     transaction.Commit();
+                                    
+                                    // Log audit trail
+                                    try
+                                    {
+                                        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+                                        var userName = User.FindFirst(ClaimTypes.Name)?.Value ?? "System";
+                                        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+                                        var actionType = model.IsBarOrder ? "Fire to Bar" : "Fire to Kitchen";
+                                        var ticketType = model.IsBarOrder ? "BOT" : "KOT";
+                                        
+                                        await AuditTrailController.LogAuditAsync(_connectionString, model.OrderId, orderNumber, "Fire", "Order",
+                                            model.OrderId, "Status", "Pending", "Fired", userId, userName, ipAddress, null, 
+                                            $"{ticketType} #{ticketNumber} created - {itemsToProcess.Count} item(s) fired");
+                                    }
+                                    catch { /* Audit logging should not break the main flow */ }
                                     
                                     // Build success message based on order type
                                     string successMsg = "";

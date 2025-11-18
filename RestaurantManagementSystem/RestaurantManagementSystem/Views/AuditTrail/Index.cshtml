@@ -1,0 +1,413 @@
+@model AuditTrailViewModel
+@{
+    ViewData["Title"] = "Order Audit Trail";
+}
+
+<div class="container-fluid py-4">
+    <!-- Header Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 8px 8px 0 0;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h3 class="mb-1"><i class="fas fa-clipboard-list me-2"></i>Order Audit Trail</h3>
+                            <p class="mb-0 opacity-75">Track all order modifications and changes</p>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button onclick="exportToCSV()" class="btn btn-light" title="Export to CSV">
+                                <i class="fas fa-file-csv me-1"></i>Export CSV
+                            </button>
+                            <button onclick="exportToPDF()" class="btn btn-light" title="Export to PDF">
+                                <i class="fas fa-file-pdf me-1"></i>Export PDF
+                            </button>
+                            <a href="@Url.Action("Statistics")" class="btn btn-light">
+                                <i class="fas fa-chart-bar me-1"></i>View Statistics
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filters</h5>
+                </div>
+                <div class="card-body">
+                    <form method="get" id="filterForm">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">Order Number</label>
+                                <input type="text" name="orderNumber" value="@Model.OrderNumber" class="form-control" placeholder="Enter order number">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">Start Date</label>
+                                <input type="date" name="startDate" value="@Model.StartDate?.ToString("yyyy-MM-dd")" class="form-control">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">End Date</label>
+                                <input type="date" name="endDate" value="@Model.EndDate?.ToString("yyyy-MM-dd")" class="form-control">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">Entity Type</label>
+                                <select name="entityType" class="form-select">
+                                    @foreach (var item in Model.EntityTypes)
+                                    {
+                                        <option value="@item.Value" selected="@(item.Value == Model.EntityType)">@item.Text</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">User</label>
+                                <select name="userId" class="form-select">
+                                    @foreach (var item in Model.Users)
+                                    {
+                                        <option value="@item.Value" selected="@(item.Value == Model.UserId?.ToString())">@item.Text</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Search</label>
+                                <input type="text" name="searchTerm" value="@Model.SearchTerm" class="form-control" placeholder="Search in audit logs...">
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="fas fa-search me-1"></i>Apply Filters
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Section -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-list me-2"></i>Audit Records (@Model.TotalRecords)</h5>
+                    <div class="text-muted">
+                        Showing @((Model.CurrentPage - 1) * Model.PageSize + 1) - @Math.Min(Model.CurrentPage * Model.PageSize, Model.TotalRecords) of @Model.TotalRecords
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    @if (Model.AuditRecords.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 120px;">Date/Time</th>
+                                        <th style="width: 120px;">Order #</th>
+                                        <th style="width: 150px;">Action</th>
+                                        <th style="width: 100px;">Entity</th>
+                                        <th style="width: 120px;">Field</th>
+                                        <th>Change Details</th>
+                                        <th style="width: 150px;">Changed By</th>
+                                        <th style="width: 80px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var record in Model.AuditRecords)
+                                    {
+                                        var actionBadge = record.Action.Contains("Create") ? "success" :
+                                                         record.Action.Contains("Update") ? "warning" :
+                                                         record.Action.Contains("Delete") ? "danger" :
+                                                         record.Action.Contains("Payment") ? "info" : "secondary";
+                                        
+                                        <tr>
+                                            <td>
+                                                <small class="text-muted d-block">@record.ChangedDate.ToString("MM/dd/yyyy")</small>
+                                                <small class="fw-bold">@record.ChangedDate.ToString("HH:mm:ss")</small>
+                                            </td>
+                                            <td>
+                                                <a href="@Url.Action("OrderAudit", new { id = record.OrderId })" class="text-decoration-none fw-bold">
+                                                    @record.OrderNumber
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-@actionBadge">@record.Action</span>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-secondary">@record.EntityType</span>
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(record.FieldName))
+                                                {
+                                                    <small class="text-muted">@record.FieldName</small>
+                                                }
+                                                else
+                                                {
+                                                    <small class="text-muted">-</small>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(record.OldValue) || !string.IsNullOrEmpty(record.NewValue))
+                                                {
+                                                    <div class="change-details">
+                                                        @if (!string.IsNullOrEmpty(record.OldValue))
+                                                        {
+                                                            <small class="d-block text-danger"><del>@record.OldValue</del></small>
+                                                        }
+                                                        @if (!string.IsNullOrEmpty(record.NewValue))
+                                                        {
+                                                            <small class="d-block text-success"><strong>@record.NewValue</strong></small>
+                                                        }
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <small class="text-muted">-</small>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <div class="avatar-circle me-2">
+                                                        <i class="fas fa-user"></i>
+                                                    </div>
+                                                    <small>@record.ChangedByName</small>
+                                                </div>
+                                            </td>
+                                            <td class="text-center">
+                                                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#detailModal@(record.Id)">
+                                                    <i class="fas fa-info-circle"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        
+                                        <!-- Detail Modal -->
+                                        <div class="modal fade" id="detailModal@(record.Id)" tabindex="-1">
+                                            <div class="modal-dialog">
+                                                <div class="modal-content">
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title">Audit Record Details</h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <dl class="row mb-0">
+                                                            <dt class="col-sm-4">Order Number:</dt>
+                                                            <dd class="col-sm-8">@record.OrderNumber</dd>
+                                                            
+                                                            <dt class="col-sm-4">Action:</dt>
+                                                            <dd class="col-sm-8">@record.Action</dd>
+                                                            
+                                                            <dt class="col-sm-4">Entity Type:</dt>
+                                                            <dd class="col-sm-8">@record.EntityType</dd>
+                                                            
+                                                            @if (record.EntityId.HasValue)
+                                                            {
+                                                                <dt class="col-sm-4">Entity ID:</dt>
+                                                                <dd class="col-sm-8">@record.EntityId</dd>
+                                                            }
+                                                            
+                                                            <dt class="col-sm-4">Changed By:</dt>
+                                                            <dd class="col-sm-8">@record.ChangedByName</dd>
+                                                            
+                                                            <dt class="col-sm-4">Changed Date:</dt>
+                                                            <dd class="col-sm-8">@record.ChangedDate.ToString("MM/dd/yyyy HH:mm:ss")</dd>
+                                                            
+                                                            @if (!string.IsNullOrEmpty(record.IPAddress))
+                                                            {
+                                                                <dt class="col-sm-4">IP Address:</dt>
+                                                                <dd class="col-sm-8">@record.IPAddress</dd>
+                                                            }
+                                                            
+                                                            @if (!string.IsNullOrEmpty(record.AdditionalInfo))
+                                                            {
+                                                                <dt class="col-sm-4">Additional Info:</dt>
+                                                                <dd class="col-sm-8"><small>@record.AdditionalInfo</small></dd>
+                                                            }
+                                                        </dl>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- Pagination -->
+                        @if (Model.TotalPages > 1)
+                        {
+                            <div class="card-footer bg-white border-top">
+                                <nav>
+                                    <ul class="pagination mb-0 justify-content-center">
+                                        <li class="page-item @(Model.CurrentPage == 1 ? "disabled" : "")">
+                                            <a class="page-link" href="@Url.Action("Index", new { page = Model.CurrentPage - 1, orderNumber = Model.OrderNumber, startDate = Model.StartDate, endDate = Model.EndDate, userId = Model.UserId, entityType = Model.EntityType, searchTerm = Model.SearchTerm })">Previous</a>
+                                        </li>
+                                        
+                                        @for (int i = Math.Max(1, Model.CurrentPage - 2); i <= Math.Min(Model.TotalPages, Model.CurrentPage + 2); i++)
+                                        {
+                                            <li class="page-item @(i == Model.CurrentPage ? "active" : "")">
+                                                <a class="page-link" href="@Url.Action("Index", new { page = i, orderNumber = Model.OrderNumber, startDate = Model.StartDate, endDate = Model.EndDate, userId = Model.UserId, entityType = Model.EntityType, searchTerm = Model.SearchTerm })">@i</a>
+                                            </li>
+                                        }
+                                        
+                                        <li class="page-item @(Model.CurrentPage == Model.TotalPages ? "disabled" : "")">
+                                            <a class="page-link" href="@Url.Action("Index", new { page = Model.CurrentPage + 1, orderNumber = Model.OrderNumber, startDate = Model.StartDate, endDate = Model.EndDate, userId = Model.UserId, entityType = Model.EntityType, searchTerm = Model.SearchTerm })">Next</a>
+                                        </li>
+                                    </ul>
+                                </nav>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center py-5">
+                            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No audit records found matching your criteria.</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .avatar-circle {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 0.8rem;
+    }
+    
+    .change-details small {
+        font-family: 'Courier New', monospace;
+    }
+    
+    .table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+</style>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            // Auto-submit form on filter change
+            $('#filterForm select').on('change', function() {
+                $('#filterForm').submit();
+            });
+        });
+
+        function exportToCSV() {
+            const rows = [];
+            
+            // Add header row
+            rows.push(['Timestamp', 'Order Number', 'Action', 'Entity Type', 'User', 'Description', 'Old Value', 'New Value']);
+            
+            // Add data rows
+            @foreach (var record in Model.Records)
+            {
+                <text>
+                rows.push([
+                    '@record.ChangedDate.ToString("yyyy-MM-dd HH:mm:ss")',
+                    '@record.OrderNumber',
+                    '@record.Action',
+                    '@record.EntityType',
+                    '@record.ChangedByName',
+                    '@Html.Raw(System.Text.Json.JsonSerializer.Serialize(record.AdditionalInfo ?? ""))',
+                    '@Html.Raw(System.Text.Json.JsonSerializer.Serialize(record.OldValue ?? ""))',
+                    '@Html.Raw(System.Text.Json.JsonSerializer.Serialize(record.NewValue ?? ""))'
+                ]);
+                </text>
+            }
+            
+            // Convert to CSV
+            let csvContent = rows.map(row => row.map(cell => {
+                // Escape quotes and wrap in quotes if contains comma
+                const cellStr = String(cell).replace(/"/g, '""');
+                return cellStr.includes(',') || cellStr.includes('\n') ? `"${cellStr}"` : cellStr;
+            }).join(',')).join('\n');
+            
+            // Create download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `audit_trail_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            toastr.success('Audit trail exported to CSV successfully');
+        }
+
+        function exportToPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('l', 'mm', 'a4'); // Landscape orientation
+            
+            // Add title
+            doc.setFontSize(18);
+            doc.text('Order Audit Trail Report', 14, 15);
+            
+            // Add date range
+            doc.setFontSize(10);
+            doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
+            @if (Model.StartDate.HasValue && Model.EndDate.HasValue)
+            {
+                <text>
+                doc.text(`Period: @Model.StartDate.Value.ToString("yyyy-MM-dd") to @Model.EndDate.Value.ToString("yyyy-MM-dd")`, 14, 27);
+                </text>
+            }
+            
+            // Prepare table data
+            const tableData = [];
+            @foreach (var record in Model.Records)
+            {
+                <text>
+                tableData.push([
+                    '@record.ChangedDate.ToString("yyyy-MM-dd HH:mm")',
+                    '@record.OrderNumber',
+                    '@record.Action',
+                    '@record.EntityType',
+                    '@record.ChangedByName',
+                    '@Html.Raw(System.Text.Json.JsonSerializer.Serialize((record.OldValue ?? "").Length > 30 ? (record.OldValue ?? "").Substring(0, 30) + "..." : (record.OldValue ?? "")))',
+                    '@Html.Raw(System.Text.Json.JsonSerializer.Serialize((record.NewValue ?? "").Length > 30 ? (record.NewValue ?? "").Substring(0, 30) + "..." : (record.NewValue ?? "")))'
+                ]);
+                </text>
+            }
+            
+            // Add table
+            doc.autoTable({
+                head: [['Timestamp', 'Order #', 'Action', 'Entity', 'User', 'Old Value', 'New Value']],
+                body: tableData,
+                startY: 32,
+                styles: { fontSize: 8, cellPadding: 2 },
+                headStyles: { fillColor: [102, 126, 234], fontStyle: 'bold' },
+                alternateRowStyles: { fillColor: [245, 245, 245] },
+                margin: { top: 32, left: 14, right: 14 }
+            });
+            
+            // Add footer
+            const pageCount = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 10);
+                doc.text('eRestoPOS - Audit Trail Report', 14, doc.internal.pageSize.height - 10);
+            }
+            
+            // Save PDF
+            doc.save(`audit_trail_${new Date().toISOString().split('T')[0]}.pdf`);
+            
+            toastr.success('Audit trail exported to PDF successfully');
+        }
+    </script>
+}

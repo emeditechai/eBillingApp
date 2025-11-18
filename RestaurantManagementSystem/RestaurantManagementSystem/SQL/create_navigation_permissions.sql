@@ -143,6 +143,7 @@ VALUES
     ('NAV_SETTINGS_MENU_BUILDER', 'NAV_SETTINGS', 'Menu Builder', 'Maintain navigation menus', NULL, 'MenuManagement', 'Index', NULL, NULL, 'fas fa-sitemap compact-icon text-info', 6, 1, 1, NULL, NULL, 0),
     ('NAV_SETTINGS_ROLE_MENU', 'NAV_SETTINGS', 'Role Menu Mapping', 'Assign menus to roles', NULL, 'RoleMenuMapping', 'Index', NULL, NULL, 'fas fa-project-diagram compact-icon text-warning', 7, 1, 1, NULL, NULL, 0),
     ('NAV_SETTINGS_ROLE_PERMISSIONS', 'NAV_SETTINGS', 'Role Permission Matrix', 'Grant CRUD permissions', NULL, 'RolePermission', 'Index', NULL, NULL, 'fas fa-user-shield compact-icon text-danger', 8, 1, 1, NULL, NULL, 0),
+    ('NAV_SETTINGS_AUDIT', 'NAV_SETTINGS', 'Audit Trail', 'Order modification history', NULL, 'AuditTrail', 'Index', NULL, NULL, 'fas fa-history compact-icon text-warning', 9, 1, 1, NULL, NULL, 0),
     ('NAV_REPORTS', NULL, 'Reports', 'Reporting workspace', NULL, NULL, NULL, NULL, NULL, 'fas fa-chart-bar compact-icon', 10, 1, 1, '#f8b133', NULL, 0),
     ('NAV_REPORTS_SALES', 'NAV_REPORTS', 'Sales Reports', NULL, NULL, 'Reports', 'Sales', NULL, NULL, 'fas fa-dollar-sign compact-icon text-primary', 1, 1, 1, NULL, NULL, 0),
     ('NAV_REPORTS_ORDERS', 'NAV_REPORTS', 'Order Reports', NULL, NULL, 'Reports', 'Orders', NULL, NULL, 'fas fa-shopping-cart compact-icon text-primary', 2, 1, 1, NULL, NULL, 0),

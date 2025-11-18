@@ -1,0 +1,307 @@
+@model AuditTrailViewModel
+@{
+    ViewData["Title"] = $"Audit Trail - Order #{Model.OrderNumber}";
+}
+
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h3><i class="fas fa-history me-2"></i>Order Audit Trail</h3>
+                    <p class="text-muted mb-0">Complete modification history for Order #@Model.OrderNumber</p>
+                </div>
+                <a href="@Url.Action("Index")" class="btn btn-primary">
+                    <i class="fas fa-arrow-left me-1"></i>Back to Audit Trail
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Order Info Card -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h4 class="mb-2">Order #@Model.OrderNumber</h4>
+                            <p class="text-muted mb-0">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Total @Model.TotalRecords.ToString("N0") audit records found
+                            </p>
+                        </div>
+                        <div class="col-md-4 text-md-end">
+                            <button class="btn btn-outline-primary" onclick="window.print()">
+                                <i class="fas fa-print me-1"></i>Print Timeline
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Timeline -->
+    <div class="row">
+        <div class="col-12">
+            @if (Model.Records.Any())
+            {
+                <div class="timeline">
+                    @foreach (var record in Model.Records.OrderBy(r => r.ChangedDate))
+                    {
+                        var actionClass = record.Action switch
+                        {
+                            "Create" or "Add" or "Insert" => "success",
+                            "Update" or "Modify" or "Edit" => "warning",
+                            "Delete" or "Remove" or "Cancel" => "danger",
+                            "Fire" or "Complete" or "Approve" => "info",
+                            _ => "secondary"
+                        };
+                        
+                        var iconClass = record.Action switch
+                        {
+                            "Create" => "fa-plus-circle",
+                            "Update" or "Modify" or "Edit" => "fa-edit",
+                            "Delete" or "Remove" => "fa-trash-alt",
+                            "Cancel" => "fa-ban",
+                            "Fire" => "fa-fire",
+                            "Complete" => "fa-check-circle",
+                            "Approve" => "fa-thumbs-up",
+                            "Add" or "Insert" => "fa-plus",
+                            _ => "fa-circle"
+                        };
+
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-@actionClass">
+                                <i class="fas @iconClass"></i>
+                            </div>
+                            <div class="timeline-content">
+                                <div class="card border-0 shadow-sm">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start mb-3">
+                                            <div class="flex-grow-1">
+                                                <div class="d-flex align-items-center gap-2 mb-2">
+                                                    <span class="badge bg-@actionClass">@record.Action</span>
+                                                    <span class="badge bg-light text-dark">@record.EntityType</span>
+                                                    @if (record.EntityId.HasValue)
+                                                    {
+                                                        <span class="text-muted small">ID: @record.EntityId.Value</span>
+                                                    }
+                                                </div>
+                                                <h6 class="mb-0">@(record.FieldName ?? record.AdditionalInfo ?? "No description")</h6>
+                                            </div>
+                                            <small class="text-muted text-nowrap ms-3">
+                                                <i class="fas fa-clock me-1"></i>
+                                                @record.ChangedDate.ToString("MMM dd, yyyy HH:mm:ss")
+                                            </small>
+                                        </div>
+
+                                        <!-- User Info -->
+                                        <div class="d-flex align-items-center gap-2 mb-3">
+                                            <div class="avatar-circle-sm">
+                                                @record.ChangedByName.Substring(0, Math.Min(2, record.ChangedByName.Length)).ToUpper()
+                                            </div>
+                                            <div>
+                                                <small class="text-muted d-block">Modified by</small>
+                                                <strong>@record.ChangedByName</strong>
+                                            </div>
+                                        </div>
+
+                                        <!-- Changes Section -->
+                                        @if (!string.IsNullOrEmpty(record.OldValue) || !string.IsNullOrEmpty(record.NewValue))
+                                        {
+                                            <div class="changes-section">
+                                                <hr class="my-3">
+                                                <h6 class="text-muted mb-3">
+                                                    <i class="fas fa-exchange-alt me-1"></i>Change Details
+                                                </h6>
+                                                <div class="row">
+                                                    @if (!string.IsNullOrEmpty(record.OldValue))
+                                                    {
+                                                        <div class="col-md-6">
+                                                            <div class="change-box old-value">
+                                                                <small class="text-muted d-block mb-2">
+                                                                    <i class="fas fa-minus-circle me-1"></i>Previous Value
+                                                                </small>
+                                                                <code class="d-block">@record.OldValue</code>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                    @if (!string.IsNullOrEmpty(record.NewValue))
+                                                    {
+                                                        <div class="col-md-6">
+                                                            <div class="change-box new-value">
+                                                                <small class="text-muted d-block mb-2">
+                                                                    <i class="fas fa-plus-circle me-1"></i>New Value
+                                                                </small>
+                                                                <code class="d-block">@record.NewValue</code>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+
+                                        <!-- Additional Details -->
+                                        @if (!string.IsNullOrEmpty(record.AdditionalInfo))
+                                        {
+                                            <div class="mt-3">
+                                                <small class="text-muted d-block mb-1">
+                                                    <i class="fas fa-info-circle me-1"></i>Additional Details
+                                                </small>
+                                                <p class="mb-0 small">@record.AdditionalInfo</p>
+                                            </div>
+                                        }
+
+                                        <!-- IP Address -->
+                                        @if (!string.IsNullOrEmpty(record.IPAddress))
+                                        {
+                                            <div class="mt-2">
+                                                <small class="text-muted">
+                                                    <i class="fas fa-network-wired me-1"></i>IP: @record.IPAddress
+                                                </small>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body text-center py-5">
+                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <h5>No Audit Records Found</h5>
+                        <p class="text-muted">No modification history available for this order.</p>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Summary Footer -->
+    @if (Model.Records.Any())
+    {
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm bg-light">
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-md-4">
+                                <h5 class="mb-0">@Model.Records.Count(r => r.Action == "Create" || r.Action == "Add")</h5>
+                                <small class="text-muted">Created/Added</small>
+                            </div>
+                            <div class="col-md-4">
+                                <h5 class="mb-0">@Model.Records.Count(r => r.Action == "Update" || r.Action == "Modify" || r.Action == "Edit")</h5>
+                                <small class="text-muted">Modified</small>
+                            </div>
+                            <div class="col-md-4">
+                                <h5 class="mb-0">@Model.Records.Count(r => r.Action == "Delete" || r.Action == "Remove" || r.Action == "Cancel")</h5>
+                                <small class="text-muted">Deleted/Cancelled</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .timeline {
+        position: relative;
+        padding: 20px 0;
+    }
+
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 30px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #e9ecef;
+    }
+
+    .timeline-item {
+        position: relative;
+        padding-left: 80px;
+        padding-bottom: 40px;
+    }
+
+    .timeline-item:last-child {
+        padding-bottom: 0;
+    }
+
+    .timeline-marker {
+        position: absolute;
+        left: 12px;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1rem;
+        border: 3px solid white;
+        box-shadow: 0 0 0 3px #e9ecef;
+        z-index: 2;
+    }
+
+    .timeline-content {
+        flex-grow: 1;
+    }
+
+    .avatar-circle-sm {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 0.75rem;
+        font-weight: 600;
+        flex-shrink: 0;
+    }
+
+    .change-box {
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+    }
+
+    .change-box.old-value {
+        background-color: #fff5f5;
+        border-color: #feb2b2;
+    }
+
+    .change-box.new-value {
+        background-color: #f0fdf4;
+        border-color: #86efac;
+    }
+
+    .change-box code {
+        background: transparent;
+        padding: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    @@media print {
+        .btn, .navbar, .sidebar {
+            display: none !important;
+        }
+        
+        .timeline-item {
+            page-break-inside: avoid;
+        }
+    }
+</style>

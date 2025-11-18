@@ -1,0 +1,249 @@
+@model AuditTrailStatistics
+@{
+    ViewData["Title"] = "Audit Trail Statistics";
+}
+
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h3><i class="fas fa-chart-line me-2"></i>Audit Trail Statistics</h3>
+                    <p class="text-muted mb-0">Overview of order modification activities</p>
+                </div>
+                <a href="@Url.Action("Index")" class="btn btn-primary">
+                    <i class="fas fa-arrow-left me-1"></i>Back to Audit Trail
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center">
+                    <div class="stat-icon mb-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <i class="fas fa-database"></i>
+                    </div>
+                    <h3 class="fw-bold mb-0">@Model.TotalAuditRecords.ToString("N0")</h3>
+                    <p class="text-muted mb-0">Total Audit Records</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center">
+                    <div class="stat-icon mb-3" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                        <i class="fas fa-calendar-day"></i>
+                    </div>
+                    <h3 class="fw-bold mb-0">@Model.OrdersModifiedToday</h3>
+                    <p class="text-muted mb-0">Orders Modified Today</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center">
+                    <div class="stat-icon mb-3" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                        <i class="fas fa-calendar-week"></i>
+                    </div>
+                    <h3 class="fw-bold mb-0">@Model.OrdersModifiedThisWeek</h3>
+                    <p class="text-muted mb-0">Orders Modified This Week</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center">
+                    <div class="stat-icon mb-3" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                        <i class="fas fa-calendar-alt"></i>
+                    </div>
+                    <h3 class="fw-bold mb-0">@Model.OrdersModifiedThisMonth</h3>
+                    <p class="text-muted mb-0">Orders Modified This Month</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Action Breakdown -->
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0"><i class="fas fa-tasks me-2"></i>Action Breakdown</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.ActionBreakdown.Any())
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var item in Model.ActionBreakdown.OrderByDescending(x => x.Value).Take(10))
+                            {
+                                var percentage = Model.TotalAuditRecords > 0 ? (item.Value * 100.0 / Model.TotalAuditRecords) : 0;
+                                <div class="list-group-item border-0 px-0">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="fw-bold">@item.Key</span>
+                                        <span class="badge bg-primary">@item.Value</span>
+                                    </div>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar" role="progressbar" style="width: @percentage%;" aria-valuenow="@percentage" aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted text-center py-4">No action data available</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Entity Type Breakdown -->
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0"><i class="fas fa-layer-group me-2"></i>Entity Type Breakdown</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.EntityTypeBreakdown.Any())
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var item in Model.EntityTypeBreakdown.OrderByDescending(x => x.Value))
+                            {
+                                var percentage = Model.TotalAuditRecords > 0 ? (item.Value * 100.0 / Model.TotalAuditRecords) : 0;
+                                var colorClass = item.Key == "Order" ? "success" :
+                                               item.Key == "OrderItem" ? "warning" :
+                                               item.Key == "Payment" ? "info" : "secondary";
+                                <div class="list-group-item border-0 px-0">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="fw-bold">@item.Key</span>
+                                        <span class="badge bg-@colorClass">@item.Value</span>
+                                    </div>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-@colorClass" role="progressbar" style="width: @percentage%;" aria-valuenow="@percentage" aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted text-center py-4">No entity type data available</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Users Activity -->
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0"><i class="fas fa-users me-2"></i>Top 10 Most Active Users</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.TopUsers.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 60px;">#</th>
+                                        <th>User Name</th>
+                                        <th style="width: 200px;">Activity Count</th>
+                                        <th style="width: 40%;">Activity Level</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @{
+                                        int rank = 1;
+                                        int maxActivity = Model.TopUsers.FirstOrDefault()?.ActivityCount ?? 1;
+                                    }
+                                    @foreach (var user in Model.TopUsers)
+                                    {
+                                        var percentage = maxActivity > 0 ? (user.ActivityCount * 100.0 / maxActivity) : 0;
+                                        <tr>
+                                            <td class="text-center">
+                                                @if (rank == 1)
+                                                {
+                                                    <span class="badge bg-warning"><i class="fas fa-trophy"></i></span>
+                                                }
+                                                else if (rank == 2)
+                                                {
+                                                    <span class="badge bg-secondary"><i class="fas fa-medal"></i></span>
+                                                }
+                                                else if (rank == 3)
+                                                {
+                                                    <span class="badge bg-info"><i class="fas fa-award"></i></span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">@rank</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <div class="avatar-circle me-2">
+                                                        @user.UserName.Substring(0, Math.Min(2, user.UserName.Length)).ToUpper()
+                                                    </div>
+                                                    <span class="fw-bold">@user.UserName</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-primary fs-6">@user.ActivityCount.ToString("N0") activities</span>
+                                            </td>
+                                            <td>
+                                                <div class="progress" style="height: 25px;">
+                                                    <div class="progress-bar bg-gradient" role="progressbar" style="width: @percentage%;" aria-valuenow="@percentage" aria-valuemin="0" aria-valuemax="100">
+                                                        @percentage.ToString("F1")%
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        rank++;
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted text-center py-4">No user activity data available</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .stat-icon {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+    }
+    
+    .avatar-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+    
+    .bg-gradient {
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
+    }
+</style>

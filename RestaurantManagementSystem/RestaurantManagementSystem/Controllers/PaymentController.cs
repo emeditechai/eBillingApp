@@ -364,7 +364,7 @@ END", connection))
         
         [HttpPostAttribute]
         [ValidateAntiForgeryTokenAttribute]
-        public IActionResult ProcessPayment(ProcessPaymentViewModel model)
+        public async Task<IActionResult> ProcessPayment(ProcessPaymentViewModel model)
         {
             if (ModelState.IsValid)
             {
@@ -670,6 +670,7 @@ END", connection))
 
                                                             if (approvedSum >= orderTotal - 0.05m)
                                                             {
+                                                                int rowsAffected = 0;
                                                                 using (var completeCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
                                                                     UPDATE Orders
                                                                     SET Status = 3,
@@ -679,7 +680,30 @@ END", connection))
                                                                 ", connection))
                                                                 {
                                                                     completeCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
-                                                                    completeCmd.ExecuteNonQuery();
+                                                                    rowsAffected = completeCmd.ExecuteNonQuery();
+                                                                }
+                                                                
+                                                                // Log audit trail when order is completed
+                                                                if (rowsAffected > 0)
+                                                                {
+                                                                    try
+                                                                    {
+                                                                        var userId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "0");
+                                                                        var userName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "System";
+                                                                        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+                                                                        string orderNumber = string.Empty;
+                                                                        using (var orderCmd = new Microsoft.Data.SqlClient.SqlCommand("SELECT OrderNumber FROM Orders WHERE Id = @OrderId", connection))
+                                                                        {
+                                                                            orderCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
+                                                                            var result = orderCmd.ExecuteScalar();
+                                                                            if (result != null) orderNumber = result.ToString() ?? string.Empty;
+                                                                        }
+                                                                        
+                                                                        await AuditTrailController.LogAuditAsync(_connectionString, model.OrderId, orderNumber, "Complete", "Order",
+                                                                            model.OrderId, "Status", "In Progress", "Completed", userId, userName, ipAddress, null,
+                                                                            $"Order completed - Total: ₹{orderTotal:F2}, Paid: ₹{approvedSum:F2}");
+                                                                    }
+                                                                    catch { /* Audit logging should not break the main flow */ }
                                                                 }
                                                             }
                                                             else
@@ -720,6 +744,31 @@ END", connection))
                                                         }
                                                     }
                                                     catch { /* ignore roundoff persistence failures to avoid blocking payment success */ }
+                                                    
+                                            // Log audit trail for payment
+                                            try
+                                            {
+                                                var userId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "0");
+                                                var userName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "System";
+                                                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+                                                string orderNumber = string.Empty;
+                                                using (var orderCmd = new Microsoft.Data.SqlClient.SqlCommand("SELECT OrderNumber FROM Orders WHERE Id = @OrderId", connection))
+                                                {
+                                                    orderCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
+                                                    var result = orderCmd.ExecuteScalar();
+                                                    if (result != null) orderNumber = result.ToString() ?? string.Empty;
+                                                }
+                                                
+                                                var amountText = $"₹{paymentAmountToStore:F2}";
+                                                if (model.TipAmount > 0) amountText += $" + Tip ₹{model.TipAmount:F2}";
+                                                if (model.DiscountAmount > 0) amountText += $" (Discount: ₹{model.DiscountAmount:F2})";
+                                                var statusText = paymentStatus == 1 ? "Approved" : "Pending Approval";
+                                                
+                                                await AuditTrailController.LogAuditAsync(_connectionString, model.OrderId, orderNumber, "Add", "Payment",
+                                                    paymentId, "Amount", null, amountText, userId, userName, ipAddress, null,
+                                                    $"Payment Method: {paymentMethodName}, Status: {statusText}");
+                                            }
+                                            catch { /* Audit logging should not break the main flow */ }
                                         }
                                         else // Pending
                                         {
@@ -735,6 +784,30 @@ END", connection))
                                             {
                                                 TempData["InfoMessage"] = "Payment requires approval. It has been saved as pending.";
                                             }
+                                            
+                                            // Log audit trail for pending payment
+                                            try
+                                            {
+                                                var userId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "0");
+                                                var userName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "System";
+                                                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+                                                string orderNumber = string.Empty;
+                                                using (var orderCmd = new Microsoft.Data.SqlClient.SqlCommand("SELECT OrderNumber FROM Orders WHERE Id = @OrderId", connection))
+                                                {
+                                                    orderCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
+                                                    var result = orderCmd.ExecuteScalar();
+                                                    if (result != null) orderNumber = result.ToString() ?? string.Empty;
+                                                }
+                                                
+                                                var amountText = $"₹{paymentAmountToStore:F2}";
+                                                if (model.TipAmount > 0) amountText += $" + Tip ₹{model.TipAmount:F2}";
+                                                if (model.DiscountAmount > 0) amountText += $" (Discount: ₹{model.DiscountAmount:F2})";
+                                                
+                                                await AuditTrailController.LogAuditAsync(_connectionString, model.OrderId, orderNumber, "Add", "Payment",
+                                                    paymentId, "Amount", null, amountText, userId, userName, ipAddress, null,
+                                                    $"Payment Method: {paymentMethodName}, Status: Pending Approval");
+                                            }
+                                            catch { /* Audit logging should not break the main flow */ }
                                         }
 
                                         // If discount provided and not already persisted, update order with proper GST recalculation
@@ -970,7 +1043,7 @@ END", connection))
         // New: Process multiple payments in one submission
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult ProcessSplitPayments(ProcessSplitPaymentsViewModel model)
+        public async Task<IActionResult> ProcessSplitPayments(ProcessSplitPaymentsViewModel model)
         {
             _logger?.LogInformation("ProcessSplitPayments called for Order {OrderId} with {ItemCount} items", model?.OrderId, model?.Items?.Count ?? 0);
             
@@ -1369,6 +1442,31 @@ END", connection))
                         }
                     }
                 }
+
+                // Log audit trail for split payments
+                try
+                {
+                    var userId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "0");
+                    var userName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "System";
+                    var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+                    string orderNumber = string.Empty;
+                    using (var conn = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                    {
+                        conn.Open();
+                        using (var orderCmd = new Microsoft.Data.SqlClient.SqlCommand("SELECT OrderNumber FROM Orders WHERE Id = @OrderId", conn))
+                        {
+                            orderCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
+                            var result = orderCmd.ExecuteScalar();
+                            if (result != null) orderNumber = result.ToString() ?? string.Empty;
+                        }
+                    }
+                    
+                    var totalAmount = model.Items.Sum(i => i.Amount + i.TipAmount);
+                    await AuditTrailController.LogAuditAsync(_connectionString, model.OrderId, orderNumber, "Add", "Payment",
+                        null, "Amount", null, $"₹{totalAmount:F2} (Split)", userId, userName, ipAddress, null,
+                        $"Split payment - {model.Items.Count} payment(s) processed");
+                }
+                catch { /* Audit logging should not break the main flow */ }
 
                 TempData["SuccessMessage"] = "Split payments processed successfully.";
                 _logger?.LogInformation("Split payments completed successfully for Order {OrderId}, redirecting to Index", model.OrderId);
