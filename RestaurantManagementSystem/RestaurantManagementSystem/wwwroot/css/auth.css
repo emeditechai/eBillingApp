@@ -56,6 +56,16 @@
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
+.login-logo-text {
+    font-size: 42px;
+    font-weight: 800;
+    color: white;
+    margin-bottom: 15px;
+    letter-spacing: 1px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    font-family: 'Segoe UI', Arial, sans-serif;
+}
+
 .login-header h2 {
     margin-bottom: 10px;
     font-weight: 700;
