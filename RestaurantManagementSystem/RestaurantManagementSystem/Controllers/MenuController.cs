@@ -483,6 +483,8 @@ namespace RestaurantManagementSystem.Controllers
                 Name = menuItem.Name,
                 Description = menuItem.Description,
                 Price = menuItem.Price,
+                TakeoutPrice = menuItem.TakeoutPrice,
+                DeliveryPrice = menuItem.DeliveryPrice,
                 UOMId = menuItem.UOMId,
                 UOMName = menuItem.UOMName,
                 CategoryId = menuItem.CategoryId,
@@ -939,6 +941,8 @@ namespace RestaurantManagementSystem.Controllers
                             m.[Name], 
                             m.[Description], 
                             m.[Price], 
+                            m.[TakeoutPrice],
+                            m.[DeliveryPrice],
                             m.[CategoryId], 
                             c.[Name] AS CategoryName,
                             m.[SubCategoryId],
@@ -971,6 +975,8 @@ namespace RestaurantManagementSystem.Controllers
                             m.[Name], 
                             m.[Description], 
                             m.[Price], 
+                            m.[TakeoutPrice],
+                            m.[DeliveryPrice],
                             m.[CategoryId], 
                             c.[Name] AS CategoryName,
                             NULL AS SubCategoryId,
@@ -1009,6 +1015,8 @@ namespace RestaurantManagementSystem.Controllers
                                         Name = SafeGetString(reader, "Name") ?? string.Empty,
                                         Description = SafeGetString(reader, "Description") ?? string.Empty,
                                         Price = SafeGetDecimal(reader, "Price"),
+                                        TakeoutPrice = SafeGetNullableDecimal(reader, "TakeoutPrice"),
+                                        DeliveryPrice = SafeGetNullableDecimal(reader, "DeliveryPrice"),
                                         CategoryId = SafeGetInt(reader, "CategoryId"),
                                         Category = new Category { Name = SafeGetString(reader, "CategoryName") ?? "Uncategorized" },
                                         SubCategoryId = SafeGetNullableInt(reader, "SubCategoryId"),
@@ -1118,6 +1126,8 @@ namespace RestaurantManagementSystem.Controllers
                             m.[Name], 
                             m.[Description], 
                             m.[Price], 
+                            m.[TakeoutPrice],
+                            m.[DeliveryPrice],
                             m.[CategoryId], 
                             c.[Name] AS CategoryName,
                             m.[SubCategoryId],
@@ -1155,6 +1165,8 @@ namespace RestaurantManagementSystem.Controllers
                             m.[Name], 
                             m.[Description], 
                             m.[Price], 
+                            m.[TakeoutPrice],
+                            m.[DeliveryPrice],
                             m.[CategoryId], 
                             c.[Name] AS CategoryName,
                             NULL AS SubCategoryId,
@@ -1194,6 +1206,8 @@ namespace RestaurantManagementSystem.Controllers
                                 Name = SafeGetString(reader, "Name") ?? string.Empty,
                                 Description = SafeGetString(reader, "Description") ?? string.Empty,
                                 Price = SafeGetDecimal(reader, "Price"),
+                                TakeoutPrice = SafeGetNullableDecimal(reader, "TakeoutPrice"),
+                                DeliveryPrice = SafeGetNullableDecimal(reader, "DeliveryPrice"),
                                 UOMId = HasColumn(reader, "UOMId") ? SafeGetNullableInt(reader, "UOMId") : null,
                                 UOMName = HasColumn(reader, "UOMName") ? SafeGetString(reader, "UOMName") : null,
                                 CategoryId = SafeGetInt(reader, "CategoryId"),
@@ -1335,10 +1349,10 @@ namespace RestaurantManagementSystem.Controllers
                     string uomParam = hasUOMColumn ? ", @UOMId" : string.Empty;
                     
                     insertQuery = $@"
-                        INSERT INTO [dbo].[MenuItems] (PLUCode, Name, Description, Price, CategoryId, SubCategoryId, ImagePath,
+                        INSERT INTO [dbo].[MenuItems] (PLUCode, Name, Description, Price, TakeoutPrice, DeliveryPrice, CategoryId, SubCategoryId, ImagePath,
                                   IsAvailable, PrepTime, CalorieCount, 
                                   IsFeatured, IsSpecial, DiscountPercentage, KitchenStationId, GSTPercentage, IsGstApplicable, NotAvailable{groupColumn}{uomColumn})
-                        VALUES (@PLUCode, @Name, @Description, @Price, @CategoryId, @SubCategoryId, @ImagePath,
+                        VALUES (@PLUCode, @Name, @Description, @Price, @TakeoutPrice, @DeliveryPrice, @CategoryId, @SubCategoryId, @ImagePath,
                             @IsAvailable, @PreparationTimeMinutes, @CalorieCount, 
                             @IsFeatured, @IsSpecial, @DiscountPercentage, @KitchenStationId, @GSTPercentage, @IsGstApplicable, @NotAvailable{groupParam}{uomParam});
                         SELECT SCOPE_IDENTITY();";
@@ -1351,10 +1365,10 @@ namespace RestaurantManagementSystem.Controllers
                     string uomParam = hasUOMColumn ? ", @UOMId" : string.Empty;
                     
                     insertQuery = $@"
-                        INSERT INTO [dbo].[MenuItems] (PLUCode, Name, Description, Price, CategoryId, ImagePath,
+                        INSERT INTO [dbo].[MenuItems] (PLUCode, Name, Description, Price, TakeoutPrice, DeliveryPrice, CategoryId, ImagePath,
                                   IsAvailable, PrepTime, CalorieCount, 
                                   IsFeatured, IsSpecial, DiscountPercentage, KitchenStationId, GSTPercentage, IsGstApplicable, NotAvailable{groupColumn}{uomColumn})
-                        VALUES (@PLUCode, @Name, @Description, @Price, @CategoryId, @ImagePath,
+                        VALUES (@PLUCode, @Name, @Description, @Price, @TakeoutPrice, @DeliveryPrice, @CategoryId, @ImagePath,
                             @IsAvailable, @PreparationTimeMinutes, @CalorieCount, 
                             @IsFeatured, @IsSpecial, @DiscountPercentage, @KitchenStationId, @GSTPercentage, @IsGstApplicable, @NotAvailable{groupParam}{uomParam});
                         SELECT SCOPE_IDENTITY();";
@@ -1366,6 +1380,17 @@ namespace RestaurantManagementSystem.Controllers
                     command.Parameters.AddWithValue("@Name", model.Name);
                     command.Parameters.AddWithValue("@Description", model.Description);
                     command.Parameters.AddWithValue("@Price", model.Price);
+                    
+                    if (model.TakeoutPrice.HasValue)
+                        command.Parameters.AddWithValue("@TakeoutPrice", model.TakeoutPrice);
+                    else
+                        command.Parameters.AddWithValue("@TakeoutPrice", DBNull.Value);
+                    
+                    if (model.DeliveryPrice.HasValue)
+                        command.Parameters.AddWithValue("@DeliveryPrice", model.DeliveryPrice);
+                    else
+                        command.Parameters.AddWithValue("@DeliveryPrice", DBNull.Value);
+                    
                     command.Parameters.AddWithValue("@CategoryId", model.CategoryId);
                     
                     // Add SubCategoryId parameter only if column exists
@@ -1643,6 +1668,8 @@ namespace RestaurantManagementSystem.Controllers
                         PLUCode = @PLUCode,
                         Description = @Description,
                         Price = @Price,
+                        TakeoutPrice = @TakeoutPrice,
+                        DeliveryPrice = @DeliveryPrice,
                         CategoryId = @CategoryId,
                         SubCategoryId = @SubCategoryId,
                         ImagePath = @ImagePath,
@@ -1665,6 +1692,17 @@ namespace RestaurantManagementSystem.Controllers
                     command.Parameters.AddWithValue("@Name", model.Name);
                     command.Parameters.AddWithValue("@Description", model.Description);
                     command.Parameters.AddWithValue("@Price", model.Price);
+                    
+                    if (model.TakeoutPrice.HasValue)
+                        command.Parameters.AddWithValue("@TakeoutPrice", model.TakeoutPrice);
+                    else
+                        command.Parameters.AddWithValue("@TakeoutPrice", DBNull.Value);
+                    
+                    if (model.DeliveryPrice.HasValue)
+                        command.Parameters.AddWithValue("@DeliveryPrice", model.DeliveryPrice);
+                    else
+                        command.Parameters.AddWithValue("@DeliveryPrice", DBNull.Value);
+                    
                     command.Parameters.AddWithValue("@CategoryId", model.CategoryId);
                     
                     // Handle SubCategoryId with proper validation against dbo.SubCategories

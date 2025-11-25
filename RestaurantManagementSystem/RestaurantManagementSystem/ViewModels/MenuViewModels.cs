@@ -28,6 +28,16 @@ namespace RestaurantManagementSystem.ViewModels
         [DataType(DataType.Currency)]
         public decimal Price { get; set; }
 
+        [Display(Name = "Takeout Price")]
+        [Range(0.01, 10000, ErrorMessage = "Takeout Price must be greater than 0")]
+        [DataType(DataType.Currency)]
+        public decimal? TakeoutPrice { get; set; }
+
+        [Display(Name = "Delivery Price")]
+        [Range(0.01, 10000, ErrorMessage = "Delivery Price must be greater than 0")]
+        [DataType(DataType.Currency)]
+        public decimal? DeliveryPrice { get; set; }
+
         [Display(Name = "Unit of Measurement")]
         public int? UOMId { get; set; }
 

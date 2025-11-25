@@ -71,6 +71,18 @@
                                             <span asp-validation-for="Price" class="text-danger"></span>
                                         </div>
                                         
+                                        <div class="form-group">
+                                            <label asp-for="TakeoutPrice" class="control-label"></label>
+                                            <input asp-for="TakeoutPrice" class="form-control" type="number" step="0.01" />
+                                            <span asp-validation-for="TakeoutPrice" class="text-danger"></span>
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label asp-for="DeliveryPrice" class="control-label"></label>
+                                            <input asp-for="DeliveryPrice" class="form-control" type="number" step="0.01" />
+                                            <span asp-validation-for="DeliveryPrice" class="text-danger"></span>
+                                        </div>
+                                        
                                         <!-- UOM Dropdown - Visible only for BAR items -->
                                         <div class="form-group" id="uom-group" style="display: none;">
                                             <label asp-for="UOMId" class="control-label">Unit of Measurement</label>

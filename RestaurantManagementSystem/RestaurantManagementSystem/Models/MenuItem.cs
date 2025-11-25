@@ -25,6 +25,16 @@ namespace RestaurantManagementSystem.Models
         [DataType(DataType.Currency)]
         public decimal Price { get; set; }
 
+        [Display(Name = "Takeout Price")]
+        [Range(0.01, 9999.99, ErrorMessage = "Takeout Price must be between ₹0.01 and ₹9,999.99")]
+        [DataType(DataType.Currency)]
+        public decimal? TakeoutPrice { get; set; }
+
+        [Display(Name = "Delivery Price")]
+        [Range(0.01, 9999.99, ErrorMessage = "Delivery Price must be between ₹0.01 and ₹9,999.99")]
+        [DataType(DataType.Currency)]
+        public decimal? DeliveryPrice { get; set; }
+
         [Display(Name = "Unit of Measurement")]
         public int? UOMId { get; set; }
         public string UOMName { get; set; }

@@ -77,7 +77,19 @@
                                     <td>@item.Category?.Name</td>
                                     <td>@(item.MenuItemGroup?.ItemGroup ?? "-")</td>
                                     <td>@(item.SubCategory?.Name ?? "-")</td>
-                                    <td>&#8377;@item.Price.ToString("N2")</td>
+                                    <td>
+                                        <div class="small">
+                                            <strong class="text-dark">Base:</strong> <strong class="text-success"><text>₹</text>@item.Price.ToString("N2")</strong>
+                                            @if (item.TakeoutPrice.HasValue)
+                                            {
+                                                <br/><strong class="text-primary">Takeout:</strong> <strong class="text-info"><text>₹</text>@item.TakeoutPrice.Value.ToString("N2")</strong>
+                                            }
+                                            @if (item.DeliveryPrice.HasValue)
+                                            {
+                                                <br/><strong class="text-warning">Delivery:</strong> <strong class="text-danger"><text>₹</text>@item.DeliveryPrice.Value.ToString("N2")</strong>
+                                            }
+                                        </div>
+                                    </td>
                                     <td>@item.PreparationTimeMinutes min</td>
                                     <td>
                                         @if (item.IsAvailable)
