@@ -1,6 +1,8 @@
--- Order Wise Payment Method Wise Daily Collection Register
--- Updated to show GST Amount and correct Actual Bill Amount (Subtotal - Discount)
--- This stored procedure generates a detailed collection report with support for split payments
+-- Optimize Collection Register Stored Procedure for Performance
+-- This script updates the usp_GetCollectionRegister procedure with performance improvements
+
+USE [RestaurantManagement]
+GO
 
 IF OBJECT_ID('dbo.usp_GetCollectionRegister', 'P') IS NOT NULL
     DROP PROCEDURE dbo.usp_GetCollectionRegister;
@@ -64,7 +66,7 @@ BEGIN
         p.Amount + ISNULL(p.TipAmount, 0) AS ReceiptAmount,
         pm.Name AS PaymentMethod,
         
-        -- Simplified Details building
+        -- Simplified Details building using STUFF to remove leading separator
         STUFF(
             CASE WHEN p.DiscAmount > 0 THEN ' | Discount: ₹' + CAST(p.DiscAmount AS VARCHAR(20)) ELSE '' END +
             CASE WHEN ISNULL(p.CGSTAmount, 0) + ISNULL(p.SGSTAmount, 0) > 0 
@@ -91,7 +93,33 @@ BEGIN
 END
 GO
 
-PRINT 'Collection Register stored procedure updated successfully.';
-PRINT 'Actual Bill Amount now calculated as Orders.Subtotal - Discount';
-PRINT 'GST Amount column added (CGST + SGST)';
+PRINT 'Collection Register stored procedure optimized successfully.';
+PRINT 'Performance improvements:';
+PRINT '  - Added CTE with filtered data to reduce processing';
+PRINT '  - Changed date filter to use CreatedAt >= and < DATEADD for better index usage';
+PRINT '  - Added NOLOCK hints to reduce locking overhead';
+PRINT '  - Optimized OrderTables join with subquery to get first table';
+PRINT '  - Simplified Details column building with STUFF function';
 GO
+
+-- Create recommended indexes if they don't exist
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Payments_CreatedAt_Status_Includes' AND object_id = OBJECT_ID('Payments'))
+BEGIN
+    CREATE NONCLUSTERED INDEX IX_Payments_CreatedAt_Status_Includes
+    ON Payments(CreatedAt, Status)
+    INCLUDE (OrderId, PaymentMethodId, Amount, TipAmount, DiscAmount, CGSTAmount, SGSTAmount, 
+             RoundoffAdjustmentAmt, ProcessedByName, ProcessedBy, LastFourDigits, CardType, ReferenceNumber);
+    PRINT 'Created index IX_Payments_CreatedAt_Status_Includes on Payments table';
+END
+GO
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_OrderTables_OrderId' AND object_id = OBJECT_ID('OrderTables'))
+BEGIN
+    CREATE NONCLUSTERED INDEX IX_OrderTables_OrderId
+    ON OrderTables(OrderId)
+    INCLUDE (TableId);
+    PRINT 'Created index IX_OrderTables_OrderId on OrderTables table';
+END
+GO
+
+PRINT 'Collection Register optimization complete!';
