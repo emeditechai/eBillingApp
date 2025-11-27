@@ -130,7 +130,10 @@
             <datalist id="menuItems">
                 @foreach (var mi in Model.AvailableMenuItems)
                 {
-                  <option value="@mi.Name" data-id="@mi.Id" data-price="@mi.Price.ToString("F2")" data-plu="@mi.PLUCode">@mi.PLUCode - @mi.Name (₹@mi.Price.ToString("F2"))</option>
+                    var displayPrice = Model.OrderType == 1 ? (mi.TakeoutPrice ?? mi.Price) : 
+                                      (Model.OrderType == 2 || Model.OrderType == 3) ? (mi.DeliveryPrice ?? mi.Price) : 
+                                      mi.Price;
+                  <option value="@mi.Name" data-id="@mi.Id" data-price="@displayPrice.ToString("F2")" data-plu="@mi.PLUCode">@mi.PLUCode - @mi.Name (₹@displayPrice.ToString("F2"))</option>
                 }
             </datalist>
           </div>
@@ -481,7 +484,9 @@
       async function loadMenuItemsForGroup(groupId) {
         if (!dataList) return;
         try {
-          const resp = await fetch(`/Order/GetMenuItemsByGroup?groupId=${encodeURIComponent(groupId)}`);
+          const orderIdElem = document.getElementById('orderDetailsApp');
+          const orderId = orderIdElem ? orderIdElem.getAttribute('data-order-id') : '';
+          const resp = await fetch(`/Order/GetMenuItemsByGroup?groupId=${encodeURIComponent(groupId)}&orderId=${encodeURIComponent(orderId)}`);
           if (!resp.ok) return;
           const items = await resp.json();
           // Clear datalist
@@ -509,9 +514,8 @@
           const gid = e.target.value || '1';
           loadMenuItemsForGroup(gid);
         });
-        // initial load on page ready (default group id=1 or selected)
-        const initialGid = groupSelect.value || '1';
-        loadMenuItemsForGroup(initialGid);
+        // Don't load on initial page load - server-side rendering already provides correct prices
+        // Only reload when user changes the group selection
       }
     })();
   </script>

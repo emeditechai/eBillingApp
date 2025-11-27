@@ -318,8 +318,22 @@ BEGIN
         RETURN;
     END
     
-    -- Get menu item price
-    SELECT @UnitPrice = [Price] FROM [MenuItems] WHERE [Id] = @MenuItemId;
+    -- Get menu item price based on order type
+    -- OrderType: 0=Dine-In, 1=Takeout, 2=Delivery, 3=Online
+    DECLARE @OrderType INT;
+    SELECT @OrderType = [OrderType] FROM [Orders] WHERE [Id] = @OrderId;
+    
+    -- Select price based on order type
+    -- Dine-In (0): Use Price column
+    -- Takeout (1): Use TakeoutPrice if available, fallback to Price
+    -- Delivery (2): Use DeliveryPrice if available, fallback to Price
+    -- Online (3): Use DeliveryPrice if available, fallback to Price
+    SELECT @UnitPrice = CASE 
+        WHEN @OrderType = 1 THEN ISNULL([TakeoutPrice], [Price])  -- Takeout
+        WHEN @OrderType IN (2, 3) THEN ISNULL([DeliveryPrice], [Price])  -- Delivery or Online
+        ELSE [Price]  -- Dine-In (0) or default
+    END
+    FROM [MenuItems] WHERE [Id] = @MenuItemId;
     
     -- Calculate subtotal
     SET @Subtotal = @UnitPrice * @Quantity;

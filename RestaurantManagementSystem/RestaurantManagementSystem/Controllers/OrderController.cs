@@ -494,14 +494,14 @@ namespace RestaurantManagementSystem.Controllers
                                 SET @hasCol = 1;
                              IF (@hasCol = 1)
                              BEGIN
-                                SELECT Id, PLUCode, Name, Description, Price
+                                SELECT Id, PLUCode, Name, Description, Price, TakeoutPrice, DeliveryPrice
                                 FROM dbo.MenuItems
                                 WHERE IsAvailable = 1 AND (menuitemgroupID = @GroupId)
                                 ORDER BY Name
                              END
                              ELSE
                              BEGIN
-                                SELECT Id, PLUCode, Name, Description, Price
+                                SELECT Id, PLUCode, Name, Description, Price, TakeoutPrice, DeliveryPrice
                                 FROM dbo.MenuItems
                                 WHERE IsAvailable = 1
                                 ORDER BY Name
@@ -519,7 +519,9 @@ namespace RestaurantManagementSystem.Controllers
                                 PLUCode = reader.IsDBNull(1) ? null : reader.GetString(1),
                                 Name = reader.GetString(2),
                                 Description = reader.IsDBNull(3) ? null : reader.GetString(3),
-                                Price = reader.GetDecimal(4)
+                                Price = reader.GetDecimal(4),
+                                TakeoutPrice = reader.IsDBNull(5) ? (decimal?)null : reader.GetDecimal(5),
+                                DeliveryPrice = reader.IsDBNull(6) ? (decimal?)null : reader.GetDecimal(6)
                             });
                         }
                     }
@@ -576,7 +578,7 @@ namespace RestaurantManagementSystem.Controllers
         }
 
         [HttpGet]
-        public JsonResult GetMenuItemsByGroup(int groupId)
+        public JsonResult GetMenuItemsByGroup(int groupId, int? orderId = null)
         {
             var items = new List<object>();
             try
@@ -584,19 +586,42 @@ namespace RestaurantManagementSystem.Controllers
                 using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
                 {
                     connection.Open();
+                    
+                    // Get order type if orderId is provided
+                    int orderType = 0; // Default to Dine-In
+                    if (orderId.HasValue)
+                    {
+                        using (var typeCmd = new Microsoft.Data.SqlClient.SqlCommand("SELECT OrderType FROM Orders WHERE Id = @OrderId", connection))
+                        {
+                            typeCmd.Parameters.AddWithValue("@OrderId", orderId.Value);
+                            var result = typeCmd.ExecuteScalar();
+                            if (result != null) orderType = Convert.ToInt32(result);
+                        }
+                    }
+                    
                     var sql = @"DECLARE @hasCol bit = 0;
                                  IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.MenuItems') AND name = 'menuitemgroupID')
                                     SET @hasCol = 1;
                                  IF (@hasCol = 1)
                                  BEGIN
-                                    SELECT Id, PLUCode, Name, Price
+                                    SELECT Id, PLUCode, Name, 
+                                        CASE 
+                                            WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price)  -- Takeout
+                                            WHEN @OrderType IN (2, 3) THEN ISNULL(DeliveryPrice, Price)  -- Delivery or Online
+                                            ELSE Price  -- Dine-In (0) or default
+                                        END AS Price
                                     FROM dbo.MenuItems
                                     WHERE IsAvailable = 1 AND (menuitemgroupID = @GroupId)
                                     ORDER BY Name
                                  END
                                  ELSE
                                  BEGIN
-                                    SELECT Id, PLUCode, Name, Price
+                                    SELECT Id, PLUCode, Name, 
+                                        CASE 
+                                            WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price)  -- Takeout
+                                            WHEN @OrderType IN (2, 3) THEN ISNULL(DeliveryPrice, Price)  -- Delivery or Online
+                                            ELSE Price  -- Dine-In (0) or default
+                                        END AS Price
                                     FROM dbo.MenuItems
                                     WHERE IsAvailable = 1
                                     ORDER BY Name
@@ -604,6 +629,7 @@ namespace RestaurantManagementSystem.Controllers
                     using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(sql, connection))
                     {
                         cmd.Parameters.AddWithValue("@GroupId", groupId);
+                        cmd.Parameters.AddWithValue("@OrderType", orderType);
                         using (var r = cmd.ExecuteReader())
                         {
                             while (r.Read())
@@ -672,11 +698,36 @@ namespace RestaurantManagementSystem.Controllers
             using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
             {
                 connection.Open();
-                using (var command = new Microsoft.Data.SqlClient.SqlCommand(@"INSERT INTO OrderItems (OrderId, MenuItemId, Quantity, UnitPrice, Subtotal, Status, CreatedAt) SELECT @OrderId, Id, @Quantity, Price, Price * @Quantity, 0, GETDATE() FROM MenuItems WHERE Id = @MenuItemId", connection))
+                // Get order type to determine which price to use
+                int orderType = 0;
+                using (var typeCmd = new Microsoft.Data.SqlClient.SqlCommand("SELECT OrderType FROM Orders WHERE Id = @OrderId", connection))
+                {
+                    typeCmd.Parameters.AddWithValue("@OrderId", orderId);
+                    var result = typeCmd.ExecuteScalar();
+                    if (result != null) orderType = Convert.ToInt32(result);
+                }
+                
+                // Insert with order type-based pricing
+                using (var command = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    INSERT INTO OrderItems (OrderId, MenuItemId, Quantity, UnitPrice, Subtotal, Status, CreatedAt) 
+                    SELECT @OrderId, Id, @Quantity, 
+                        CASE 
+                            WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price)  -- Takeout
+                            WHEN @OrderType IN (2, 3) THEN ISNULL(DeliveryPrice, Price)  -- Delivery or Online
+                            ELSE Price  -- Dine-In (0) or default
+                        END,
+                        CASE 
+                            WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price) * @Quantity  -- Takeout
+                            WHEN @OrderType IN (2, 3) THEN ISNULL(DeliveryPrice, Price) * @Quantity  -- Delivery or Online
+                            ELSE Price * @Quantity  -- Dine-In (0) or default
+                        END,
+                        0, GETDATE() 
+                    FROM MenuItems WHERE Id = @MenuItemId", connection))
                 {
                     command.Parameters.AddWithValue("@OrderId", orderId);
                     command.Parameters.AddWithValue("@MenuItemId", menuItemId);
                     command.Parameters.AddWithValue("@Quantity", quantity);
+                    command.Parameters.AddWithValue("@OrderType", orderType);
                     command.ExecuteNonQuery();
                 }
             }
@@ -3497,12 +3548,28 @@ namespace RestaurantManagementSystem.Controllers
                                     return Json(new { success = false, message = "Invalid new item data." });
                                 }
                                 
-                                // First get the unit price of the menu item
+                                // Get order type to determine which price to use
+                                int orderType = 0;
+                                using (var typeCmd = new Microsoft.Data.SqlClient.SqlCommand(
+                                    "SELECT OrderType FROM Orders WHERE Id = @OrderId", connection, transaction))
+                                {
+                                    typeCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                    var result = typeCmd.ExecuteScalar();
+                                    if (result != null) orderType = Convert.ToInt32(result);
+                                }
+                                
+                                // Get the unit price based on order type
                                 decimal unitPrice = 0;
-                                using (var command = new Microsoft.Data.SqlClient.SqlCommand(
-                                    "SELECT Price FROM MenuItems WHERE Id = @MenuItemId", connection, transaction))
+                                using (var command = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                    SELECT CASE 
+                                        WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price)  -- Takeout
+                                        WHEN @OrderType IN (2, 3) THEN ISNULL(DeliveryPrice, Price)  -- Delivery or Online
+                                        ELSE Price  -- Dine-In (0) or default
+                                    END
+                                    FROM MenuItems WHERE Id = @MenuItemId", connection, transaction))
                                 {
                                     command.Parameters.AddWithValue("@MenuItemId", item.MenuItemId.Value);
+                                    command.Parameters.AddWithValue("@OrderType", orderType);
                                     var result = command.ExecuteScalar();
                                     if (result != null)
                                     {
