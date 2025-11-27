@@ -2648,34 +2648,40 @@ END", connection))
             {
                 connection.Open();
 
-                // Get today's analytics
+                // Pre-compute order classifications for performance
+                var today = DateTime.Today;
+                var todayEnd = today.AddDays(1);
+                
+                // Get today's analytics with optimized filtering
                 using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(@"
                     DECLARE @HasOrderKitchenType bit = CASE WHEN EXISTS (
                         SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'OrderKitchenType'
                     ) THEN 1 ELSE 0 END;
+                    
+                    ;WITH OrderClassification AS (
+                        SELECT 
+                            o.Id,
+                            CASE 
+                                WHEN @HasOrderKitchenType = 1 THEN 
+                                    CASE WHEN o.OrderKitchenType = 'Bar' THEN 2 ELSE 1 END
+                                ELSE 
+                                    CASE WHEN EXISTS (SELECT 1 FROM KitchenTickets kt WITH (NOLOCK) WHERE kt.OrderId = o.Id AND kt.KitchenStation = 'BAR') THEN 2 ELSE 1 END
+                            END AS Classification
+                        FROM Orders o WITH (NOLOCK)
+                    )
                     SELECT 
                         ISNULL(SUM(p.Amount), 0) AS TotalPayments,
                         ISNULL(SUM(p.TipAmount), 0) AS TotalTips
-                    FROM Payments p
-                    WHERE p.Status = 1 -- Approved payments only
-                        AND CAST(p.CreatedAt AS DATE) = CAST(GETDATE() AS DATE)
-                        AND (
-                            @FilterMode = 0 OR
-                            (
-                                @FilterMode = 1 AND (
-                                    (@HasOrderKitchenType = 1 AND EXISTS (SELECT 1 FROM Orders o2 WHERE o2.Id = p.OrderId AND ISNULL(o2.OrderKitchenType,'Foods') <> 'Bar'))
-                                    OR (@HasOrderKitchenType = 0 AND NOT EXISTS (SELECT 1 FROM KitchenTickets kt WHERE kt.OrderId = p.OrderId AND kt.KitchenStation = 'BAR'))
-                                )
-                            ) OR 
-                            (
-                                @FilterMode = 2 AND (
-                                    (@HasOrderKitchenType = 1 AND EXISTS (SELECT 1 FROM Orders o2 WHERE o2.Id = p.OrderId AND o2.OrderKitchenType = 'Bar'))
-                                    OR (@HasOrderKitchenType = 0 AND EXISTS (SELECT 1 FROM KitchenTickets kt WHERE kt.OrderId = p.OrderId AND kt.KitchenStation = 'BAR'))
-                                )
-                            )
-                        )", connection))
+                    FROM Payments p WITH (NOLOCK)
+                    LEFT JOIN OrderClassification oc ON p.OrderId = oc.Id
+                    WHERE p.Status = 1
+                        AND p.CreatedAt >= @Today
+                        AND p.CreatedAt < @TodayEnd
+                        AND (@FilterMode = 0 OR ISNULL(oc.Classification, 1) = @FilterMode)", connection))
                 {
                     command.Parameters.AddWithValue("@FilterMode", filterMode);
+                    command.Parameters.AddWithValue("@Today", today);
+                    command.Parameters.AddWithValue("@TodayEnd", todayEnd);
                     using (Microsoft.Data.SqlClient.SqlDataReader reader = command.ExecuteReader())
                     {
                         if (reader.Read())
@@ -2691,27 +2697,29 @@ END", connection))
                     DECLARE @HasOrderKitchenType bit = CASE WHEN EXISTS (
                         SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'OrderKitchenType'
                     ) THEN 1 ELSE 0 END;
+                    
+                    ;WITH OrderClassification AS (
+                        SELECT 
+                            o.Id,
+                            CASE 
+                                WHEN @HasOrderKitchenType = 1 THEN 
+                                    CASE WHEN o.OrderKitchenType = 'Bar' THEN 2 ELSE 1 END
+                                ELSE 
+                                    CASE WHEN EXISTS (SELECT 1 FROM KitchenTickets kt WITH (NOLOCK) WHERE kt.OrderId = o.Id AND kt.KitchenStation = 'BAR') THEN 2 ELSE 1 END
+                            END AS Classification
+                        FROM Orders o WITH (NOLOCK)
+                    )
                     SELECT ISNULL(SUM(ISNULL(p.CGSTAmount,0) + ISNULL(p.SGSTAmount,0)), 0) AS TotalGST
-                    FROM Payments p
-                    WHERE p.Status = 1 -- Approved payments only
-                        AND CAST(p.CreatedAt AS DATE) = CAST(GETDATE() AS DATE)
-                        AND (
-                            @FilterMode = 0 OR
-                            (
-                                @FilterMode = 1 AND (
-                                    (@HasOrderKitchenType = 1 AND EXISTS (SELECT 1 FROM Orders o2 WHERE o2.Id = p.OrderId AND ISNULL(o2.OrderKitchenType,'Foods') <> 'Bar'))
-                                    OR (@HasOrderKitchenType = 0 AND NOT EXISTS (SELECT 1 FROM KitchenTickets kt WHERE kt.OrderId = p.OrderId AND kt.KitchenStation = 'BAR'))
-                                )
-                            ) OR 
-                            (
-                                @FilterMode = 2 AND (
-                                    (@HasOrderKitchenType = 1 AND EXISTS (SELECT 1 FROM Orders o2 WHERE o2.Id = p.OrderId AND o2.OrderKitchenType = 'Bar'))
-                                    OR (@HasOrderKitchenType = 0 AND EXISTS (SELECT 1 FROM KitchenTickets kt WHERE kt.OrderId = p.OrderId AND kt.KitchenStation = 'BAR'))
-                                )
-                            )
-                        )", connection))
+                    FROM Payments p WITH (NOLOCK)
+                    LEFT JOIN OrderClassification oc ON p.OrderId = oc.Id
+                    WHERE p.Status = 1
+                        AND p.CreatedAt >= @Today
+                        AND p.CreatedAt < @TodayEnd
+                        AND (@FilterMode = 0 OR ISNULL(oc.Classification, 1) = @FilterMode)", connection))
                 {
                     command.Parameters.AddWithValue("@FilterMode", filterMode);
+                    command.Parameters.AddWithValue("@Today", today);
+                    command.Parameters.AddWithValue("@TodayEnd", todayEnd);
                     using (Microsoft.Data.SqlClient.SqlDataReader reader = command.ExecuteReader())
                     {
                         if (reader.Read())
@@ -2726,6 +2734,18 @@ END", connection))
                     DECLARE @HasOrderKitchenType bit = CASE WHEN EXISTS (
                         SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'OrderKitchenType'
                     ) THEN 1 ELSE 0 END;
+                    
+                    ;WITH OrderClassification AS (
+                        SELECT 
+                            o.Id,
+                            CASE 
+                                WHEN @HasOrderKitchenType = 1 THEN 
+                                    CASE WHEN o.OrderKitchenType = 'Bar' THEN 2 ELSE 1 END
+                                ELSE 
+                                    CASE WHEN EXISTS (SELECT 1 FROM KitchenTickets kt WITH (NOLOCK) WHERE kt.OrderId = o.Id AND kt.KitchenStation = 'BAR') THEN 2 ELSE 1 END
+                            END AS Classification
+                        FROM Orders o WITH (NOLOCK)
+                    )
                     SELECT 
                         pm.Id AS PaymentMethodId,
                         pm.Name AS PaymentMethodName,
@@ -2733,30 +2753,20 @@ END", connection))
                         ISNULL(SUM(p.Amount), 0) AS TotalAmount,
                         ISNULL(SUM(ISNULL(p.CGSTAmount,0) + ISNULL(p.SGSTAmount,0)), 0) AS TotalGST,
                         COUNT(p.Id) AS TransactionCount
-                    FROM PaymentMethods pm
-                    LEFT JOIN Payments p ON pm.Id = p.PaymentMethodId 
-                        AND p.Status = 1 -- Approved payments only
-                        AND CAST(p.CreatedAt AS DATE) = CAST(GETDATE() AS DATE)
-                        AND (
-                            @FilterMode = 0 OR
-                            (
-                                @FilterMode = 1 AND (
-                                    (@HasOrderKitchenType = 1 AND EXISTS (SELECT 1 FROM Orders o2 WHERE o2.Id = p.OrderId AND ISNULL(o2.OrderKitchenType,'Foods') <> 'Bar'))
-                                    OR (@HasOrderKitchenType = 0 AND NOT EXISTS (SELECT 1 FROM KitchenTickets kt WHERE kt.OrderId = p.OrderId AND kt.KitchenStation = 'BAR'))
-                                )
-                            ) OR 
-                            (
-                                @FilterMode = 2 AND (
-                                    (@HasOrderKitchenType = 1 AND EXISTS (SELECT 1 FROM Orders o2 WHERE o2.Id = p.OrderId AND o2.OrderKitchenType = 'Bar'))
-                                    OR (@HasOrderKitchenType = 0 AND EXISTS (SELECT 1 FROM KitchenTickets kt WHERE kt.OrderId = p.OrderId AND kt.KitchenStation = 'BAR'))
-                                )
-                            )
-                        )
+                    FROM PaymentMethods pm WITH (NOLOCK)
+                    LEFT JOIN Payments p WITH (NOLOCK) ON pm.Id = p.PaymentMethodId 
+                        AND p.Status = 1
+                        AND p.CreatedAt >= @Today
+                        AND p.CreatedAt < @TodayEnd
+                    LEFT JOIN OrderClassification oc ON p.OrderId = oc.Id
                     WHERE pm.IsActive = 1
+                        AND (@FilterMode = 0 OR p.Id IS NULL OR ISNULL(oc.Classification, 1) = @FilterMode)
                     GROUP BY pm.Id, pm.Name, pm.DisplayName
                     ORDER BY TotalAmount DESC", connection))
                 {
                     command.Parameters.AddWithValue("@FilterMode", filterMode);
+                    command.Parameters.AddWithValue("@Today", today);
+                    command.Parameters.AddWithValue("@TodayEnd", todayEnd);
                     using (Microsoft.Data.SqlClient.SqlDataReader reader = command.ExecuteReader())
                     {
                         while (reader.Read())
@@ -2774,23 +2784,47 @@ END", connection))
                     }
                 }
 
-                // Get payment history - showing actual processed payments with their real amounts
+                // Get payment history - optimized with pre-computed totals and classifications
+                var fromDateTime = model.FromDate.Date;
+                var toDateTime = model.ToDate.Date.AddDays(1);
+                
                 using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(@"
                     DECLARE @HasOrderKitchenType bit = CASE WHEN EXISTS (
                         SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'OrderKitchenType'
                     ) THEN 1 ELSE 0 END;
+                    
+                    ;WITH OrderClassification AS (
+                        SELECT 
+                            o.Id,
+                            CASE 
+                                WHEN @HasOrderKitchenType = 1 THEN 
+                                    CASE WHEN o.OrderKitchenType = 'Bar' THEN 2 ELSE 1 END
+                                ELSE 
+                                    CASE WHEN EXISTS (SELECT 1 FROM KitchenTickets kt WITH (NOLOCK) WHERE kt.OrderId = o.Id AND kt.KitchenStation = 'BAR') THEN 2 ELSE 1 END
+                            END AS Classification
+                        FROM Orders o WITH (NOLOCK)
+                    ),
+                    PaymentTotals AS (
+                        SELECT 
+                            p.OrderId,
+                            SUM(p.Amount) AS TotalPayable,
+                            SUM(p.GSTAmount) AS TotalGST,
+                            MAX(p.CreatedAt) AS LastPaymentDate
+                        FROM Payments p WITH (NOLOCK)
+                        WHERE p.Status = 1
+                            AND p.CreatedAt >= @FromDate
+                            AND p.CreatedAt < @ToDate
+                        GROUP BY p.OrderId
+                    )
                     SELECT 
                         o.Id AS OrderId,
                         o.OrderNumber,
                         ISNULL(tt.TableName, 'Takeout/Delivery') AS TableName,
-                        -- Total payable is the sum of all payment amounts for this order (includes GST as processed)
-                        (SELECT ISNULL(SUM(p2.Amount), 0) FROM Payments p2 WHERE p2.OrderId = o.Id AND p2.Status = 1) AS TotalPayable,
-                        ISNULL(SUM(p.Amount), 0) AS TotalPaid,
-                        -- Due amount is 0 since we're only showing orders with payments
+                        ISNULL(pt.TotalPayable, 0) AS TotalPayable,
+                        ISNULL(pt.TotalPayable, 0) AS TotalPaid,
                         0 AS DueAmount,
-                        -- Sum of GST amounts from all approved payments
-                        ISNULL(SUM(p.GSTAmount), 0) AS GSTAmount,
-                        MAX(p.CreatedAt) AS PaymentDate,
+                        ISNULL(pt.TotalGST, 0) AS GSTAmount,
+                        pt.LastPaymentDate AS PaymentDate,
                         o.Status AS OrderStatus,
                         CASE o.Status 
                             WHEN 0 THEN 'Open'
@@ -2800,31 +2834,16 @@ END", connection))
                             WHEN 4 THEN 'Cancelled'
                             ELSE 'Unknown'
                         END AS OrderStatusDisplay
-                    FROM Orders o
-                    LEFT JOIN TableTurnovers tto ON o.TableTurnoverId = tto.Id
-                    LEFT JOIN Tables tt ON tto.TableId = tt.Id
-                    INNER JOIN Payments p ON o.Id = p.OrderId AND p.Status = 1 -- Only orders with approved payments
-                    WHERE CAST(p.CreatedAt AS DATE) BETWEEN @FromDate AND @ToDate
-                      AND (
-                          @FilterMode = 0 OR
-                          (
-                              @FilterMode = 1 AND (
-                                  (@HasOrderKitchenType = 1 AND ISNULL(o.OrderKitchenType,'Foods') <> 'Bar')
-                                  OR (@HasOrderKitchenType = 0 AND NOT EXISTS (SELECT 1 FROM KitchenTickets kt WHERE kt.OrderId = o.Id AND kt.KitchenStation = 'BAR'))
-                              )
-                          ) OR
-                          (
-                              @FilterMode = 2 AND (
-                                  (@HasOrderKitchenType = 1 AND o.OrderKitchenType = 'Bar')
-                                  OR (@HasOrderKitchenType = 0 AND EXISTS (SELECT 1 FROM KitchenTickets kt WHERE kt.OrderId = o.Id AND kt.KitchenStation = 'BAR'))
-                              )
-                          )
-                      )
-                    GROUP BY o.Id, o.OrderNumber, tt.TableName, o.Status
-                    ORDER BY MAX(p.CreatedAt) DESC", connection))
+                    FROM Orders o WITH (NOLOCK)
+                    INNER JOIN PaymentTotals pt ON o.Id = pt.OrderId
+                    LEFT JOIN OrderClassification oc ON o.Id = oc.Id
+                    LEFT JOIN TableTurnovers tto WITH (NOLOCK) ON o.TableTurnoverId = tto.Id
+                    LEFT JOIN Tables tt WITH (NOLOCK) ON tto.TableId = tt.Id
+                    WHERE (@FilterMode = 0 OR ISNULL(oc.Classification, 1) = @FilterMode)
+                    ORDER BY pt.LastPaymentDate DESC", connection))
                 {
-                    command.Parameters.AddWithValue("@FromDate", model.FromDate.Date);
-                    command.Parameters.AddWithValue("@ToDate", model.ToDate.Date);
+                    command.Parameters.AddWithValue("@FromDate", fromDateTime);
+                    command.Parameters.AddWithValue("@ToDate", toDateTime);
                     command.Parameters.AddWithValue("@FilterMode", filterMode);
 
                     using (Microsoft.Data.SqlClient.SqlDataReader reader = command.ExecuteReader())
@@ -2848,13 +2867,25 @@ END", connection))
                     }
                 }
 
-                    // Populate pending payments (awaiting approval) within the selected date range
+                    // Populate pending payments (awaiting approval) - optimized
                     try
                     {
                         using (var pendingCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
                             DECLARE @HasOrderKitchenType bit = CASE WHEN EXISTS (
                                 SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'OrderKitchenType'
                             ) THEN 1 ELSE 0 END;
+                            
+                            ;WITH OrderClassification AS (
+                                SELECT 
+                                    o.Id,
+                                    CASE 
+                                        WHEN @HasOrderKitchenType = 1 THEN 
+                                            CASE WHEN o.OrderKitchenType = 'Bar' THEN 2 ELSE 1 END
+                                        ELSE 
+                                            CASE WHEN EXISTS (SELECT 1 FROM KitchenTickets kt WITH (NOLOCK) WHERE kt.OrderId = o.Id AND kt.KitchenStation = 'BAR') THEN 2 ELSE 1 END
+                                    END AS Classification
+                                FROM Orders o WITH (NOLOCK)
+                            )
                             SELECT 
                                 p.Id AS PaymentId,
                                 p.OrderId,
@@ -2872,32 +2903,20 @@ END", connection))
                                 p.LastFourDigits,
                                 p.CardType,
                                 p.Notes
-                            FROM Payments p
-                            INNER JOIN Orders o ON p.OrderId = o.Id
-                            LEFT JOIN TableTurnovers tto ON o.TableTurnoverId = tto.Id
-                            LEFT JOIN Tables tt ON tto.TableId = tt.Id
-                            LEFT JOIN PaymentMethods pm ON p.PaymentMethodId = pm.Id
-                            WHERE p.Status = 0 -- Pending
-                              AND CAST(p.CreatedAt AS DATE) BETWEEN @FromDate AND @ToDate
-                              AND (
-                                  @FilterMode = 0 OR
-                                  (
-                                      @FilterMode = 1 AND (
-                                          (@HasOrderKitchenType = 1 AND ISNULL(o.OrderKitchenType,'Foods') <> 'Bar')
-                                          OR (@HasOrderKitchenType = 0 AND NOT EXISTS (SELECT 1 FROM KitchenTickets kt WHERE kt.OrderId = p.OrderId AND kt.KitchenStation = 'BAR'))
-                                      )
-                                  ) OR
-                                  (
-                                      @FilterMode = 2 AND (
-                                          (@HasOrderKitchenType = 1 AND o.OrderKitchenType = 'Bar')
-                                          OR (@HasOrderKitchenType = 0 AND EXISTS (SELECT 1 FROM KitchenTickets kt WHERE kt.OrderId = p.OrderId AND kt.KitchenStation = 'BAR'))
-                                      )
-                                  )
-                              )
+                            FROM Payments p WITH (NOLOCK)
+                            INNER JOIN Orders o WITH (NOLOCK) ON p.OrderId = o.Id
+                            LEFT JOIN OrderClassification oc ON p.OrderId = oc.Id
+                            LEFT JOIN TableTurnovers tto WITH (NOLOCK) ON o.TableTurnoverId = tto.Id
+                            LEFT JOIN Tables tt WITH (NOLOCK) ON tto.TableId = tt.Id
+                            LEFT JOIN PaymentMethods pm WITH (NOLOCK) ON p.PaymentMethodId = pm.Id
+                            WHERE p.Status = 0
+                              AND p.CreatedAt >= @FromDate
+                              AND p.CreatedAt < @ToDate
+                              AND (@FilterMode = 0 OR ISNULL(oc.Classification, 1) = @FilterMode)
                             ORDER BY p.CreatedAt DESC", connection))
                         {
-                            pendingCmd.Parameters.AddWithValue("@FromDate", model.FromDate.Date);
-                            pendingCmd.Parameters.AddWithValue("@ToDate", model.ToDate.Date);
+                            pendingCmd.Parameters.AddWithValue("@FromDate", fromDateTime);
+                            pendingCmd.Parameters.AddWithValue("@ToDate", toDateTime);
                             pendingCmd.Parameters.AddWithValue("@FilterMode", filterMode);
 
                             using (var rdr = pendingCmd.ExecuteReader())
