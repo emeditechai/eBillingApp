@@ -156,6 +156,48 @@
     </div>
 
     <div class="row mt-3">
+        <div class="col-12">
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Customer List (Takeout & Delivery)</span>
+                    <span class="small text-muted">Period: @Model.Filter.From?.ToString("dd MMM yyyy") – @Model.Filter.To?.ToString("dd MMM yyyy")</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle table-sticky" id="customerListTable">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Phone</th>
+                                    <th>Address</th>
+                                    <th>Order Type</th>
+                                    <th class="text-end">Visits</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in Model.CustomerList)
+                                {
+                                    <tr>
+                                        <td>@row.Name</td>
+                                        <td>@row.Phone</td>
+                                        <td class="text-truncate" style="max-width: 320px;" title="@row.Address">@row.Address</td>
+                                        <td>
+                                            @if (row.OrderType == "Delivery") { <span class="badge bg-primary">Delivery</span>; }
+                                            else if (row.OrderType == "Takeout") { <span class="badge bg-info text-dark">Takeout</span>; }
+                                            else { <span class="badge bg-secondary">@row.OrderType</span>; }
+                                        </td>
+                                        <td class="text-end"><span class="badge bg-secondary">@row.Visits</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-3">
         <div class="col-lg-6">
             <div class="card mb-3">
                 <div class="card-header">Loyalty Buckets</div>

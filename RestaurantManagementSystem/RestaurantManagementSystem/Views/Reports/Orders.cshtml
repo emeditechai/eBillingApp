@@ -384,6 +384,34 @@
     </div>
 </div>
 
+<!-- Order Details Modal -->
+<div class="modal fade" id="orderDetailsModal" tabindex="-1" aria-labelledby="orderDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="orderDetailsModalLabel">
+                    <i class="fas fa-receipt me-2"></i>Order Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="orderDetailsContent">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Loading order details...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="#" id="viewFullDetailsBtn" class="btn btn-primary" target="_blank">
+                    <i class="fas fa-external-link-alt me-1"></i>View Full Details
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     function resetFilters() {
         document.getElementById('Filter_FromDate').value = '@DateTime.Today.ToString("yyyy-MM-dd")';
@@ -411,8 +439,151 @@
     }
 
     function showOrderDetails(orderId) {
-        // Placeholder for order details modal
-        alert('Order details for Order ID: ' + orderId + '\n\nThis feature can be expanded to show detailed order information in a modal.');
+        // Show modal
+        var modal = new bootstrap.Modal(document.getElementById('orderDetailsModal'));
+        modal.show();
+        
+        // Update view full details link
+        document.getElementById('viewFullDetailsBtn').href = '/Order/Details/' + orderId;
+        
+        // Load order details via AJAX
+        fetch('/Order/GetOrderSummary?id=' + orderId)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    var html = `
+                        <div class="order-summary">
+                            <!-- Order Header -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <h6 class="text-muted mb-1">Order Number</h6>
+                                    <h4 class="mb-0">${data.orderNumber}</h4>
+                                </div>
+                                <div class="col-md-6 text-end">
+                                    <h6 class="text-muted mb-1">Status</h6>
+                                    <span class="${data.statusClass}">${data.status}</span>
+                                </div>
+                            </div>
+                            
+                            <hr>
+                            
+                            <!-- Customer & Order Info -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <h6 class="text-muted mb-2">Customer Information</h6>
+                                    <div><strong>${data.customerName}</strong></div>
+                                    ${data.customerPhone ? `<div class="text-muted small">${data.customerPhone}</div>` : ''}
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-muted mb-2">Order Information</h6>
+                                    ${data.tableName ? `<div><i class="fas fa-table me-2"></i>${data.tableName}</div>` : ''}
+                                    <div><i class="fas fa-concierge-bell me-2"></i>${data.serverName || 'N/A'}</div>
+                                    <div><i class="fas fa-shopping-bag me-2"></i>${data.orderType}</div>
+                                    <div class="text-muted small"><i class="fas fa-clock me-2"></i>${data.createdAt}</div>
+                                </div>
+                            </div>
+                            
+                            ${data.specialInstructions ? `
+                            <div class="alert alert-info">
+                                <strong><i class="fas fa-info-circle me-2"></i>Special Instructions:</strong>
+                                <div>${data.specialInstructions}</div>
+                            </div>
+                            ` : ''}
+                            
+                            <hr>
+                            
+                            <!-- Order Items -->
+                            <h6 class="text-muted mb-3">Order Items</h6>
+                            <div class="table-responsive mb-3">
+                                <table class="table table-sm">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Item</th>
+                                            <th class="text-center">Qty</th>
+                                            <th class="text-end">Price</th>
+                                            <th class="text-end">Subtotal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${data.items.map(item => `
+                                            <tr>
+                                                <td>
+                                                    <strong>${item.name}</strong>
+                                                    ${item.modifiers && item.modifiers.length > 0 ? 
+                                                        `<div class="text-muted small">+ ${item.modifiers.join(', ')}</div>` : ''}
+                                                    ${item.specialInstructions ? 
+                                                        `<div class="text-info small"><em>${item.specialInstructions}</em></div>` : ''}
+                                                </td>
+                                                <td class="text-center">${item.quantity}</td>
+                                                <td class="text-end">₹${item.unitPrice.toFixed(2)}</td>
+                                                <td class="text-end">₹${item.subtotal.toFixed(2)}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Order Totals -->
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <div class="row mb-2">
+                                        <div class="col-6 text-end"><strong>Subtotal:</strong></div>
+                                        <div class="col-6 text-end">₹${data.subtotal.toFixed(2)}</div>
+                                    </div>
+                                    ${data.discountAmount > 0 ? `
+                                    <div class="row mb-2 text-success">
+                                        <div class="col-6 text-end"><strong>Discount:</strong></div>
+                                        <div class="col-6 text-end">-₹${data.discountAmount.toFixed(2)}</div>
+                                    </div>
+                                    ` : ''}
+                                    ${data.cgstAmount > 0 || data.sgstAmount > 0 ? `
+                                    <div class="row mb-2">
+                                        <div class="col-6 text-end">CGST:</div>
+                                        <div class="col-6 text-end">₹${data.cgstAmount.toFixed(2)}</div>
+                                    </div>
+                                    <div class="row mb-2">
+                                        <div class="col-6 text-end">SGST:</div>
+                                        <div class="col-6 text-end">₹${data.sgstAmount.toFixed(2)}</div>
+                                    </div>
+                                    ` : ''}
+                                    ${data.tipAmount > 0 ? `
+                                    <div class="row mb-2">
+                                        <div class="col-6 text-end">Tip:</div>
+                                        <div class="col-6 text-end">₹${data.tipAmount.toFixed(2)}</div>
+                                    </div>
+                                    ` : ''}
+                                    <hr class="my-2">
+                                    <div class="row">
+                                        <div class="col-6 text-end"><h5><strong>Total:</strong></h5></div>
+                                        <div class="col-6 text-end"><h5><strong>₹${data.totalAmount.toFixed(2)}</strong></h5></div>
+                                    </div>
+                                    ${data.completedAt ? `
+                                    <div class="row mt-2">
+                                        <div class="col-12 text-center text-muted small">
+                                            Completed: ${data.completedAt}
+                                        </div>
+                                    </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    document.getElementById('orderDetailsContent').innerHTML = html;
+                } else {
+                    document.getElementById('orderDetailsContent').innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>${data.message}
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                document.getElementById('orderDetailsContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>Error loading order details: ${error.message}
+                    </div>
+                `;
+            });
     }
 
     function ensureExportAllowed() {

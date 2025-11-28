@@ -109,6 +109,12 @@ namespace RestaurantManagementSystem.Controllers
     [RequirePermission("NAV_ORDERS_CREATE", PermissionAction.Add)]
     public async Task<IActionResult> Create(CreateOrderViewModel model)
         {
+            // Server-side conditional validation for Delivery address
+            if (model.OrderType == 2 && string.IsNullOrWhiteSpace(model.CustomerAddress))
+            {
+                ModelState.AddModelError("CustomerAddress", "Address is required for Delivery orders.");
+            }
+
             if (ModelState.IsValid)
             {
                 try
@@ -203,6 +209,25 @@ namespace RestaurantManagementSystem.Controllers
                                                 kitchenCommand.Parameters.AddWithValue("@OrderId", orderId);
                                                 kitchenCommand.ExecuteNonQuery();
                                             }
+
+                                            // If Delivery and address provided, persist it to Orders.CustomerAddress (safe check for column)
+                                            try
+                                            {
+                                                if (model.OrderType == 2 && !string.IsNullOrWhiteSpace(model.CustomerAddress))
+                                                {
+                                                    using (var setAddressCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                                        IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'CustomerAddress')
+                                                        BEGIN
+                                                            UPDATE dbo.Orders SET CustomerAddress = @Addr WHERE Id = @OrderId;
+                                                        END", connection, transaction))
+                                                    {
+                                                        setAddressCmd.Parameters.AddWithValue("@Addr", model.CustomerAddress.Trim());
+                                                        setAddressCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                                        setAddressCmd.ExecuteNonQuery();
+                                                    }
+                                                }
+                                            }
+                                            catch { /* do not block order creation if column missing */ }
 
                                             // Add primary table to OrderTables (for both single and merged orders)
                                             int? primaryTableId = null;
@@ -648,6 +673,81 @@ namespace RestaurantManagementSystem.Controllers
             }
             catch { }
             return Json(items);
+        }
+
+        // Get Order Details Summary for Modal (JSON API)
+        [HttpGet]
+        public IActionResult GetOrderSummary(int id)
+        {
+            try
+            {
+                var model = GetOrderDetails(id);
+                if (model == null)
+                {
+                    return Json(new { success = false, message = "Order not found" });
+                }
+
+                var summary = new
+                {
+                    success = true,
+                    orderNumber = model.OrderNumber,
+                    customerName = !string.IsNullOrEmpty(model.CustomerName) ? model.CustomerName : "Walk-in",
+                    customerPhone = model.CustomerPhone,
+                    tableName = model.TableName,
+                    serverName = model.ServerName,
+                    orderType = model.OrderType switch
+                    {
+                        0 => "Dine-In",
+                        1 => "Takeout",
+                        2 => "Delivery",
+                        3 => "Online",
+                        _ => "Unknown"
+                    },
+                    status = model.Status switch
+                    {
+                        0 => "New",
+                        1 => "In Progress",
+                        2 => "Ready",
+                        3 => "Completed",
+                        4 => "Cancelled",
+                        _ => "Unknown"
+                    },
+                    statusClass = model.Status switch
+                    {
+                        0 => "badge bg-info",
+                        1 => "badge bg-warning",
+                        2 => "badge bg-primary",
+                        3 => "badge bg-success",
+                        4 => "badge bg-danger",
+                        _ => "badge bg-secondary"
+                    },
+                    items = model.Items.Select(item => new
+                    {
+                        name = item.MenuItemName,
+                        quantity = item.Quantity,
+                        unitPrice = item.UnitPrice,
+                        subtotal = item.Subtotal,
+                        specialInstructions = item.SpecialInstructions,
+                        modifiers = item.Modifiers?.Select(m => m.ModifierName).ToList() ?? new List<string>()
+                    }).ToList(),
+                    subtotal = model.Subtotal,
+                    discountAmount = model.DiscountAmount,
+                    gstAmount = model.CGSTAmount + model.SGSTAmount,
+                    cgstAmount = model.CGSTAmount,
+                    sgstAmount = model.SGSTAmount,
+                    tipAmount = model.TipAmount,
+                    totalAmount = model.TotalAmount,
+                    specialInstructions = model.SpecialInstructions,
+                    createdAt = model.CreatedAt.ToString("dd-MMM-yyyy HH:mm"),
+                    completedAt = model.CompletedAt?.ToString("dd-MMM-yyyy HH:mm")
+                };
+
+                return Json(summary);
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "Error loading order details: " + ex.Message });
+            }
         }
 
         // KOT Bill print view
@@ -2890,7 +2990,8 @@ namespace RestaurantManagementSystem.Controllers
                         CASE 
                             WHEN o.TableTurnoverId IS NOT NULL THEN tt.GuestName 
                             ELSE o.CustomerName 
-                        END AS GuestName
+                        END AS GuestName,
+                        o.CustomerAddress AS CustomerAddress
                     FROM Orders o
                     LEFT JOIN Users u ON o.UserId = u.Id
                     LEFT JOIN TableTurnovers tt ON o.TableTurnoverId = tt.Id
@@ -2954,6 +3055,17 @@ namespace RestaurantManagementSystem.Controllers
                                 KitchenTickets = new List<KitchenTicketViewModel>(),
                                 AvailableCourses = new List<CourseType>()
                             };
+
+                            // Safely load delivery address if present
+                            try
+                            {
+                                int ordAddr = reader.GetOrdinal("CustomerAddress");
+                                if (ordAddr >= 0 && !reader.IsDBNull(ordAddr))
+                                {
+                                    order.CustomerAddress = reader.GetString(ordAddr);
+                                }
+                            }
+                            catch { /* column may not exist in older schemas */ }
                             
                             // Override with merged table names if available
                             order.TableName = GetMergedTableDisplayName(order.Id, order.TableName);

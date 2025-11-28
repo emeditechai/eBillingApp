@@ -126,6 +126,11 @@
                                     <input asp-for="CustomerPhone" class="form-control" />
                                     <span asp-validation-for="CustomerPhone" class="text-danger"></span>
                                 </div>
+                                <div id="addressSection" class="mt-3 d-none">
+                                    <label asp-for="CustomerAddress" class="form-label">Address</label>
+                                    <textarea asp-for="CustomerAddress" class="form-control" rows="3" placeholder="Flat/House No, Street, Area, City, PIN"></textarea>
+                                    <span asp-validation-for="CustomerAddress" class="text-danger"></span>
+                                </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-2 text-secondary fw-bold" style="font-size:1.1rem;">Special Instructions</div>
@@ -156,11 +161,17 @@
                 var orderType = $('#orderType').val();
                 if (orderType === '0') {
                     $('#tableSection').removeClass('d-none');
-                    $('#customerSection, #phoneSection').addClass('d-none');
+                    $('#customerSection, #phoneSection, #addressSection').addClass('d-none');
                     $('#mergeTablesWrapper').removeClass('d-none');
                 } else {
                     $('#tableSection').addClass('d-none');
                     $('#customerSection, #phoneSection').removeClass('d-none');
+                    // Show address only for Delivery
+                    if (orderType === '2') {
+                        $('#addressSection').removeClass('d-none');
+                    } else {
+                        $('#addressSection').addClass('d-none');
+                    }
                     $('#mergeTablesWrapper').addClass('d-none');
                 }
             }
@@ -210,6 +221,19 @@
                         $('#TableTurnoverId').focus();
                         return false;
                     }
+                    } else if ($('#orderType').val() === '2') { // delivery
+                        var addr = $.trim($('#CustomerAddress').val() || '');
+                        if (addr.length === 0) {
+                            e.preventDefault();
+                            $('.alert-danger.addr-validation').remove();
+                            var alertHtml2 = '<div class="alert alert-danger alert-dismissible fade show addr-validation" role="alert">' +
+                                '<i class="fas fa-map-marker-alt me-2"></i><strong>Address Required!</strong> Please enter delivery address.' +
+                                '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+                            $('form .row').first().before(alertHtml2);
+                            $('html, body').animate({ scrollTop: $(document).find('.alert-danger.addr-validation').offset().top - 100 }, 400);
+                            $('#CustomerAddress').focus();
+                            return false;
+                        }
                 }
                 return true;
             });

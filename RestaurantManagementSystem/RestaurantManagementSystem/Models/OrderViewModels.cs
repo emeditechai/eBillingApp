@@ -62,6 +62,11 @@ namespace RestaurantManagementSystem.Models
         [Display(Name = "Customer Phone")]
         [StringLength(20)]
         public string CustomerPhone { get; set; }
+
+        // Delivery only
+        [Display(Name = "Address")]
+        [StringLength(500)]
+        public string CustomerAddress { get; set; }
         
         [Display(Name = "Special Instructions")]
         [StringLength(500)]
@@ -82,6 +87,7 @@ namespace RestaurantManagementSystem.Models
         public string ServerName { get; set; }
         public string CustomerName { get; set; }
         public string CustomerPhone { get; set; }
+        public string CustomerAddress { get; set; }
         private decimal? _subtotal;
         public decimal Subtotal {
             get {

@@ -1226,6 +1226,7 @@ namespace RestaurantManagementSystem.Controllers
                 model.VisitFrequencies.Clear();
                 model.LoyaltyStats.Clear();
                 model.Demographics.Clear();
+                model.CustomerList.Clear();
 
                 using var reader = await command.ExecuteReaderAsync();
 
@@ -1302,6 +1303,55 @@ namespace RestaurantManagementSystem.Controllers
             catch (Exception ex)
             {
                 Console.WriteLine($"Error loading customer report: {ex.Message}");
+            }
+
+            // Load Takeout/Delivery customer list grouped by phone
+            try
+            {
+                using var connection2 = new SqlConnection(_connectionString);
+                await connection2.OpenAsync();
+                using var cmd = new SqlCommand(@"
+                    SELECT 
+                        ISNULL(NULLIF(o.CustomerName,''), 'Unknown') AS Name,
+                        ISNULL(NULLIF(o.CustomerPhone,''), '') AS Phone,
+                        MAX(ISNULL(NULLIF(o.CustomerAddress,''), '')) AS Address,
+                        CASE o.OrderType WHEN 1 THEN 'Takeout' WHEN 2 THEN 'Delivery' ELSE 'Other' END AS OrderType,
+                        COUNT(*) AS Visits
+                    FROM Orders o WITH (NOLOCK)
+                    WHERE o.OrderType IN (1,2)
+                      AND (@From IS NULL OR o.CreatedAt >= @From)
+                      AND (@To IS NULL OR o.CreatedAt < DATEADD(DAY,1,@To))
+                    GROUP BY 
+                        ISNULL(NULLIF(o.CustomerName,''), 'Unknown'),
+                        ISNULL(NULLIF(o.CustomerPhone,''), ''),
+                        CASE o.OrderType WHEN 1 THEN 'Takeout' WHEN 2 THEN 'Delivery' ELSE 'Other' END
+                    HAVING ISNULL(NULLIF(o.CustomerPhone,''), '') <> ''
+                    ORDER BY Visits DESC, Name ASC
+                ", connection2)
+                {
+                    CommandType = CommandType.Text,
+                    CommandTimeout = 60
+                };
+
+                cmd.Parameters.Add(new SqlParameter("@From", SqlDbType.Date) { Value = (object?)model.Filter.From?.Date ?? DBNull.Value });
+                cmd.Parameters.Add(new SqlParameter("@To", SqlDbType.Date) { Value = (object?)model.Filter.To?.Date ?? DBNull.Value });
+
+                using var r = await cmd.ExecuteReaderAsync();
+                while (await r.ReadAsync())
+                {
+                    model.CustomerList.Add(new CustomerListRow
+                    {
+                        Name = r.IsDBNull(r.GetOrdinal("Name")) ? string.Empty : r.GetString(r.GetOrdinal("Name")),
+                        Phone = r.IsDBNull(r.GetOrdinal("Phone")) ? string.Empty : r.GetString(r.GetOrdinal("Phone")),
+                        Address = r.IsDBNull(r.GetOrdinal("Address")) ? string.Empty : r.GetString(r.GetOrdinal("Address")),
+                        OrderType = r.IsDBNull(r.GetOrdinal("OrderType")) ? string.Empty : r.GetString(r.GetOrdinal("OrderType")),
+                        Visits = r.IsDBNull(r.GetOrdinal("Visits")) ? 0 : r.GetInt32(r.GetOrdinal("Visits"))
+                    });
+                }
+            }
+            catch (Exception ex2)
+            {
+                Console.WriteLine($"Error loading customers list: {ex2.Message}");
             }
         }
 

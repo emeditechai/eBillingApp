@@ -10,6 +10,7 @@ namespace RestaurantManagementSystem.Models
         public List<VisitFrequency> VisitFrequencies { get; set; } = new List<VisitFrequency>();
         public List<LoyaltyBucket> LoyaltyStats { get; set; } = new List<LoyaltyBucket>();
         public List<DemographicRow> Demographics { get; set; } = new List<DemographicRow>();
+        public List<CustomerListRow> CustomerList { get; set; } = new List<CustomerListRow>();
     }
 
     public class CustomerReportFilter
@@ -59,5 +60,14 @@ namespace RestaurantManagementSystem.Models
     {
         public string Category { get; set; } = ""; // e.g., AgeGroup or Gender
         public int Count { get; set; }
+    }
+
+    public class CustomerListRow
+    {
+        public string Name { get; set; } = "";
+        public string Phone { get; set; } = "";
+        public string Address { get; set; } = "";
+        public string OrderType { get; set; } = ""; // Takeout / Delivery
+        public int Visits { get; set; }
     }
 }
