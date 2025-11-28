@@ -38,10 +38,10 @@
     .dashboard-header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
         color: #ffffff;
-        padding: 28px;
-        border-radius: 16px;
-        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4), 0 1px 8px rgba(0,0,0,0.1);
-        margin-bottom: 28px;
+        padding: 18px 20px; /* compact padding */
+        border-radius: 14px;
+        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.35), 0 1px 6px rgba(0,0,0,0.08);
+        margin-bottom: 20px;
         position: relative;
         overflow: hidden;
     }
@@ -85,17 +85,17 @@
         .dashboard-help-btn i { font-size: 1rem; }
     .dashboard-header .brand-logo-wrapper {
         position: absolute;
-        top: 12px;
-        right: 15px;
+        top: 10px;
+        right: 12px;
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 10px;
         background: linear-gradient(135deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.15) 100%);
-        padding: 8px 18px 8px 12px;
-        border-radius: 50px;
+        padding: 6px 14px 6px 10px; /* compact */
+        border-radius: 14px; /* smaller badge */
         backdrop-filter: blur(10px);
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2), inset 0 1px 1px rgba(255,255,255,0.3);
-        max-width: 280px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.18), inset 0 1px 1px rgba(255,255,255,0.3);
+        max-width: 260px;
         border: 1px solid rgba(255,255,255,0.3);
     }
     .dashboard-header .brand-logo-wrapper img.brand-logo {
@@ -123,14 +123,14 @@
     
     .dashboard-header h1 {
         margin: 0;
-        font-weight: 300;
-        font-size: 2.5rem;
+        font-weight: 400;
+        font-size: 2.0rem; /* compact title */
     }
     
     .dashboard-header p {
-        margin-top: 10px;
+        margin-top: 6px;
         opacity: 0.9;
-        font-size: 1.1rem;
+        font-size: 1.0rem; /* compact subtitle */
     }
     
     .user-info {
@@ -382,6 +382,12 @@
                 <h1 class="me-3"><i class="fas fa-utensils me-2" aria-hidden="true"></i>@Model.RestaurantName Dashboard</h1>
             </div>
             <p>Welcome back, <strong>@Model.UserFullName</strong>!</p>
+            <div class="d-flex justify-content-end">
+                <div class="live-clock" id="liveClock">
+                    <span class="date" id="liveDate">—</span>
+                    <span class="time" id="liveTime">00:00:00</span>
+                </div>
+            </div>
             
             <div class="user-info">
                 <div>
@@ -493,14 +499,14 @@
                                         @{
                                             string badgeClass = order.Status.ToLower() switch
                                             {
-                                                "completed" => "badge-success",
-                                                "in progress" or "preparing" => "badge-warning",
-                                                "cancelled" => "badge-danger",
-                                                "pending" => "badge-info",
-                                                _ => "badge-secondary"
+                                                "completed" => "bg-success",
+                                                "in progress" or "preparing" => "bg-warning text-dark",
+                                                "cancelled" => "bg-danger",
+                                                "pending" => "bg-info text-dark",
+                                                _ => "bg-secondary"
                                             };
                                         }
-                                        <span class="badge badge-custom @badgeClass">@order.Status</span>
+                                        <span class="badge @badgeClass">@order.Status</span>
                                     </td>
                                     <td>@order.OrderTime</td>
                                     <td>
@@ -521,6 +527,38 @@
             </div>
         </div>
     </div>
+
+    <!-- Live Date & Digital Time -->
+    <style>
+        .live-clock { position: static; margin-top: 6px; padding: 6px 10px; border-radius: 10px; background: rgba(0,0,0,0.28); backdrop-filter: blur(6px); color: #fff; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.22);} 
+        .live-clock .date { font-size: 0.85rem; opacity: .95; }
+        .live-clock .time { font-family: "SF Mono", Menlo, Monaco, Consolas, monospace; font-size: 1.0rem; letter-spacing: 0.4px; }
+        @@media (max-width: 768px) { .live-clock { position: static; margin: 8px 0 0; } }
+    </style>
+    @* Removed duplicate bottom-side live clock to avoid double display *@
+
+    <script>
+        (function(){
+            function pad(n){ return n<10 ? '0'+n : ''+n; }
+            function format12h(h){ return h%12 === 0 ? 12 : h%12; }
+            function updateClock(){
+                const now = new Date();
+                const yyyy = now.getFullYear();
+                const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                const dd = pad(now.getDate());
+                const dateStr = `${dd} ${monthNames[now.getMonth()]} ${yyyy}`;
+                const hh12 = format12h(now.getHours());
+                const ampm = now.getHours() >= 12 ? 'PM' : 'AM';
+                const timeStr = `${pad(hh12)}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ${ampm}`;
+                const dEl = document.getElementById('liveDate');
+                const tEl = document.getElementById('liveTime');
+                if (dEl) dEl.textContent = dateStr;
+                if (tEl) tEl.textContent = timeStr;
+            }
+            function init(){ updateClock(); setInterval(updateClock, 1000); }
+            if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', init); } else { init(); }
+        })();
+    </script>
 
     <!-- Help Modal - Comprehensive Version -->
     @await Html.PartialAsync("_HelpInfo")
