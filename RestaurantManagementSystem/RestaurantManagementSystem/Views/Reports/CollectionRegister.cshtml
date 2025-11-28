@@ -156,18 +156,21 @@
                     <tbody>
                         @foreach (var row in Model.Rows)
                         {
-                            <tr>
+                            var isRefund = row.PaymentStatus == 3;
+                            var rowClass = isRefund ? "table-danger" : "";
+                            var textClass = isRefund ? "text-danger" : "";
+                            <tr class="@rowClass">
                                 <td class="text-nowrap">@(row.PaymentDate.ToString("dd-MMM-yyyy HH:mm"))</td>
                                 <td>@row.OrderNo</td>
                                 <td>@row.TableNo</td>
                                 <td>@row.Username</td>
-                                <td class="text-end">₹@(row.ActualBillAmount.ToString("N2"))</td>
-                                <td class="text-end">₹@(row.DiscountAmount.ToString("N2"))</td>
-                                <td class="text-end text-success">₹@(row.GSTAmount.ToString("N2"))</td>
-                                <td class="text-end">₹@(row.RoundOffAmount.ToString("+0.00;-0.00;0.00"))</td>
-                                <td class="text-end fw-bold">₹@(row.ReceiptAmount.ToString("N2"))</td>
-                                <td><span class="badge bg-primary">@row.PaymentMethod</span></td>
-                                <td class="small text-muted">@row.Details</td>
+                                <td class="text-end @textClass">₹@(row.ActualBillAmount.ToString("N2"))</td>
+                                <td class="text-end @textClass">₹@(Math.Abs(row.DiscountAmount).ToString("N2"))</td>
+                                <td class="text-end @(isRefund ? "text-danger" : "text-success")">₹@(row.GSTAmount.ToString("N2"))</td>
+                                <td class="text-end @textClass">₹@(row.RoundOffAmount.ToString("+0.00;-0.00;0.00"))</td>
+                                <td class="text-end fw-bold @textClass">₹@(row.ReceiptAmount.ToString("N2"))</td>
+                                <td><span class="badge @(isRefund ? "bg-danger" : "bg-primary")">@row.PaymentMethod</span></td>
+                                <td class="small @(isRefund ? "text-danger fw-bold" : "text-muted")">@row.Details</td>
                             </tr>
                         }
                     </tbody>

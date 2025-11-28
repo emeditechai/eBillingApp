@@ -1535,7 +1535,8 @@ namespace RestaurantManagementSystem.Controllers
                         ReceiptAmount = reader.GetDecimal(reader.GetOrdinal("ReceiptAmount")),
                         PaymentMethod = reader.GetString(reader.GetOrdinal("PaymentMethod")),
                         Details = reader.GetString(reader.GetOrdinal("Details")),
-                        PaymentDate = reader.GetDateTime(reader.GetOrdinal("PaymentDate"))
+                        PaymentDate = reader.GetDateTime(reader.GetOrdinal("PaymentDate")),
+                        PaymentStatus = reader.GetInt32(reader.GetOrdinal("PaymentStatus"))
                     };
                     model.Rows.Add(row);
                 }

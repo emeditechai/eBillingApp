@@ -1,12 +1,18 @@
--- Order Wise Payment Method Wise Daily Collection Register
--- Updated to show GST Amount and correct Actual Bill Amount (Subtotal - Discount)
--- This stored procedure generates a detailed collection report with support for split payments
--- Now includes void/refund payments with clear indication
+-- Update Collection Register to include Void/Refund payments
+-- This script safely updates the stored procedure to fetch and display refunded payments
 
+USE RestaurantManagement;
+GO
+
+PRINT 'Updating Collection Register to include Void/Refund payments...';
+GO
+
+-- Drop existing procedure
 IF OBJECT_ID('dbo.usp_GetCollectionRegister', 'P') IS NOT NULL
     DROP PROCEDURE dbo.usp_GetCollectionRegister;
 GO
 
+-- Create updated procedure with void/refund support
 CREATE PROCEDURE dbo.usp_GetCollectionRegister
     @FromDate DATE = NULL,
     @ToDate DATE = NULL,
@@ -114,8 +120,10 @@ BEGIN
 END
 GO
 
-PRINT 'Collection Register stored procedure updated successfully.';
-PRINT 'Actual Bill Amount now calculated as Orders.Subtotal - Discount';
-PRINT 'GST Amount column added (CGST + SGST)';
-PRINT 'Now includes void/refund payments with negative amounts and REFUND indicator';
+PRINT '✓ Collection Register stored procedure updated successfully';
+PRINT '✓ Now includes void/refund payments with:';
+PRINT '  - Negative amounts for refunds';
+PRINT '  - REFUND indicator in Payment Method';
+PRINT '  - Red highlighting in the UI';
+PRINT '  - Void reason displayed in Details column';
 GO

@@ -33,6 +33,7 @@ namespace RestaurantManagementSystem.ViewModels
         public string PaymentMethod { get; set; }
         public string Details { get; set; }
         public DateTime PaymentDate { get; set; }
+        public int PaymentStatus { get; set; } // 1=Approved, 3=Void/Refund
     }
 
     public class CollectionRegisterSummary
