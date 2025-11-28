@@ -391,6 +391,7 @@ namespace RestaurantManagementSystem.Controllers
             // Support both encrypted token and plain parameters for backward compatibility
             int actualId = 0;
             bool actualFromBar = false;
+            bool hasExplicitFromBar = false; // track whether caller explicitly specified the context
 
             if (!string.IsNullOrEmpty(token))
             {
@@ -407,6 +408,7 @@ namespace RestaurantManagementSystem.Controllers
                     if (parameters.ContainsKey("fromBar") && bool.TryParse(parameters["fromBar"], out bool decryptedFromBar))
                     {
                         actualFromBar = decryptedFromBar;
+                        hasExplicitFromBar = true;
                     }
                 }
                 catch (Exception ex)
@@ -420,7 +422,11 @@ namespace RestaurantManagementSystem.Controllers
             {
                 // Use plain parameters for backward compatibility
                 actualId = id.Value;
-                actualFromBar = fromBar ?? false;
+                if (fromBar.HasValue)
+                {
+                    actualFromBar = fromBar.Value;
+                    hasExplicitFromBar = true;
+                }
             }
             else
             {
@@ -433,11 +439,12 @@ namespace RestaurantManagementSystem.Controllers
                 return NotFound();
             }
 
-            // Determine BAR context: explicit parameter > TempData > DB detection (KitchenTickets BAR/BOT)
+            // Determine BAR context: EXPLICIT parameter (true or false) > TempData > DB detection
             bool isBarContext = false;
-            if (actualFromBar)
+            if (hasExplicitFromBar)
             {
-                isBarContext = true;
+                // Caller explicitly declared the context; honor it and skip detection
+                isBarContext = actualFromBar;
             }
             else if (TempData["IsBarOrder"] as bool? == true)
             {
