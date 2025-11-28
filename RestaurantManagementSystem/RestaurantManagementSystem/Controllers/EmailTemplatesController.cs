@@ -44,7 +44,7 @@ namespace RestaurantManagementSystem.Controllers
         // GET: EmailTemplates/Create
         public IActionResult Create()
         {
-            return View();
+            return View(new EmailTemplate());
         }
 
         // POST: EmailTemplates/Create
