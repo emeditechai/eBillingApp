@@ -1,0 +1,343 @@
+@model RestaurantManagementSystem.ViewModels.MailConfigurationViewModel
+@{
+    ViewData["Title"] = "Mail Configuration";
+}
+
+<link rel="stylesheet" href="~/css/settings.css" />
+<link rel="stylesheet" href="~/css/settings-compact.css" />
+
+<div class="container-fluid px-4 settings-container">
+    <div class="settings-hero">
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
+            <div>
+                <h1 class="h3 mb-1"><i class="fas fa-envelope-open-text me-2"></i>Mail Configuration</h1>
+                <p class="lead mb-0">Configure SMTP email server settings for system notifications</p>
+            </div>
+        </div>
+        <div class="mt-2">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="/Home/Index">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="/Settings/Index">Settings</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Mail Configuration</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show shadow-sm border-0">
+            <i class="fas fa-check-circle me-2"></i>
+            @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show shadow-sm border-0">
+            <i class="fas fa-exclamation-circle me-2"></i>
+            @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card settings-card pro-card mb-4">
+                <div class="card-header d-flex align-items-center justify-content-between py-2 px-3">
+                    <h2 class="section-title mb-0">
+                        <span class="icon-chip"><i class="fas fa-server"></i></span>
+                        SMTP Server Configuration
+                    </h2>
+                    <small class="meta-subtitle">Email server connection settings</small>
+                </div>
+                <div class="card-body py-3 px-4">
+                    <form asp-action="Save" method="post" id="mailConfigForm">
+                        <input type="hidden" asp-for="Id" />
+                        
+                        <div class="row g-3">
+                            <div class="col-md-8">
+                                <div class="form-group">
+                                    <label asp-for="SmtpServer" class="form-label fw-semibold">
+                                        <i class="fas fa-server text-primary me-1"></i>SMTP Server
+                                    </label>
+                                    <input asp-for="SmtpServer" class="form-control" placeholder="smtp.gmail.com" />
+                                    <small class="form-text text-muted">
+                                        <i class="fas fa-info-circle me-1"></i>Use full SMTP address (e.g., smtp.yourdomain.com, not just yourdomain.com)
+                                    </small>
+                                    <span asp-validation-for="SmtpServer" class="text-danger small"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label asp-for="SmtpPort" class="form-label fw-semibold">
+                                        <i class="fas fa-plug text-primary me-1"></i>SMTP Port
+                                    </label>
+                                    <input asp-for="SmtpPort" type="number" class="form-control" placeholder="587" />
+                                    <small class="form-text text-muted">
+                                        587 (TLS) or 465 (SSL)
+                                    </small>
+                                    <span asp-validation-for="SmtpPort" class="text-danger small"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mt-2">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label asp-for="SmtpUsername" class="form-label fw-semibold">
+                                        <i class="fas fa-user text-primary me-1"></i>Username
+                                    </label>
+                                    <input asp-for="SmtpUsername" class="form-control" placeholder="your-email@domain.com" />
+                                    <span asp-validation-for="SmtpUsername" class="text-danger small"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label asp-for="SmtpPassword" class="form-label fw-semibold">
+                                        <i class="fas fa-key text-primary me-1"></i>Password
+                                    </label>
+                                    <div class="input-group">
+                                        <input asp-for="SmtpPassword" type="password" class="form-control" id="passwordInput" placeholder="••••••••" />
+                                        <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                                            <i class="fas fa-eye" id="toggleIcon"></i>
+                                        </button>
+                                    </div>
+                                    <span asp-validation-for="SmtpPassword" class="text-danger small"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <div class="form-check form-switch">
+                                <input asp-for="EnableSSL" class="form-check-input" type="checkbox" id="enableSSLSwitch" />
+                                <label class="form-check-label fw-semibold" for="enableSSLSwitch">
+                                    <i class="fas fa-lock text-success me-1"></i>Enable SSL/TLS
+                                    <small class="text-muted d-block">Recommended for secure email transmission</small>
+                                </label>
+                            </div>
+                        </div>
+
+                        <hr class="my-4" />
+
+                        <h5 class="mb-3">
+                            <span class="icon-chip"><i class="fas fa-envelope"></i></span>
+                            Email Settings
+                        </h5>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label asp-for="FromEmail" class="form-label fw-semibold">
+                                        <i class="fas fa-at text-primary me-1"></i>From Email
+                                    </label>
+                                    <input asp-for="FromEmail" type="email" class="form-control" placeholder="noreply@restaurant.com" />
+                                    <span asp-validation-for="FromEmail" class="text-danger small"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label asp-for="FromName" class="form-label fw-semibold">
+                                        <i class="fas fa-signature text-primary me-1"></i>From Name
+                                    </label>
+                                    <input asp-for="FromName" class="form-control" placeholder="Restaurant Management System" />
+                                    <span asp-validation-for="FromName" class="text-danger small"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <div class="form-group">
+                                <label asp-for="AdminNotificationEmail" class="form-label fw-semibold">
+                                    <i class="fas fa-user-shield text-primary me-1"></i>Admin Notification Email
+                                    <span class="badge bg-secondary ms-1">Optional</span>
+                                </label>
+                                <input asp-for="AdminNotificationEmail" type="email" class="form-control" placeholder="admin@restaurant.com" />
+                                <small class="form-text text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>Email address to receive system notifications and alerts
+                                </small>
+                                <span asp-validation-for="AdminNotificationEmail" class="text-danger small"></span>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <div class="form-check form-switch">
+                                <input asp-for="IsActive" class="form-check-input" type="checkbox" id="isActiveSwitch" />
+                                <label class="form-check-label fw-semibold" for="isActiveSwitch">
+                                    <i class="fas fa-power-off text-success me-1"></i>Activate Email Service
+                                    <small class="text-muted d-block">Enable this to start sending emails from the system</small>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2 mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i>Save Configuration
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="testEmailBtn">
+                                <i class="fas fa-paper-plane me-1"></i>Send Test Email
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card settings-card pro-card mb-4">
+                <div class="card-header py-2 px-3">
+                    <h3 class="section-title mb-0">
+                        <span class="icon-chip"><i class="fas fa-info-circle"></i></span>
+                        Quick Guide
+                    </h3>
+                </div>
+                <div class="card-body py-3 px-4">
+                    <div class="small">
+                        <h6 class="fw-bold mb-2"><i class="fas fa-envelope text-primary me-1"></i>Gmail Configuration</h6>
+                        <ul class="mb-2 ps-3">
+                            <li>SMTP Server: smtp.gmail.com</li>
+                            <li>Port: 587 (TLS) or 465 (SSL)</li>
+                            <li>Enable SSL: Yes</li>
+                            <li><strong>Username:</strong> Full email address</li>
+                        </ul>
+                        <div class="alert alert-info p-2 mb-3">
+                            <small>
+                                <strong>🔑 Gmail App Password Required:</strong><br>
+                                1. Go to <a href="https://myaccount.google.com/security" target="_blank">Google Account Security</a><br>
+                                2. Enable 2-Step Verification<br>
+                                3. Go to Security → App Passwords<br>
+                                4. Generate password for "Mail"<br>
+                                5. Use generated password (not regular password)
+                            </small>
+                        </div>
+
+                        <h6 class="fw-bold mb-2"><i class="fas fa-envelope text-info me-1"></i>Outlook/Office 365</h6>
+                        <ul class="mb-3 ps-3">
+                            <li>SMTP Server: smtp.office365.com</li>
+                            <li>Port: 587</li>
+                            <li>Enable SSL: Yes</li>
+                            <li><strong>Username:</strong> Full email address</li>
+                        </ul>
+
+                        <h6 class="fw-bold mb-2"><i class="fas fa-envelope text-warning me-1"></i>Custom Domain</h6>
+                        <ul class="mb-3 ps-3">
+                            <li>SMTP Server: smtp.yourdomain.com <small class="text-muted">(or mail.yourdomain.com)</small></li>
+                            <li>Port: Check with your hosting provider (usually 587 or 465)</li>
+                            <li>Contact your hosting provider for exact settings</li>
+                        </ul>
+
+                        <h6 class="fw-bold mb-2"><i class="fas fa-shield-alt text-success me-1"></i>Security Tips</h6>
+                        <ul class="mb-2 ps-3">
+                            <li>Always use App Passwords for Gmail</li>
+                            <li>Enable 2FA on email account</li>
+                            <li>Always enable SSL/TLS</li>
+                            <li>Test configuration before activating</li>
+                        </ul>
+
+                        <div class="alert alert-warning p-2 mt-3 mb-0">
+                            <small>
+                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                <strong>Important:</strong> Never use your regular email password. Always use App Passwords or application-specific credentials.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card settings-card pro-card">
+                <div class="card-header py-2 px-3">
+                    <h3 class="section-title mb-0">
+                        <span class="icon-chip"><i class="fas fa-vial"></i></span>
+                        Test Email
+                    </h3>
+                </div>
+                <div class="card-body py-3 px-4">
+                    <div class="small">
+                        <p class="mb-2">Send a test email to verify your configuration:</p>
+                        <div class="form-group mb-3">
+                            <label class="form-label fw-semibold small">Test Email Address</label>
+                            <input type="email" id="testEmailAddress" class="form-control form-control-sm" placeholder="test@example.com" />
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary w-100" id="sendTestEmailBtn">
+                            <i class="fas fa-paper-plane me-1"></i>Send Test Email
+                        </button>
+                        <div id="testEmailResult" class="mt-2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    
+    <script>
+        // Toggle password visibility
+        document.getElementById('togglePassword').addEventListener('click', function() {
+            const passwordInput = document.getElementById('passwordInput');
+            const toggleIcon = document.getElementById('toggleIcon');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleIcon.classList.remove('fa-eye');
+                toggleIcon.classList.add('fa-eye-slash');
+            } else {
+                passwordInput.type = 'password';
+                toggleIcon.classList.remove('fa-eye-slash');
+                toggleIcon.classList.add('fa-eye');
+            }
+        });
+
+        // Test email functionality
+        document.getElementById('sendTestEmailBtn').addEventListener('click', async function() {
+            const testEmail = document.getElementById('testEmailAddress').value;
+            const resultDiv = document.getElementById('testEmailResult');
+            
+            if (!testEmail) {
+                resultDiv.innerHTML = '<div class="alert alert-danger p-2 mb-0 small"><i class="fas fa-exclamation-circle me-1"></i>Please enter a test email address</div>';
+                return;
+            }
+
+            // Validate email format
+            const emailRegex = /^[^\s@@]+@@[^\s@@]+\.[^\s@@]+$/;
+            if (!emailRegex.test(testEmail)) {
+                resultDiv.innerHTML = '<div class="alert alert-danger p-2 mb-0 small"><i class="fas fa-exclamation-circle me-1"></i>Invalid email format</div>';
+                return;
+            }
+
+            // Show loading
+            resultDiv.innerHTML = '<div class="text-center p-2"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Sending...</span></div></div>';
+
+            try {
+                const response = await fetch('/MailConfiguration/TestConfiguration', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]').value
+                    },
+                    body: JSON.stringify({ testEmail: testEmail })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    resultDiv.innerHTML = '<div class="alert alert-success p-2 mb-0 small"><i class="fas fa-check-circle me-1"></i>' + result.message + '</div>';
+                } else {
+                    resultDiv.innerHTML = '<div class="alert alert-danger p-2 mb-0 small"><i class="fas fa-exclamation-circle me-1"></i>' + result.message + '</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="alert alert-danger p-2 mb-0 small"><i class="fas fa-exclamation-circle me-1"></i>Error: ' + error.message + '</div>';
+            }
+        });
+
+        // Alternative test email button in main form
+        document.getElementById('testEmailBtn').addEventListener('click', function(e) {
+            e.preventDefault();
+            document.getElementById('testEmailAddress').focus();
+            document.getElementById('testEmailAddress').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+    </script>
+}

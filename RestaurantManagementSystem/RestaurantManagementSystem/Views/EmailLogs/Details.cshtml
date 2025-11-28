@@ -1,0 +1,195 @@
+@model RestaurantManagementSystem.Models.EmailLog
+@{
+    ViewData["Title"] = "Email Log Details";
+}
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <h2>
+                <i class="fas fa-envelope-open-text text-info"></i> Email Log Details
+            </h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="@Url.Action("Index", "EmailLogs")">Email Logs</a>
+                    </li>
+                    <li class="breadcrumb-item active">Details #@Model.EmailLogID</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- Status Card -->
+    <div class="row">
+        <div class="col-md-12 mb-3">
+            <div class="card @(Model.Status == "Success" ? "border-success" : "border-danger")">
+                <div class="card-header @(Model.Status == "Success" ? "bg-success" : "bg-danger") text-white">
+                    <h5 class="mb-0">
+                        @if (Model.Status == "Success")
+                        {
+                            <i class="fas fa-check-circle"></i> <text>Email Sent Successfully</text>
+                        }
+                        else
+                        {
+                            <i class="fas fa-times-circle"></i> <text>Email Failed</text>
+                        }
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Log ID:</strong> @Model.EmailLogID</p>
+                            <p><strong>Sent At:</strong> @Model.SentAt.ToString("yyyy-MM-dd HH:mm:ss")</p>
+                            <p><strong>Processing Time:</strong> 
+                                @if (Model.ProcessingTimeMs.HasValue)
+                                {
+                                    <span class="badge bg-info">@Model.ProcessingTimeMs ms</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">N/A</span>
+                                }
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            @if (!string.IsNullOrEmpty(Model.IPAddress))
+                            {
+                                <p><strong>IP Address:</strong> @Model.IPAddress</p>
+                            }
+                            @if (!string.IsNullOrEmpty(Model.UserAgent))
+                            {
+                                <p><strong>User Agent:</strong> <small>@Model.UserAgent</small></p>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Email Details -->
+    <div class="row">
+        <div class="col-md-12 mb-3">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-envelope"></i> Email Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="fw-bold">From:</label>
+                            <p>@Model.FromEmail</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="fw-bold">To:</label>
+                            <p>@Model.ToEmail</p>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label class="fw-bold">Subject:</label>
+                            <p>@(Model.Subject ?? "N/A")</p>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(Model.EmailBody))
+                    {
+                        <div class="row">
+                            <div class="col-md-12">
+                                <label class="fw-bold">Email Body:</label>
+                                <div class="border p-3 bg-light" style="max-height: 400px; overflow-y: auto;">
+                                    @Html.Raw(Model.EmailBody)
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SMTP Configuration Used -->
+    <div class="row">
+        <div class="col-md-12 mb-3">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="fas fa-server"></i> SMTP Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>SMTP Server:</strong> @Model.SmtpServer</p>
+                            <p><strong>SMTP Port:</strong> @Model.SmtpPort</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>SSL Enabled:</strong> 
+                                @if (Model.EnableSSL)
+                                {
+                                    <span class="badge bg-success"><i class="fas fa-lock"></i> Yes</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning"><i class="fas fa-unlock"></i> No</span>
+                                }
+                            </p>
+                            <p><strong>SMTP Username:</strong> @Model.SmtpUsername</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Details (if failed) -->
+    @if (Model.Status == "Failed")
+    {
+        <div class="row">
+            <div class="col-md-12 mb-3">
+                <div class="card border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="mb-0"><i class="fas fa-exclamation-triangle"></i> Error Details</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (!string.IsNullOrEmpty(Model.ErrorCode))
+                        {
+                            <p><strong>Error Code:</strong> <span class="badge bg-danger">@Model.ErrorCode</span></p>
+                        }
+                        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+                        {
+                            <p><strong>Error Message:</strong></p>
+                            <div class="alert alert-danger">
+                                <pre class="mb-0" style="white-space: pre-wrap;">@Model.ErrorMessage</pre>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Action Buttons -->
+    <div class="row">
+        <div class="col-md-12">
+            <a href="@Url.Action("Index")" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to List
+            </a>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Auto-dismiss alerts after 5 seconds
+        setTimeout(function() {
+            $('.alert').fadeOut('slow');
+        }, 5000);
+    </script>
+}
