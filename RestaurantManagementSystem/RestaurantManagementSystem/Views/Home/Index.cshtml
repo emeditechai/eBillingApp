@@ -469,65 +469,6 @@
 
     <!-- Quick Reservation removed to simplify dashboard. -->
 
-    <!-- Recent Orders Table -->
-    <div class="row">
-        <div class="col-12 mb-4">
-            <div class="data-table-container">
-                <h3>Recent Orders</h3>
-                <div class="table-responsive">
-                    <table id="restaurantTable" class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>Order ID</th>
-                                <th>Customer</th>
-                                <th>Table</th>
-                                <th>Total</th>
-                                <th>Status</th>
-                                <th>Time</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var order in Model.RecentOrders)
-                            {
-                                <tr>
-                                    <td>@order.OrderNumber</td>
-                                    <td>@order.CustomerName</td>
-                                    <td>@order.TableNumber</td>
-                                    <td>₹@order.TotalAmount.ToString("N2")</td>
-                                    <td>
-                                        @{
-                                            string badgeClass = order.Status.ToLower() switch
-                                            {
-                                                "completed" => "bg-success",
-                                                "in progress" or "preparing" => "bg-warning text-dark",
-                                                "cancelled" => "bg-danger",
-                                                "pending" => "bg-info text-dark",
-                                                _ => "bg-secondary"
-                                            };
-                                        }
-                                        <span class="badge @badgeClass">@order.Status</span>
-                                    </td>
-                                    <td>@order.OrderTime</td>
-                                    <td>
-                                        <a href="@Url.Action("Details", "Order", new { id = order.OrderId })" class="btn btn-sm btn-primary"><i class="fas fa-eye"></i></a>
-                                        <button class="btn btn-sm btn-info print-order" data-order-id="@order.OrderId"><i class="fas fa-print"></i></button>
-                                    </td>
-                                </tr>
-                            }
-                            @if (!Model.RecentOrders.Any())
-                            {
-                                <tr>
-                                    <td colspan="7" class="text-center">No recent orders found</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Live Date & Digital Time -->
     <style>
         .live-clock { position: static; margin-top: 6px; padding: 6px 10px; border-radius: 10px; background: rgba(0,0,0,0.28); backdrop-filter: blur(6px); color: #fff; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.22);} 
