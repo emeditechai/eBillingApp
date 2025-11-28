@@ -564,6 +564,7 @@ BEGIN
         KitchenTickets kt
     WHERE 
         kt.Status = @Status
+        AND kt.KitchenStation != 'BAR'  -- Exclude BAR tickets
         AND (@StationId IS NULL OR kt.KitchenStationId = @StationId)
     ORDER BY 
         kt.CreatedAt;
@@ -593,7 +594,8 @@ BEGIN
     FROM 
         KitchenTickets kt
     WHERE 
-        (@StationId IS NULL OR kt.KitchenStationId = @StationId)
+        kt.KitchenStation != 'BAR'  -- Exclude BAR tickets
+        AND (@StationId IS NULL OR kt.KitchenStationId = @StationId)
         AND (@Status IS NULL OR kt.Status = @Status)
         AND (@DateFrom IS NULL OR kt.CreatedAt >= @DateFrom)
         AND (@DateTo IS NULL OR kt.CreatedAt <= @DateTo)
@@ -809,9 +811,9 @@ CREATE PROCEDURE GetKitchenDashboardStats
 AS
 BEGIN
     SELECT
-        SUM(CASE WHEN kt.Status = 0 THEN 1 ELSE 0 END) AS NewTicketsCount,
-        SUM(CASE WHEN kt.Status = 1 THEN 1 ELSE 0 END) AS InProgressTicketsCount,
-        SUM(CASE WHEN kt.Status = 2 THEN 1 ELSE 0 END) AS ReadyTicketsCount,
+        COUNT(DISTINCT CASE WHEN kt.Status = 0 THEN kt.Id ELSE NULL END) AS NewTicketsCount,
+        COUNT(DISTINCT CASE WHEN kt.Status = 1 THEN kt.Id ELSE NULL END) AS InProgressTicketsCount,
+        COUNT(DISTINCT CASE WHEN kt.Status = 2 THEN kt.Id ELSE NULL END) AS ReadyTicketsCount,
         SUM(CASE WHEN kti.Status < 2 THEN 1 ELSE 0 END) AS PendingItemsCount,
         SUM(CASE WHEN kti.Status = 2 THEN 1 ELSE 0 END) AS ReadyItemsCount,
         AVG(CASE 
@@ -825,6 +827,7 @@ BEGIN
         KitchenTicketItems kti ON kt.Id = kti.KitchenTicketId
     WHERE
         kt.Status < 4  -- Not cancelled
+        AND kt.KitchenStation != 'BAR'  -- Exclude BAR tickets
         AND (@StationId IS NULL OR kt.KitchenStationId = @StationId);
 END;
 GO

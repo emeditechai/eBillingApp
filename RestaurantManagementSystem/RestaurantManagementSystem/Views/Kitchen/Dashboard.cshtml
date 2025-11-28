@@ -41,6 +41,7 @@
                 <div class="card-body text-center">
                     <h5 class="card-title">New</h5>
                     <h2 class="mb-0">@Model.Stats.NewTicketsCount</h2>
+                    <small class="text-muted">(@Model.Stats.NewItemsCount items)</small>
                 </div>
             </div>
         </div>
@@ -49,6 +50,7 @@
                 <div class="card-body text-center">
                     <h5 class="card-title">In Progress</h5>
                     <h2 class="mb-0">@Model.Stats.InProgressTicketsCount</h2>
+                    <small>(@Model.Stats.InProgressItemsCount items)</small>
                 </div>
             </div>
         </div>
@@ -57,6 +59,7 @@
                 <div class="card-body text-center">
                     <h5 class="card-title">Ready</h5>
                     <h2 class="mb-0">@Model.Stats.ReadyTicketsCount</h2>
+                    <small>(@Model.Stats.ReadyItemsTotalCount items)</small>
                 </div>
             </div>
         </div>

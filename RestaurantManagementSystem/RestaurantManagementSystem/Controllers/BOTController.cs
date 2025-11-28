@@ -355,6 +355,41 @@ namespace RestaurantManagementSystem.Controllers
                 }
             }
             
+            // Get item counts per status for BAR
+            var itemCountSql = @"
+                SELECT kt.Status, COUNT(kti.Id) as ItemCount
+                FROM KitchenTickets kt
+                INNER JOIN KitchenTicketItems kti ON kt.Id = kti.KitchenTicketId
+                WHERE kt.KitchenStation = 'BAR'
+                  AND kt.TicketNumber LIKE 'BOT-%'
+                  AND kt.Status IN (0, 1, 2)
+                GROUP BY kt.Status";
+            
+            using (var itemCmd = new SqlCommand(itemCountSql, connection))
+            {
+                using (var itemReader = itemCmd.ExecuteReader())
+                {
+                    while (itemReader.Read())
+                    {
+                        int status = itemReader.GetInt32(0);
+                        int itemCount = itemReader.GetInt32(1);
+                        
+                        switch (status)
+                        {
+                            case 0: // New
+                                stats.NewItemsCount = itemCount;
+                                break;
+                            case 1: // In Progress
+                                stats.InProgressItemsCount = itemCount;
+                                break;
+                            case 2: // Ready
+                                stats.ReadyItemsCount = itemCount;
+                                break;
+                        }
+                    }
+                }
+            }
+            
             return stats;
         }
 

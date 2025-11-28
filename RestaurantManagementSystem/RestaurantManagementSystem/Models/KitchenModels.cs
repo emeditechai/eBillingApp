@@ -139,6 +139,11 @@ namespace RestaurantManagementSystem.Models
         public int ReadyItemsCount { get; set; }
         public double AvgPrepTimeMinutes { get; set; }
         
+        // Item counts per status
+        public int NewItemsCount { get; set; }
+        public int InProgressItemsCount { get; set; }
+        public int ReadyItemsTotalCount { get; set; }
+        
         public int TotalTicketsCount => NewTicketsCount + InProgressTicketsCount + ReadyTicketsCount;
         public int TotalItemsCount => PendingItemsCount + ReadyItemsCount;
     }

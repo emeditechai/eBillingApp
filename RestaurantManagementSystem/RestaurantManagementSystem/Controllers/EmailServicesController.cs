@@ -402,16 +402,24 @@ namespace RestaurantManagementSystem.Controllers
                                   (MONTH(gf.GuestBirthDate) = MONTH(GETDATE()) AND DAY(gf.GuestBirthDate) > DAY(GETDATE()))
                         THEN 1 ELSE 0 END as Age,
                         (SELECT TOP 1 SentAt FROM tbl_EmailCampaignHistory 
-                         WHERE GuestId = gf.Id AND CampaignType = 'Birthday' 
+                         WHERE GuestEmail = gf.Email AND CampaignType = 'Birthday' 
                          AND YEAR(SentAt) = YEAR(GETDATE()) 
                          AND Status = 'Success'
                          ORDER BY SentAt DESC) as LastSentDate
-                    FROM GuestFeedback gf
-                    WHERE gf.Email IS NOT NULL 
-                    AND gf.Email <> ''
-                    AND gf.GuestBirthDate IS NOT NULL
-                    AND MONTH(gf.GuestBirthDate) = MONTH(GETDATE())
-                    AND DAY(gf.GuestBirthDate) = DAY(GETDATE())
+                    FROM (
+                        SELECT 
+                            MIN(Id) as Id,
+                            MAX(GuestName) as GuestName,
+                            Email,
+                            MAX(GuestBirthDate) as GuestBirthDate
+                        FROM GuestFeedback
+                        WHERE Email IS NOT NULL 
+                        AND Email <> ''
+                        AND GuestBirthDate IS NOT NULL
+                        AND MONTH(GuestBirthDate) = MONTH(GETDATE())
+                        AND DAY(GuestBirthDate) = DAY(GETDATE())
+                        GROUP BY Email
+                    ) gf
                     ORDER BY gf.GuestName";
 
                 using (var command = new SqlCommand(query, connection))
@@ -455,16 +463,24 @@ namespace RestaurantManagementSystem.Controllers
                                   (MONTH(gf.AnniversaryDate) = MONTH(GETDATE()) AND DAY(gf.AnniversaryDate) > DAY(GETDATE()))
                         THEN 1 ELSE 0 END as Years,
                         (SELECT TOP 1 SentAt FROM tbl_EmailCampaignHistory 
-                         WHERE GuestId = gf.Id AND CampaignType = 'Anniversary' 
+                         WHERE GuestEmail = gf.Email AND CampaignType = 'Anniversary' 
                          AND YEAR(SentAt) = YEAR(GETDATE()) 
                          AND Status = 'Success'
                          ORDER BY SentAt DESC) as LastSentDate
-                    FROM GuestFeedback gf
-                    WHERE gf.Email IS NOT NULL 
-                    AND gf.Email <> ''
-                    AND gf.AnniversaryDate IS NOT NULL
-                    AND MONTH(gf.AnniversaryDate) = MONTH(GETDATE())
-                    AND DAY(gf.AnniversaryDate) = DAY(GETDATE())
+                    FROM (
+                        SELECT 
+                            MIN(Id) as Id,
+                            MAX(GuestName) as GuestName,
+                            Email,
+                            MAX(AnniversaryDate) as AnniversaryDate
+                        FROM GuestFeedback
+                        WHERE Email IS NOT NULL 
+                        AND Email <> ''
+                        AND AnniversaryDate IS NOT NULL
+                        AND MONTH(AnniversaryDate) = MONTH(GETDATE())
+                        AND DAY(AnniversaryDate) = DAY(GETDATE())
+                        GROUP BY Email
+                    ) gf
                     ORDER BY gf.GuestName";
 
                 using (var command = new SqlCommand(query, connection))
@@ -498,17 +514,18 @@ namespace RestaurantManagementSystem.Controllers
                 await connection.OpenAsync();
 
                 var query = @"
-                    SELECT DISTINCT
-                        gf.Id,
-                        gf.GuestName,
+                    SELECT 
+                        MIN(gf.Id) as Id,
+                        MAX(gf.GuestName) as GuestName,
                         gf.Email,
-                        (SELECT MAX(VisitDate) FROM GuestFeedback WHERE Email = gf.Email) as LastVisitDate,
-                        (SELECT COUNT(*) FROM GuestFeedback WHERE Email = gf.Email) as TotalVisits
+                        MAX(gf.VisitDate) as LastVisitDate,
+                        COUNT(*) as TotalVisits
                     FROM GuestFeedback gf
                     WHERE gf.Email IS NOT NULL 
                     AND gf.Email <> ''
                     AND gf.GuestName IS NOT NULL
-                    ORDER BY gf.GuestName";
+                    GROUP BY gf.Email
+                    ORDER BY MAX(gf.GuestName)";
 
                 using (var command = new SqlCommand(query, connection))
                 using (var reader = await command.ExecuteReaderAsync())

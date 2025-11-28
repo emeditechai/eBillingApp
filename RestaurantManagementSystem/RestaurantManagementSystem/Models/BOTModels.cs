@@ -275,5 +275,10 @@ namespace RestaurantManagementSystem.Models
         public int BilledTodayCount { get; set; }
         public int TotalActiveBOTs { get; set; }
         public double AvgPrepTimeMinutes { get; set; }
+        
+        // Item counts per status
+        public int NewItemsCount { get; set; }
+        public int InProgressItemsCount { get; set; }
+        public int ReadyItemsCount { get; set; }
     }
 }
