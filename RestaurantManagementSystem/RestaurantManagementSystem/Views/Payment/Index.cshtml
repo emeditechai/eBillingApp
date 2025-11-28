@@ -179,10 +179,23 @@
                                 </div>
                                 <hr class="my-2">
                             }
+                            @{
+                                // When order is fully paid with roundoff, remaining can be slightly negative
+                                // Display it as 0.00 if it's within roundoff tolerance (e.g., -1 to 0)
+                                decimal displayRemaining = Model.RemainingAmount;
+                                bool isFullyPaid = false;
+                                
+                                if (Model.RemainingAmount <= 0 && Model.RemainingAmount >= -1m)
+                                {
+                                    // Order is paid (possibly with roundoff adjustment)
+                                    isFullyPaid = true;
+                                    displayRemaining = 0m;
+                                }
+                            }
                             <div class="row mb-2">
                                 <div class="col-6 text-end fs-5 fw-bold">Remaining:</div>
-                                <div class="col-6 text-end fs-5 fw-bold @(Model.RemainingAmount <= 0 ? "text-success" : "text-danger")" id="remainingAmountWrapper">
-                                    <span id="remainingAmountDisplay">₹@Model.RemainingAmount.ToString("F2")</span>
+                                <div class="col-6 text-end fs-5 fw-bold @(isFullyPaid ? "text-success" : "text-danger")" id="remainingAmountWrapper">
+                                    <span id="remainingAmountDisplay">₹@displayRemaining.ToString("F2")</span>
                                 </div>
                             </div>
                             @* Show expected roundoff if there is a remaining amount (pre-payment) *@
@@ -199,6 +212,18 @@
                                 <div class="row mb-2">
                                     <div class="col-6 text-end fw-semibold">Total to Process:</div>
                                     <div class="col-6 text-end fw-semibold"><span id="totalToProcessDisplay">₹@rounded.ToString("F0")</span></div>
+                                </div>
+                            }
+                            @* Show roundoff breakdown after payment is complete *@
+                            @if (isFullyPaid && displayRoundoff != 0)
+                            {
+                                <div class="row mb-2">
+                                    <div class="col-6 text-end text-muted">Roundoff (if paid now):</div>
+                                    <div class="col-6 text-end"><span>₹@displayRoundoff.ToString("+0.00;-0.00;0.00")</span></div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-6 text-end fw-semibold">Total to Process:</div>
+                                    <div class="col-6 text-end fw-semibold"><span>₹0</span></div>
                                 </div>
                             }
                                 </div>
@@ -695,17 +720,21 @@
                 const additionalRoundoffNow = roundMoney(overallRoundoff - existingRoundoff);
                 // Amount the customer needs to pay now is Rounded(Total) minus ALL amounts already paid (incl. previous roundoff)
                 let toProcess = Math.max(0, totalRounded - paid);
-                const remaining = roundMoney(total - paid);
+                let remaining = roundMoney(total - paid);
                 const roundoff = additionalRoundoffNow;
+                
+                // If remaining is negative or zero (within roundoff tolerance), display as 0.00
+                const displayRemaining = (remaining <= 0 && remaining >= -1) ? 0 : remaining;
+                const isFullyPaid = (remaining <= 0 && remaining >= -1);
 
                 // Update displays
-                if (remainingEl) remainingEl.textContent = fmtMoney(remaining);
+                if (remainingEl) remainingEl.textContent = fmtMoney(displayRemaining);
                 if (totalAmountEl) totalAmountEl.textContent = fmtMoney(total);
                 if (roundoffEl) roundoffEl.textContent = (roundoff===0? '₹0.00' : (roundoff>0? `₹+${roundoff.toFixed(2)}` : `₹${roundoff.toFixed(2)}`));
                 if (totalProcessEl) totalProcessEl.textContent = `₹${toProcess.toFixed(0)}`;
                 if (remainingWrap) {
                     remainingWrap.classList.remove('text-success','text-danger');
-                    remainingWrap.classList.add(remaining<=0 ? 'text-success' : 'text-danger');
+                    remainingWrap.classList.add(isFullyPaid ? 'text-success' : 'text-danger');
                 }
 
                 // Update Process Payment link with encrypted URL
