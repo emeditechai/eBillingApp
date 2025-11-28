@@ -15,6 +15,9 @@ namespace RestaurantManagementSystem.Models
         [StringLength(255)]
         public string FromEmail { get; set; } = string.Empty;
 
+        [StringLength(255)]
+        public string? FromName { get; set; }
+
         [Required]
         [StringLength(255)]
         public string ToEmail { get; set; } = string.Empty;
@@ -23,6 +26,8 @@ namespace RestaurantManagementSystem.Models
         public string? Subject { get; set; }
 
         public string? EmailBody { get; set; }
+
+        public string? Body { get; set; }
 
         // SMTP Configuration Used
         [Required]
@@ -34,6 +39,10 @@ namespace RestaurantManagementSystem.Models
 
         [Required]
         public bool EnableSSL { get; set; }
+
+        public bool? SmtpUseSsl { get; set; }
+
+        public int? SmtpTimeout { get; set; }
 
         [Required]
         [StringLength(255)]
@@ -61,8 +70,17 @@ namespace RestaurantManagementSystem.Models
         [StringLength(500)]
         public string? UserAgent { get; set; }
 
+        // Email Type and Source Tracking
+        [StringLength(50)]
+        public string? EmailType { get; set; }
+
+        [StringLength(100)]
+        public string? SentFrom { get; set; }
+
         // Audit Fields
         public int? CreatedBy { get; set; }
+
+        public int? SentBy { get; set; }
 
         [Required]
         public DateTime CreatedAt { get; set; } = DateTime.Now;

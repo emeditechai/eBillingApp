@@ -30,7 +30,17 @@
     <div class="card mb-3">
         <div class="card-body">
             <form method="get" class="row g-3">
-                <div class="col-md-3">
+                <div class="col-md-2">
+                    <label class="form-label">From Date</label>
+                    <input type="date" name="fromDate" class="form-control" 
+                           value="@ViewBag.FromDate">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">To Date</label>
+                    <input type="date" name="toDate" class="form-control" 
+                           value="@ViewBag.ToDate">
+                </div>
+                <div class="col-md-2">
                     <label class="form-label">Status</label>
                     <select name="status" class="form-select">
                         <option value="">All</option>
@@ -38,7 +48,7 @@
                         <option value="Failed" selected="@(status == "Failed")">Failed</option>
                     </select>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">Search Email</label>
                     <input type="text" name="searchEmail" class="form-control" 
                            placeholder="Enter email address..." value="@searchEmail">
@@ -71,10 +81,11 @@
                         <thead class="table-dark">
                             <tr>
                                 <th>Status</th>
+                                <th>Type</th>
+                                <th>Source</th>
                                 <th>From</th>
                                 <th>To</th>
                                 <th>Subject</th>
-                                <th>SMTP Server</th>
                                 <th>Sent At</th>
                                 <th>Time (ms)</th>
                                 <th>Actions</th>
@@ -99,6 +110,14 @@
                                         }
                                     </td>
                                     <td>
+                                        <span class="badge bg-secondary">
+                                            @(log.EmailType ?? "General")
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">@(log.SentFrom ?? "N/A")</small>
+                                    </td>
+                                    <td>
                                         <small>@log.FromEmail</small>
                                     </td>
                                     <td>
@@ -106,15 +125,6 @@
                                     </td>
                                     <td>
                                         <small>@(log.Subject ?? "N/A")</small>
-                                    </td>
-                                    <td>
-                                        <small>
-                                            @log.SmtpServer:@log.SmtpPort
-                                            @if (log.EnableSSL)
-                                            {
-                                                <i class="fas fa-lock text-success" title="SSL Enabled"></i>
-                                            }
-                                        </small>
                                     </td>
                                     <td>
                                         <small>@log.SentAt.ToString("yyyy-MM-dd HH:mm:ss")</small>
@@ -145,28 +155,58 @@
                 @if (totalPages > 1)
                 {
                     <nav aria-label="Email logs pagination">
-                        <ul class="pagination justify-content-center">
+                        <ul class="pagination justify-content-center mt-3">
                             <li class="page-item @(currentPage == 1 ? "disabled" : "")">
-                                <a class="page-link" href="@Url.Action("Index", new { page = currentPage - 1, status, searchEmail })">
-                                    Previous
+                                <a class="page-link" href="@Url.Action("Index", new { page = currentPage - 1, status, searchEmail, fromDate = ViewBag.FromDate, toDate = ViewBag.ToDate })">
+                                    <i class="fas fa-chevron-left"></i> Previous
                                 </a>
                             </li>
 
-                            @for (int i = 1; i <= totalPages; i++)
+                            @{
+                                int startPage = Math.Max(1, currentPage - 2);
+                                int endPage = Math.Min(totalPages, currentPage + 2);
+                            }
+
+                            @if (startPage > 1)
+                            {
+                                <li class="page-item">
+                                    <a class="page-link" href="@Url.Action("Index", new { page = 1, status, searchEmail, fromDate = ViewBag.FromDate, toDate = ViewBag.ToDate })">1</a>
+                                </li>
+                                @if (startPage > 2)
+                                {
+                                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                                }
+                            }
+
+                            @for (int i = startPage; i <= endPage; i++)
                             {
                                 <li class="page-item @(i == currentPage ? "active" : "")">
-                                    <a class="page-link" href="@Url.Action("Index", new { page = i, status, searchEmail })">
+                                    <a class="page-link" href="@Url.Action("Index", new { page = i, status, searchEmail, fromDate = ViewBag.FromDate, toDate = ViewBag.ToDate })">
                                         @i
                                     </a>
                                 </li>
                             }
 
+                            @if (endPage < totalPages)
+                            {
+                                @if (endPage < totalPages - 1)
+                                {
+                                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                                }
+                                <li class="page-item">
+                                    <a class="page-link" href="@Url.Action("Index", new { page = totalPages, status, searchEmail, fromDate = ViewBag.FromDate, toDate = ViewBag.ToDate })">@totalPages</a>
+                                </li>
+                            }
+
                             <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
-                                <a class="page-link" href="@Url.Action("Index", new { page = currentPage + 1, status, searchEmail })">
-                                    Next
+                                <a class="page-link" href="@Url.Action("Index", new { page = currentPage + 1, status, searchEmail, fromDate = ViewBag.FromDate, toDate = ViewBag.ToDate })">
+                                    Next <i class="fas fa-chevron-right"></i>
                                 </a>
                             </li>
                         </ul>
+                        <div class="text-center text-muted mt-2">
+                            <small>Page @currentPage of @totalPages (Showing @Model.Count of @totalCount records)</small>
+                        </div>
                     </nav>
                 }
             }

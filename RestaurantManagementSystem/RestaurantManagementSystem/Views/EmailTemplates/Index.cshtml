@@ -1,0 +1,198 @@
+@model List<RestaurantManagementSystem.Models.EmailTemplate>
+@{
+    ViewData["Title"] = "Email Templates";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <h2><i class="fas fa-envelope-open-text me-2"></i>Email Templates</h2>
+            <p class="text-muted">Manage email templates for birthday, anniversary, and custom campaigns</p>
+        </div>
+        <div class="col-md-6 text-end">
+            <a asp-action="Create" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>Create New Template
+            </a>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle me-2"></i>@TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-circle me-2"></i>@TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (Model.Any())
+    {
+        var groupedTemplates = Model.GroupBy(t => t.TemplateType);
+
+        foreach (var group in groupedTemplates)
+        {
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        @if (group.Key == "Birthday")
+                        {
+                            <i class="fas fa-birthday-cake me-2"></i>
+                        }
+                        else if (group.Key == "Anniversary")
+                        {
+                            <i class="fas fa-heart me-2"></i>
+                        }
+                        else if (group.Key == "Promotional")
+                        {
+                            <i class="fas fa-bullhorn me-2"></i>
+                        }
+                        else
+                        {
+                            <i class="fas fa-envelope me-2"></i>
+                        }
+                        @group.Key Templates (@group.Count())
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Template Name</th>
+                                    <th>Subject</th>
+                                    <th>Status</th>
+                                    <th>Default</th>
+                                    <th>Last Updated</th>
+                                    <th width="200">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var template in group)
+                                {
+                                    <tr>
+                                        <td>
+                                            <strong>@template.TemplateName</strong>
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">@template.Subject</small>
+                                        </td>
+                                        <td>
+                                            @if (template.IsActive)
+                                            {
+                                                <span class="badge bg-success">Active</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">Inactive</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (template.IsDefault)
+                                            {
+                                                <span class="badge bg-primary">
+                                                    <i class="fas fa-star me-1"></i>Default
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="btn btn-sm btn-outline-primary" 
+                                                        onclick="setDefault(@template.EmailTemplateID, '@template.TemplateType')">
+                                                    <i class="fas fa-star"></i> Set Default
+                                                </button>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (template.UpdatedAt.HasValue)
+                                            {
+                                                <small>@template.UpdatedAt.Value.ToString("MMM dd, yyyy")</small>
+                                            }
+                                            else
+                                            {
+                                                <small>@template.CreatedAt.ToString("MMM dd, yyyy")</small>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="btn-group" role="group">
+                                                <a asp-action="Edit" asp-route-id="@template.EmailTemplateID" 
+                                                   class="btn btn-sm btn-warning" title="Edit">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                <button type="button" class="btn btn-sm btn-danger" 
+                                                        onclick="deleteTemplate(@template.EmailTemplateID, '@template.TemplateName')" 
+                                                        title="Delete"
+                                                        @(template.IsDefault ? "disabled" : "")>
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            No email templates found. Click "Create New Template" to add one.
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        function setDefault(templateId, templateType) {
+            if (confirm('Set this template as the default for ' + templateType + ' emails?')) {
+                $.post('@Url.Action("SetDefault", "EmailTemplates")', {
+                    id: templateId,
+                    templateType: templateType
+                })
+                .done(function(response) {
+                    if (response.success) {
+                        location.reload();
+                    } else {
+                        alert('Error: ' + response.message);
+                    }
+                })
+                .fail(function() {
+                    alert('Error setting default template');
+                });
+            }
+        }
+
+        function deleteTemplate(templateId, templateName) {
+            if (confirm('Are you sure you want to delete "' + templateName + '"?')) {
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '@Url.Action("Delete", "EmailTemplates")';
+                
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'id';
+                input.value = templateId;
+                form.appendChild(input);
+                
+                var token = document.createElement('input');
+                token.type = 'hidden';
+                token.name = '__RequestVerificationToken';
+                token.value = $('input[name="__RequestVerificationToken"]').val();
+                form.appendChild(token);
+                
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+    </script>
+}

@@ -1,0 +1,7 @@
+@model RestaurantManagementSystem.Models.EmailTemplate
+@{
+    ViewData["Title"] = "Edit Email Template";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@await Html.PartialAsync("Create", Model)

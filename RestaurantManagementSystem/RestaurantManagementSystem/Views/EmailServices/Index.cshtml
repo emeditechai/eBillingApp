@@ -1,0 +1,553 @@
+@model RestaurantManagementSystem.ViewModels.EmailServicesViewModel
+@{
+    ViewData["Title"] = "Email Services";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<!-- SweetAlert2 CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+
+<form asp-antiforgery="true">
+    @Html.AntiForgeryToken()
+</form>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="fas fa-envelope-open-text me-2"></i>Email Services</h2>
+            <p class="text-muted">Send automated birthday and anniversary emails, or create custom email campaigns for guests</p>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle me-2"></i>@TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-circle me-2"></i>@TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- Birthday & Anniversary Auto-Fire Section -->
+    <div class="row mb-4">
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-birthday-cake me-2"></i>Today's Birthdays (@Model.TodayBirthdays.Count)</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.TodayBirthdays.Any())
+                    {
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-hover">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th width="40"><input type="checkbox" id="selectAllBirthdays" class="form-check-input"></th>
+                                        <th>Guest Name</th>
+                                        <th>Email</th>
+                                        <th>Age</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var guest in Model.TodayBirthdays)
+                                    {
+                                        <tr class="@(guest.AlreadySent ? "table-success" : "")">
+                                            <td>
+                                                <input type="checkbox" class="form-check-input birthday-checkbox" 
+                                                       value="@guest.GuestId" 
+                                                       @(guest.AlreadySent ? "disabled" : "")>
+                                            </td>
+                                            <td>@guest.GuestName</td>
+                                            <td><small>@guest.Email</small></td>
+                                            <td>@guest.Age years</td>
+                                            <td>
+                                                @if (guest.AlreadySent)
+                                                {
+                                                    <span class="badge bg-success">
+                                                        <i class="fas fa-check me-1"></i>Sent
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-warning text-dark">
+                                                        <i class="fas fa-clock me-1"></i>Pending
+                                                    </span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="d-grid gap-2 mt-3">
+                            <button type="button" class="btn btn-primary btn-lg" id="sendBirthdayEmails">
+                                <i class="fas fa-paper-plane me-2"></i>Send Birthday Emails
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4">
+                            <i class="fas fa-birthday-cake fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No birthdays today</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="fas fa-heart me-2"></i>Today's Anniversaries (@Model.TodayAnniversaries.Count)</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.TodayAnniversaries.Any())
+                    {
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-hover">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th width="40"><input type="checkbox" id="selectAllAnniversaries" class="form-check-input"></th>
+                                        <th>Guest Name</th>
+                                        <th>Email</th>
+                                        <th>Years</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var guest in Model.TodayAnniversaries)
+                                    {
+                                        <tr class="@(guest.AlreadySent ? "table-success" : "")">
+                                            <td>
+                                                <input type="checkbox" class="form-check-input anniversary-checkbox" 
+                                                       value="@guest.GuestId" 
+                                                       @(guest.AlreadySent ? "disabled" : "")>
+                                            </td>
+                                            <td>@guest.GuestName</td>
+                                            <td><small>@guest.Email</small></td>
+                                            <td>@guest.Years years</td>
+                                            <td>
+                                                @if (guest.AlreadySent)
+                                                {
+                                                    <span class="badge bg-success">
+                                                        <i class="fas fa-check me-1"></i>Sent
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-warning text-dark">
+                                                        <i class="fas fa-clock me-1"></i>Pending
+                                                    </span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="d-grid gap-2 mt-3">
+                            <button type="button" class="btn btn-danger btn-lg" id="sendAnniversaryEmails">
+                                <i class="fas fa-paper-plane me-2"></i>Send Anniversary Emails
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4">
+                            <i class="fas fa-heart fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No anniversaries today</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Email Campaign Section -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-bullhorn me-2"></i>Custom Email Campaign</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Guest Selection -->
+                        <div class="col-lg-6">
+                            <h6 class="mb-3">Select Recipients</h6>
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="selectAllGuests">
+                                    <label class="form-check-label fw-bold" for="selectAllGuests">
+                                        Select All Guests (@Model.AllGuests.Count)
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="border rounded p-3" style="max-height: 400px; overflow-y: auto;">
+                                @foreach (var guest in Model.AllGuests)
+                                {
+                                    <div class="form-check mb-2">
+                                        <input type="checkbox" class="form-check-input guest-checkbox" 
+                                               value="@guest.GuestId" 
+                                               id="guest_@guest.GuestId">
+                                        <label class="form-check-label" for="guest_@guest.GuestId">
+                                            <strong>@guest.GuestName</strong>
+                                            <br>
+                                            <small class="text-muted">@guest.Email</small>
+                                            @if (guest.LastVisitDate.HasValue)
+                                            {
+                                                <br>
+                                                <small class="text-muted">Last visit: @guest.LastVisitDate.Value.ToString("MMM dd, yyyy")</small>
+                                            }
+                                        </label>
+                                    </div>
+                                }
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <span id="selectedCount">0</span> guest(s) selected
+                                </small>
+                            </div>
+                        </div>
+
+                        <!-- Email Composition -->
+                        <div class="col-lg-6">
+                            <h6 class="mb-3">Email Content</h6>
+                            
+                            <!-- Template Selection -->
+                            <div class="mb-3">
+                                <label for="templateSelect" class="form-label">Use Template (Optional)</label>
+                                <select id="templateSelect" class="form-select">
+                                    <option value="">-- Custom Email --</option>
+                                    @foreach (var template in Model.CustomTemplates)
+                                    {
+                                        <option value="@template.EmailTemplateID" 
+                                                data-subject="@template.Subject" 
+                                                data-body="@template.BodyHtml">
+                                            @template.TemplateName
+                                        </option>
+                                    }
+                                </select>
+                                <small class="form-text text-muted">
+                                    Select a template or create a custom email below
+                                </small>
+                            </div>
+
+                            <!-- Subject -->
+                            <div class="mb-3">
+                                <label for="emailSubject" class="form-label">Subject <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="emailSubject" required>
+                            </div>
+
+                            <!-- Body -->
+                            <div class="mb-3">
+                                <label for="emailBody" class="form-label">Email Body (HTML) <span class="text-danger">*</span></label>
+                                <textarea class="form-control" id="emailBody" rows="10" required></textarea>
+                                <small class="form-text text-muted">
+                                    Available placeholders: {GuestName}, {RestaurantName}, {Year}
+                                </small>
+                            </div>
+
+                            <!-- Send Button -->
+                            <div class="d-grid">
+                                <button type="button" class="btn btn-success btn-lg" id="sendCustomEmails">
+                                    <i class="fas fa-paper-plane me-2"></i>Send Custom Emails
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Results Modal -->
+<div class="modal fade" id="resultsModal" tabindex="-1" aria-labelledby="resultsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="resultsModalLabel">Email Campaign Results</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="resultsContent"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <!-- SweetAlert2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // Select All Birthday Checkboxes
+            $('#selectAllBirthdays').on('change', function() {
+                $('.birthday-checkbox:not(:disabled)').prop('checked', this.checked);
+            });
+
+            // Select All Anniversary Checkboxes
+            $('#selectAllAnniversaries').on('change', function() {
+                $('.anniversary-checkbox:not(:disabled)').prop('checked', this.checked);
+            });
+
+            // Select All Guests Checkboxes
+            $('#selectAllGuests').on('change', function() {
+                $('.guest-checkbox').prop('checked', this.checked);
+                updateSelectedCount();
+            });
+
+            // Update count on guest selection
+            $('.guest-checkbox').on('change', function() {
+                updateSelectedCount();
+            });
+
+            // Template selection
+            $('#templateSelect').on('change', function() {
+                const selectedOption = $(this).find('option:selected');
+                const subject = selectedOption.data('subject');
+                const body = selectedOption.data('body');
+                
+                if (subject && body) {
+                    $('#emailSubject').val(subject);
+                    $('#emailBody').val(body);
+                }
+            });
+
+            // Send Birthday Emails
+            $('#sendBirthdayEmails').on('click', function() {
+                const selectedIds = $('.birthday-checkbox:checked').map(function() {
+                    return parseInt($(this).val());
+                }).get();
+
+                if (selectedIds.length === 0) {
+                    Swal.fire('No Selection', 'Please select at least one guest', 'warning');
+                    return;
+                }
+
+                Swal.fire({
+                    title: 'Send Birthday Emails?',
+                    text: `Send birthday emails to ${selectedIds.length} guest(s)?`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#0d6efd',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Yes, send emails'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        sendAutoFireEmails('Birthday', selectedIds);
+                    }
+                });
+            });
+
+            // Send Anniversary Emails
+            $('#sendAnniversaryEmails').on('click', function() {
+                const selectedIds = $('.anniversary-checkbox:checked').map(function() {
+                    return parseInt($(this).val());
+                }).get();
+
+                if (selectedIds.length === 0) {
+                    Swal.fire('No Selection', 'Please select at least one guest', 'warning');
+                    return;
+                }
+
+                Swal.fire({
+                    title: 'Send Anniversary Emails?',
+                    text: `Send anniversary emails to ${selectedIds.length} guest(s)?`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Yes, send emails'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        sendAutoFireEmails('Anniversary', selectedIds);
+                    }
+                });
+            });
+
+            // Send Custom Emails
+            $('#sendCustomEmails').on('click', function() {
+                const selectedIds = $('.guest-checkbox:checked').map(function() {
+                    return parseInt($(this).val());
+                }).get();
+
+                const subject = $('#emailSubject').val().trim();
+                const body = $('#emailBody').val().trim();
+                const templateId = $('#templateSelect').val();
+
+                if (selectedIds.length === 0) {
+                    Swal.fire('No Selection', 'Please select at least one guest', 'warning');
+                    return;
+                }
+
+                if (!templateId && (!subject || !body)) {
+                    Swal.fire('Missing Information', 'Please provide email subject and body, or select a template', 'warning');
+                    return;
+                }
+
+                Swal.fire({
+                    title: 'Send Custom Emails?',
+                    text: `Send custom emails to ${selectedIds.length} guest(s)?`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#198754',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Yes, send emails'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        sendCustomEmails(selectedIds, templateId, subject, body);
+                    }
+                });
+            });
+
+            function updateSelectedCount() {
+                const count = $('.guest-checkbox:checked').length;
+                $('#selectedCount').text(count);
+            }
+
+            function sendAutoFireEmails(emailType, guestIds) {
+                console.log('Sending auto-fire emails:', emailType, guestIds);
+                const token = $('input[name="__RequestVerificationToken"]').val();
+                console.log('Anti-forgery token:', token ? 'Found' : 'NOT FOUND');
+                
+                $.ajax({
+                    url: '@Url.Action("AutoFireEmails", "EmailServices")',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        emailType: emailType,
+                        guestIds: guestIds
+                    }),
+                    beforeSend: function() {
+                        Swal.fire({
+                            title: 'Sending Emails...',
+                            html: 'Please wait while emails are being sent',
+                            allowOutsideClick: false,
+                            didOpen: () => {
+                                Swal.showLoading();
+                            }
+                        });
+                    },
+                    success: function(response) {
+                        Swal.close();
+                        if (response.success) {
+                            showResults(response.result);
+                            setTimeout(() => location.reload(), 2000);
+                        } else {
+                            Swal.fire('Error', response.message, 'error');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        Swal.close();
+                        console.error('AutoFire AJAX Error:', status, error, xhr);
+                        console.error('Response:', xhr.responseText);
+                        Swal.fire('Error', 'Failed to send emails: ' + (xhr.responseText || error), 'error');
+                    }
+                });
+            }
+
+            function sendCustomEmails(guestIds, templateId, subject, body) {
+                console.log('Sending custom emails:', guestIds, templateId, subject);
+                
+                $.ajax({
+                    url: '@Url.Action("SendCustomEmail", "EmailServices")',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        guestIds: guestIds,
+                        templateId: templateId ? parseInt(templateId) : null,
+                        customSubject: subject,
+                        customBody: body
+                    }),
+                    beforeSend: function() {
+                        Swal.fire({
+                            title: 'Sending Emails...',
+                            html: 'Please wait while emails are being sent',
+                            allowOutsideClick: false,
+                            didOpen: () => {
+                                Swal.showLoading();
+                            }
+                        });
+                    },
+                    success: function(response) {
+                        Swal.close();
+                        if (response.success) {
+                            showResults(response.result);
+                            // Clear form
+                            $('#emailSubject').val('');
+                            $('#emailBody').val('');
+                            $('#templateSelect').val('');
+                            $('.guest-checkbox').prop('checked', false);
+                            $('#selectAllGuests').prop('checked', false);
+                            updateSelectedCount();
+                        } else {
+                            Swal.fire('Error', response.message, 'error');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        Swal.close();
+                        console.error('Custom Email AJAX Error:', status, error, xhr);
+                        console.error('Response:', xhr.responseText);
+                        Swal.fire('Error', 'Failed to send emails: ' + (xhr.responseText || error), 'error');
+                    }
+                });
+            }
+
+            function showResults(result) {
+                let html = `
+                    <div class="alert alert-info">
+                        <h6>Campaign Summary</h6>
+                        <ul class="mb-0">
+                            <li>Total Attempted: ${result.totalAttempted}</li>
+                            <li>Success: ${result.successCount}</li>
+                            <li>Failed: ${result.failureCount}</li>
+                            <li>Processing Time: ${result.processingTimeMs}ms</li>
+                        </ul>
+                    </div>
+                `;
+
+                if (result.errors && result.errors.length > 0) {
+                    html += `
+                        <div class="alert alert-warning">
+                            <h6>Errors:</h6>
+                            <ul class="mb-0">
+                                ${result.errors.map(err => `<li>${err}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+
+                $('#resultsContent').html(html);
+                $('#resultsModal').modal('show');
+
+                // Show success toast
+                if (result.successCount > 0) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Emails Sent!',
+                        text: `Successfully sent ${result.successCount} email(s)`,
+                        timer: 3000,
+                        showConfirmButton: false
+                    });
+                }
+            }
+
+            updateSelectedCount();
+        });
+    </script>
+}

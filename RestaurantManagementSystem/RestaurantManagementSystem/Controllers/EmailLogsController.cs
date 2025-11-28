@@ -26,10 +26,30 @@ namespace RestaurantManagementSystem.Controllers
         }
 
         // GET: EmailLogs
-        public async Task<IActionResult> Index(string status = "", string searchEmail = "", int page = 1)
+        public async Task<IActionResult> Index(
+            string status = "", 
+            string searchEmail = "", 
+            DateTime? fromDate = null, 
+            DateTime? toDate = null, 
+            int page = 1)
         {
             try
             {
+                // Default to today's date if no dates provided
+                if (!fromDate.HasValue && !toDate.HasValue)
+                {
+                    fromDate = DateTime.Today;
+                    toDate = DateTime.Today.AddDays(1).AddSeconds(-1);
+                }
+                else if (fromDate.HasValue && !toDate.HasValue)
+                {
+                    toDate = fromDate.Value.AddDays(1).AddSeconds(-1);
+                }
+                else if (!fromDate.HasValue && toDate.HasValue)
+                {
+                    fromDate = toDate.Value.Date;
+                }
+
                 int pageSize = 50;
                 int skip = (page - 1) * pageSize;
                 
@@ -50,6 +70,14 @@ namespace RestaurantManagementSystem.Controllers
                     {
                         whereConditions.Add("(ToEmail LIKE @SearchEmail OR FromEmail LIKE @SearchEmail)");
                     }
+                    if (fromDate.HasValue)
+                    {
+                        whereConditions.Add("SentAt >= @FromDate");
+                    }
+                    if (toDate.HasValue)
+                    {
+                        whereConditions.Add("SentAt <= @ToDate");
+                    }
 
                     var whereClause = whereConditions.Count > 0 
                         ? "WHERE " + string.Join(" AND ", whereConditions) 
@@ -67,17 +95,25 @@ namespace RestaurantManagementSystem.Controllers
                         {
                             countCommand.Parameters.AddWithValue("@SearchEmail", $"%{searchEmail}%");
                         }
+                        if (fromDate.HasValue)
+                        {
+                            countCommand.Parameters.AddWithValue("@FromDate", fromDate.Value);
+                        }
+                        if (toDate.HasValue)
+                        {
+                            countCommand.Parameters.AddWithValue("@ToDate", toDate.Value);
+                        }
                         totalCount = (int)await countCommand.ExecuteScalarAsync();
                     }
 
                     // Get paginated logs
                     var query = $@"
                         SELECT 
-                            EmailLogID, FromEmail, ToEmail, Subject, EmailBody,
-                            SmtpServer, SmtpPort, EnableSSL, SmtpUsername,
+                            EmailLogID, FromEmail, FromName, ToEmail, Subject, EmailBody, Body,
+                            SmtpServer, SmtpPort, EnableSSL, SmtpUseSsl, SmtpTimeout, SmtpUsername,
                             Status, ErrorMessage, ErrorCode,
                             SentAt, ProcessingTimeMs, IPAddress, UserAgent,
-                            CreatedBy, CreatedAt
+                            EmailType, SentFrom, CreatedBy, SentBy, CreatedAt
                         FROM tbl_EmailLog
                         {whereClause}
                         ORDER BY SentAt DESC
@@ -94,6 +130,14 @@ namespace RestaurantManagementSystem.Controllers
                         {
                             command.Parameters.AddWithValue("@SearchEmail", $"%{searchEmail}%");
                         }
+                        if (fromDate.HasValue)
+                        {
+                            command.Parameters.AddWithValue("@FromDate", fromDate.Value);
+                        }
+                        if (toDate.HasValue)
+                        {
+                            command.Parameters.AddWithValue("@ToDate", toDate.Value);
+                        }
                         command.Parameters.AddWithValue("@Skip", skip);
                         command.Parameters.AddWithValue("@PageSize", pageSize);
 
@@ -105,22 +149,29 @@ namespace RestaurantManagementSystem.Controllers
                                 {
                                     EmailLogID = reader.GetInt32(0),
                                     FromEmail = reader.GetString(1),
-                                    ToEmail = reader.GetString(2),
-                                    Subject = reader.IsDBNull(3) ? null : reader.GetString(3),
-                                    EmailBody = reader.IsDBNull(4) ? null : reader.GetString(4),
-                                    SmtpServer = reader.GetString(5),
-                                    SmtpPort = reader.GetInt32(6),
-                                    EnableSSL = reader.GetBoolean(7),
-                                    SmtpUsername = reader.GetString(8),
-                                    Status = reader.GetString(9),
-                                    ErrorMessage = reader.IsDBNull(10) ? null : reader.GetString(10),
-                                    ErrorCode = reader.IsDBNull(11) ? null : reader.GetString(11),
-                                    SentAt = reader.GetDateTime(12),
-                                    ProcessingTimeMs = reader.IsDBNull(13) ? null : reader.GetInt32(13),
-                                    IPAddress = reader.IsDBNull(14) ? null : reader.GetString(14),
-                                    UserAgent = reader.IsDBNull(15) ? null : reader.GetString(15),
-                                    CreatedBy = reader.IsDBNull(16) ? null : reader.GetInt32(16),
-                                    CreatedAt = reader.GetDateTime(17)
+                                    FromName = reader.IsDBNull(2) ? null : reader.GetString(2),
+                                    ToEmail = reader.GetString(3),
+                                    Subject = reader.IsDBNull(4) ? null : reader.GetString(4),
+                                    EmailBody = reader.IsDBNull(5) ? null : reader.GetString(5),
+                                    Body = reader.IsDBNull(6) ? null : reader.GetString(6),
+                                    SmtpServer = reader.GetString(7),
+                                    SmtpPort = reader.GetInt32(8),
+                                    EnableSSL = reader.GetBoolean(9),
+                                    SmtpUseSsl = reader.IsDBNull(10) ? null : reader.GetBoolean(10),
+                                    SmtpTimeout = reader.IsDBNull(11) ? null : reader.GetInt32(11),
+                                    SmtpUsername = reader.GetString(12),
+                                    Status = reader.GetString(13),
+                                    ErrorMessage = reader.IsDBNull(14) ? null : reader.GetString(14),
+                                    ErrorCode = reader.IsDBNull(15) ? null : reader.GetString(15),
+                                    SentAt = reader.GetDateTime(16),
+                                    ProcessingTimeMs = reader.IsDBNull(17) ? null : reader.GetInt32(17),
+                                    IPAddress = reader.IsDBNull(18) ? null : reader.GetString(18),
+                                    UserAgent = reader.IsDBNull(19) ? null : reader.GetString(19),
+                                    EmailType = reader.IsDBNull(20) ? null : reader.GetString(20),
+                                    SentFrom = reader.IsDBNull(21) ? null : reader.GetString(21),
+                                    CreatedBy = reader.IsDBNull(22) ? null : reader.GetInt32(22),
+                                    SentBy = reader.IsDBNull(23) ? null : reader.GetInt32(23),
+                                    CreatedAt = reader.GetDateTime(24)
                                 });
                             }
                         }
@@ -129,6 +180,8 @@ namespace RestaurantManagementSystem.Controllers
 
                 ViewBag.Status = status;
                 ViewBag.SearchEmail = searchEmail;
+                ViewBag.FromDate = fromDate?.ToString("yyyy-MM-dd");
+                ViewBag.ToDate = toDate?.ToString("yyyy-MM-dd");
                 ViewBag.CurrentPage = page;
                 ViewBag.TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
                 ViewBag.TotalCount = totalCount;
@@ -156,11 +209,11 @@ namespace RestaurantManagementSystem.Controllers
 
                     var query = @"
                         SELECT 
-                            EmailLogID, FromEmail, ToEmail, Subject, EmailBody,
-                            SmtpServer, SmtpPort, EnableSSL, SmtpUsername,
+                            EmailLogID, FromEmail, FromName, ToEmail, Subject, EmailBody, Body,
+                            SmtpServer, SmtpPort, EnableSSL, SmtpUseSsl, SmtpTimeout, SmtpUsername,
                             Status, ErrorMessage, ErrorCode,
                             SentAt, ProcessingTimeMs, IPAddress, UserAgent,
-                            CreatedBy, CreatedAt
+                            EmailType, SentFrom, CreatedBy, SentBy, CreatedAt
                         FROM tbl_EmailLog
                         WHERE EmailLogID = @EmailLogID";
 
@@ -176,22 +229,29 @@ namespace RestaurantManagementSystem.Controllers
                                 {
                                     EmailLogID = reader.GetInt32(0),
                                     FromEmail = reader.GetString(1),
-                                    ToEmail = reader.GetString(2),
-                                    Subject = reader.IsDBNull(3) ? null : reader.GetString(3),
-                                    EmailBody = reader.IsDBNull(4) ? null : reader.GetString(4),
-                                    SmtpServer = reader.GetString(5),
-                                    SmtpPort = reader.GetInt32(6),
-                                    EnableSSL = reader.GetBoolean(7),
-                                    SmtpUsername = reader.GetString(8),
-                                    Status = reader.GetString(9),
-                                    ErrorMessage = reader.IsDBNull(10) ? null : reader.GetString(10),
-                                    ErrorCode = reader.IsDBNull(11) ? null : reader.GetString(11),
-                                    SentAt = reader.GetDateTime(12),
-                                    ProcessingTimeMs = reader.IsDBNull(13) ? null : reader.GetInt32(13),
-                                    IPAddress = reader.IsDBNull(14) ? null : reader.GetString(14),
-                                    UserAgent = reader.IsDBNull(15) ? null : reader.GetString(15),
-                                    CreatedBy = reader.IsDBNull(16) ? null : reader.GetInt32(16),
-                                    CreatedAt = reader.GetDateTime(17)
+                                    FromName = reader.IsDBNull(2) ? null : reader.GetString(2),
+                                    ToEmail = reader.GetString(3),
+                                    Subject = reader.IsDBNull(4) ? null : reader.GetString(4),
+                                    EmailBody = reader.IsDBNull(5) ? null : reader.GetString(5),
+                                    Body = reader.IsDBNull(6) ? null : reader.GetString(6),
+                                    SmtpServer = reader.GetString(7),
+                                    SmtpPort = reader.GetInt32(8),
+                                    EnableSSL = reader.GetBoolean(9),
+                                    SmtpUseSsl = reader.IsDBNull(10) ? null : reader.GetBoolean(10),
+                                    SmtpTimeout = reader.IsDBNull(11) ? null : reader.GetInt32(11),
+                                    SmtpUsername = reader.GetString(12),
+                                    Status = reader.GetString(13),
+                                    ErrorMessage = reader.IsDBNull(14) ? null : reader.GetString(14),
+                                    ErrorCode = reader.IsDBNull(15) ? null : reader.GetString(15),
+                                    SentAt = reader.GetDateTime(16),
+                                    ProcessingTimeMs = reader.IsDBNull(17) ? null : reader.GetInt32(17),
+                                    IPAddress = reader.IsDBNull(18) ? null : reader.GetString(18),
+                                    UserAgent = reader.IsDBNull(19) ? null : reader.GetString(19),
+                                    EmailType = reader.IsDBNull(20) ? null : reader.GetString(20),
+                                    SentFrom = reader.IsDBNull(21) ? null : reader.GetString(21),
+                                    CreatedBy = reader.IsDBNull(22) ? null : reader.GetInt32(22),
+                                    SentBy = reader.IsDBNull(23) ? null : reader.GetInt32(23),
+                                    CreatedAt = reader.GetDateTime(24)
                                 };
                             }
                         }

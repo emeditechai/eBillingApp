@@ -46,7 +46,7 @@
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <p><strong>Log ID:</strong> @Model.EmailLogID</p>
                             <p><strong>Sent At:</strong> @Model.SentAt.ToString("yyyy-MM-dd HH:mm:ss")</p>
                             <p><strong>Processing Time:</strong> 
@@ -60,7 +60,15 @@
                                 }
                             </p>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
+                            <p><strong>Email Type:</strong> 
+                                <span class="badge bg-secondary">@(Model.EmailType ?? "General")</span>
+                            </p>
+                            <p><strong>Sent From:</strong> 
+                                <span class="text-info">@(Model.SentFrom ?? "N/A")</span>
+                            </p>
+                        </div>
+                        <div class="col-md-4">
                             @if (!string.IsNullOrEmpty(Model.IPAddress))
                             {
                                 <p><strong>IP Address:</strong> @Model.IPAddress</p>
@@ -87,7 +95,16 @@
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label class="fw-bold">From:</label>
-                            <p>@Model.FromEmail</p>
+                            <p>
+                                @if (!string.IsNullOrEmpty(Model.FromName))
+                                {
+                                    <text>@Model.FromName &lt;@Model.FromEmail&gt;</text>
+                                }
+                                else
+                                {
+                                    <text>@Model.FromEmail</text>
+                                }
+                            </p>
                         </div>
                         <div class="col-md-6">
                             <label class="fw-bold">To:</label>
