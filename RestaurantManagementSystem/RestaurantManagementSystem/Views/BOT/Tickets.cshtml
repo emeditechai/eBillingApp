@@ -105,7 +105,17 @@
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0">Ticket List</h5>
-            <div>
+            <div class="d-flex align-items-center" style="gap:.5rem;">
+                <div class="input-group input-group-sm" style="width: 220px;">
+                    <label class="input-group-text" for="clientStatusFilter">Quick Filter</label>
+                    <select id="clientStatusFilter" class="form-select">
+                        <option value="">All Statuses</option>
+                        @foreach (var status in Model.Filter.StatusOptions)
+                        {
+                            <option value="@status.Text">@status.Text</option>
+                        }
+                    </select>
+                </div>
                 <a asp-action="ExportCsv" asp-controller="BOT" class="btn btn-outline-secondary btn-sm me-2" title="Export CSV">
                     <i class="fas fa-file-csv"></i>
                 </a>
@@ -176,15 +186,10 @@
 </div>
 
 @section Scripts {
+    <script src="~/js/tickets-filter.js"></script>
     <script>
-        $(document).ready(function () {
-            $('#ticketsTable').DataTable({
-                "order": [[5, "desc"]],
-                "pageLength": 25,
-                "columnDefs": [
-                    { "orderable": false, "targets": 7 }
-                ]
-            });
+        $(function () {
+            TicketsFilter.init('#ticketsTable', '#clientStatusFilter');
         });
     </script>
 }
