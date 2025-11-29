@@ -3,16 +3,16 @@
     ViewData["Title"] = "Order Dashboard";
 }
 
-<div class="container-fluid p-3" style="background: linear-gradient(135deg, #f0fdfa 60%, #ccfbf1 100%); min-height:100vh;">
+<div class="container-fluid p-3" style="background: linear-gradient(135deg, #1e293b 0%, #334155 50%, #0f172a 100%); min-height:100vh;">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 style="color: #0d9488;">
+        <h1 style="color: #22d3ee; text-shadow: 0 2px 10px rgba(34,211,238,0.3);">
             <i class="fas fa-utensils me-2"></i>@ViewData["Title"]
         </h1>
         <div class="d-flex align-items-center gap-2">
-            <a href="@Url.Action("Form", "Feedback")" class="btn btn-light" style="border-radius: 50%; width: 48px; height: 48px; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(13,148,136,.25); color: #0d9488;" target="_blank" rel="noopener noreferrer" title="Open Feedback Form">
+            <a href="@Url.Action("Form", "Feedback")" class="btn" style="border-radius: 50%; width: 48px; height: 48px; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(34,211,238,.4); background: linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%); color: white; border: none;" target="_blank" rel="noopener noreferrer" title="Open Feedback Form">
                 <i class="fas fa-comment-dots"></i>
             </a>
-            <a asp-action="Create" class="btn text-white" style="background: linear-gradient(90deg, #14b8a6 60%, #2dd4bf 100%);" target="_blank" rel="noopener noreferrer">
+            <a asp-action="Create" class="btn text-white" style="background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%); box-shadow: 0 4px 15px rgba(59,130,246,.4); border: none;" target="_blank" rel="noopener noreferrer">
                 <i class="fas fa-plus-circle"></i> New Order
             </a>
         </div>
@@ -51,36 +51,36 @@
         .food-metric-card { border-left: 4px solid #0d9488; }
     </style>
 
-    @* Metrics row with teal/cyan gradient theme *@
+    @* Metrics row with modern contrasting gradient theme *@
     <div class="row mb-3">
         <div class="col-md-3">
-            <div class="card text-white metric-card food-metric-card" style="background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);">
+            <div class="card text-white metric-card food-metric-card" style="background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); box-shadow: 0 8px 20px rgba(59,130,246,.3); border: none;">
                 <div class="card-body">
-                    <h5>Open Orders</h5>
+                    <h5 style="opacity: 0.9;">Open Orders</h5>
                     <h2>@Model.OpenOrdersCount</h2>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-white metric-card food-metric-card" style="background: linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%);">
+            <div class="card text-white metric-card food-metric-card" style="background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%); box-shadow: 0 8px 20px rgba(245,158,11,.3); border: none;">
                 <div class="card-body">
-                    <h5>In Progress</h5>
+                    <h5 style="opacity: 0.9;">In Progress</h5>
                     <h2>@Model.InProgressOrdersCount</h2>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-white metric-card food-metric-card" style="background: linear-gradient(135deg, #14b8a6 0%, #2dd4bf 100%);">
+            <div class="card text-white metric-card food-metric-card" style="background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%); box-shadow: 0 8px 20px rgba(16,185,129,.3); border: none;">
                 <div class="card-body">
-                    <h5>Ready</h5>
+                    <h5 style="opacity: 0.9;">Ready</h5>
                     <h2>@Model.ReadyOrdersCount</h2>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-white metric-card food-metric-card" style="background: linear-gradient(135deg, #2dd4bf 0%, #5eead4 100%);">
+            <div class="card text-white metric-card food-metric-card" style="background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%); box-shadow: 0 8px 20px rgba(139,92,246,.3); border: none;">
                 <div class="card-body">
-                    <h5>Today's Sales</h5>
+                    <h5 style="opacity: 0.9;">Today's Sales</h5>
                     <h2>₹@Model.TotalSales.ToString("F2")</h2>
                 </div>
             </div>
@@ -90,12 +90,12 @@
     @* Active Orders *@
     <div class="row">
         <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(90deg, #14b8a6 60%, #2dd4bf 100%); color: white;">
+            <div class="card" style="background: rgba(255,255,255,0.95); border: none; box-shadow: 0 8px 30px rgba(0,0,0,.15);">
+                <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%); color: white; border: none;">
                     <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Active Orders (All Pending Orders)</h5>
                     <div class="d-flex align-items-center" style="gap:.5rem">
                         <small>Food orders only</small>
-                        <span class="badge bg-white rounded-pill px-3" style="color: #0d9488;" title="Active orders">@((Model.ActiveOrders?.Count() ?? 0).ToString()) Records</span>
+                        <span class="badge rounded-pill px-3" style="background: rgba(255,255,255,.2); backdrop-filter: blur(10px); color: white; border: 1px solid rgba(255,255,255,.3);" title="Active orders">@((Model.ActiveOrders?.Count() ?? 0).ToString()) Records</span>
                     </div>
                 </div>
                 <div class="card-body">
@@ -103,7 +103,7 @@
                     {
                         <div class="table-responsive table-container">
                             <table class="table table-striped table-hover" id="activeOrders">
-                                <thead class="sticky" style="background: linear-gradient(90deg, #0d9488 60%, #14b8a6 100%); color: white;">
+                                <thead class="sticky" style="background: linear-gradient(135deg, #1e40af 0%, #06b6d4 100%); color: white;">
                                     <tr class="text-center">
                                         <th>Order #</th>
                                         <th>Type</th>
@@ -184,12 +184,12 @@
     @* Cancelled Orders Section *@
     <div class="row mt-3">
         <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(90deg, #dc2626 60%, #ef4444 100%); color: white;">
+            <div class="card" style="background: rgba(255,255,255,0.95); border: none; box-shadow: 0 8px 30px rgba(0,0,0,.15);">
+                <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #dc2626 0%, #f97316 100%); color: white; border: none;">
                     <h5 class="mb-0"><i class="fas fa-ban me-2"></i>Cancelled Orders</h5>
                     <div class="d-flex align-items-center" style="gap:.5rem">
                         <small>Today's cancelled orders</small>
-                        <span class="badge bg-white rounded-pill px-3" style="color: #dc2626;" title="Cancelled orders">@((Model.CancelledOrders?.Count() ?? 0).ToString()) Records</span>
+                        <span class="badge rounded-pill px-3" style="background: rgba(255,255,255,.2); backdrop-filter: blur(10px); color: white; border: 1px solid rgba(255,255,255,.3);" title="Cancelled orders">@((Model.CancelledOrders?.Count() ?? 0).ToString()) Records</span>
                     </div>
                 </div>
                 <div class="card-body">
@@ -197,7 +197,7 @@
                     {
                         <div class="table-responsive table-container">
                             <table class="table table-striped table-hover" id="cancelledOrders">
-                                <thead class="sticky" style="background: linear-gradient(90deg, #dc2626 60%, #ef4444 100%); color: white;">
+                                <thead class="sticky" style="background: linear-gradient(135deg, #dc2626 0%, #f97316 100%); color: white;">
                                     <tr class="text-center">
                                         <th>Order #</th>
                                         <th>Type</th>
