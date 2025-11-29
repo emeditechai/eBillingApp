@@ -418,7 +418,7 @@ namespace RestaurantManagementSystem.Controllers
                         AND GuestBirthDate IS NOT NULL
                         AND MONTH(GuestBirthDate) = MONTH(GETDATE())
                         AND DAY(GuestBirthDate) = DAY(GETDATE())
-                        GROUP BY Email
+                        GROUP BY Email, DAY(GuestBirthDate), MONTH(GuestBirthDate)
                     ) gf
                     ORDER BY gf.GuestName";
 
@@ -479,7 +479,7 @@ namespace RestaurantManagementSystem.Controllers
                         AND AnniversaryDate IS NOT NULL
                         AND MONTH(AnniversaryDate) = MONTH(GETDATE())
                         AND DAY(AnniversaryDate) = DAY(GETDATE())
-                        GROUP BY Email
+                        GROUP BY Email, DAY(AnniversaryDate), MONTH(AnniversaryDate)
                     ) gf
                     ORDER BY gf.GuestName";
 
