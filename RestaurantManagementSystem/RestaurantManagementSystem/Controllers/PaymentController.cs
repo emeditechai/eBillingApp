@@ -3774,6 +3774,44 @@ END", connection))
                         }
                     }
                 }
+                
+                // Load UPI settings and generate QR code if enabled
+                try
+                {
+                    using (var upiCmd = new Microsoft.Data.SqlClient.SqlCommand(
+                        "SELECT TOP 1 UPIId, PayeeName, IsEnabled FROM UPISettings ORDER BY Id DESC", connection))
+                    {
+                        using (var upiReader = upiCmd.ExecuteReader())
+                        {
+                            if (upiReader.Read())
+                            {
+                                model.UPIEnabled = upiReader.GetBoolean(2);
+                                if (model.UPIEnabled && model.RemainingAmount > 0)
+                                {
+                                    model.UPIId = upiReader.GetString(0);
+                                    model.UPIPayeeName = upiReader.GetString(1);
+                                    
+                                    // Calculate rounded total to process (with roundoff adjustment)
+                                    var roundedAmount = Math.Round(model.RemainingAmount, 0, MidpointRounding.AwayFromZero);
+                                    
+                                    // Generate UPI QR Code for rounded amount (Total to Process)
+                                    model.UPIQRCodeDataUrl = Services.UPIQRCodeService.GenerateUPIQRCodeDataUrl(
+                                        model.UPIId,
+                                        model.UPIPayeeName,
+                                        roundedAmount,
+                                        $"Order {model.OrderNumber}",
+                                        20 // pixels per module
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log UPI error but don't fail the payment page
+                    System.Diagnostics.Debug.WriteLine($"UPI QR Code generation error: {ex.Message}");
+                }
             }
             
             return model;

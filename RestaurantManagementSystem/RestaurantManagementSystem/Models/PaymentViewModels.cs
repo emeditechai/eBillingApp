@@ -38,6 +38,12 @@ namespace RestaurantManagementSystem.Models
         
         // Sum of roundoff adjustments across payments for display on index/print
         public decimal TotalRoundoff { get; set; }
+        
+        // UPI QR Code properties
+        public bool UPIEnabled { get; set; }
+        public string UPIQRCodeDataUrl { get; set; }
+        public string UPIId { get; set; }
+        public string UPIPayeeName { get; set; }
     }
     
     public class PaymentMethodViewModel
