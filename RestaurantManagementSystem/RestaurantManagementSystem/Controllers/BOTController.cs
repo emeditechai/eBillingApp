@@ -958,6 +958,7 @@ namespace RestaurantManagementSystem.Controllers
                                     command.Parameters.AddWithValue("@OrderByUserName", GetCurrentUserName());
                                     command.Parameters.AddWithValue("@CustomerName", string.IsNullOrEmpty(model.CustomerName) ? (object)DBNull.Value : model.CustomerName);
                                     command.Parameters.AddWithValue("@CustomerPhone", string.IsNullOrEmpty(model.CustomerPhone) ? (object)DBNull.Value : model.CustomerPhone);
+                                    command.Parameters.AddWithValue("@CustomerEmailId", string.IsNullOrEmpty(model.CustomerEmailId) ? (object)DBNull.Value : model.CustomerEmailId);
                                     command.Parameters.AddWithValue("@SpecialInstructions", string.IsNullOrEmpty(model.SpecialInstructions) ? (object)DBNull.Value : model.SpecialInstructions);
                                     
                                     using (SqlDataReader reader = command.ExecuteReader())

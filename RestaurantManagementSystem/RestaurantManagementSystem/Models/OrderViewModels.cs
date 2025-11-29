@@ -62,6 +62,11 @@ namespace RestaurantManagementSystem.Models
         [Display(Name = "Customer Phone")]
         [StringLength(20)]
         public string CustomerPhone { get; set; }
+        
+        [Display(Name = "Customer Email")]
+        [StringLength(100)]
+        [EmailAddress(ErrorMessage = "Invalid email format")]
+        public string CustomerEmailId { get; set; }
 
         // Delivery only
         [Display(Name = "Address")]
@@ -87,6 +92,7 @@ namespace RestaurantManagementSystem.Models
         public string ServerName { get; set; }
         public string CustomerName { get; set; }
         public string CustomerPhone { get; set; }
+        public string CustomerEmailId { get; set; }
         public string CustomerAddress { get; set; }
         private decimal? _subtotal;
         public decimal Subtotal {

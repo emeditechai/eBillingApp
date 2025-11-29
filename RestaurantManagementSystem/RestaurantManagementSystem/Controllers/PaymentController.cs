@@ -3,11 +3,13 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Extensions.Configuration;
 using RestaurantManagementSystem.Models;
 using RestaurantManagementSystem.Services;
+using RestaurantManagementSystem.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using Microsoft.Data.SqlClient;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using System.Security.Claims;
 
@@ -3346,8 +3348,12 @@ END", connection))
                             int ordTableName = OrdinalOrMinus(reader, "TableName");
                             int ordStatus = OrdinalOrMinus(reader, "Status");
                             int ordOrderType = OrdinalOrMinus(reader, "OrderType");
+                            int ordCustomerEmailId = OrdinalOrMinus(reader, "CustomerEmailId");
+                            int ordCustomerName = OrdinalOrMinus(reader, "CustomerName");
 
                             model.OrderNumber = (ordOrderNumber >= 0 && !reader.IsDBNull(ordOrderNumber)) ? reader.GetString(ordOrderNumber) : string.Empty;
+                            model.CustomerEmailId = (ordCustomerEmailId >= 0 && !reader.IsDBNull(ordCustomerEmailId)) ? reader.GetString(ordCustomerEmailId) : string.Empty;
+                            model.CustomerName = (ordCustomerName >= 0 && !reader.IsDBNull(ordCustomerName)) ? reader.GetString(ordCustomerName) : string.Empty;
                             model.Subtotal = (ordSubtotal >= 0 && !reader.IsDBNull(ordSubtotal)) ? reader.GetDecimal(ordSubtotal) : 0m;
                             model.TaxAmount = (ordTaxAmount >= 0 && !reader.IsDBNull(ordTaxAmount)) ? reader.GetDecimal(ordTaxAmount) : 0m;
                             model.TipAmount = (ordTipAmount >= 0 && !reader.IsDBNull(ordTipAmount)) ? reader.GetDecimal(ordTipAmount) : 0m;
@@ -4644,5 +4650,395 @@ END", connection))
                 return Json(new { success = false, error = "Failed to generate encrypted URL" });
             }
         }
+
+        /// <summary>
+        /// Send Bill PDF to Customer Email
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<JsonResult> SendBillPDF([FromBody] SendBillPDFRequest request)
+        {
+            try
+            {
+                if (request == null || request.OrderId <= 0 || string.IsNullOrEmpty(request.CustomerEmail))
+                {
+                    return Json(new { success = false, message = "Invalid request parameters" });
+                }
+
+                // Get mail configuration
+                var mailConfig = await GetMailConfigurationAsync();
+                if (mailConfig == null)
+                {
+                    return Json(new { success = false, message = "Email configuration not found. Please configure email settings." });
+                }
+
+                // Get payment view model (same as PrintBill uses)
+                var model = GetPaymentViewModel(request.OrderId);
+                if (model == null)
+                {
+                    return Json(new { success = false, message = "Order not found" });
+                }
+
+                // Get restaurant settings
+                RestaurantSettings settings = null;
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+                    using (var command = new SqlCommand("SELECT * FROM dbo.RestaurantSettings", connection))
+                    {
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            if (await reader.ReadAsync())
+                            {
+                                settings = new RestaurantSettings
+                                {
+                                    RestaurantName = reader["RestaurantName"] as string ?? "Restaurant",
+                                    StreetAddress = reader["StreetAddress"] as string ?? "",
+                                    City = reader["City"] as string ?? "",
+                                    State = reader["State"] as string ?? "",
+                                    PhoneNumber = reader["PhoneNumber"] as string ?? "",
+                                    Email = reader["Email"] as string ?? "",
+                                    GSTCode = reader["GSTCode"] as string ?? "",
+                                    FssaiNo = reader["FssaiNo"] as string ?? ""
+                                };
+                            }
+                        }
+                    }
+                }
+
+                // Create email subject and body
+                var subject = $"Bill for Order #{model.OrderNumber} - {settings?.RestaurantName ?? "Restaurant"}";
+                var body = GenerateBillEmailBody(model, settings);
+
+                // Send email
+                var emailResult = await SendEmailWithBillAsync(mailConfig, request.CustomerEmail, subject, body, model, settings);
+
+                if (emailResult.Success)
+                {
+                    // Log email to database
+                    await LogEmailAsync(
+                        toEmail: request.CustomerEmail,
+                        subject: subject,
+                        body: body,
+                        status: "Success",
+                        errorMessage: null,
+                        processingTimeMs: emailResult.ProcessingTimeMs,
+                        fromEmail: mailConfig.FromEmail,
+                        fromName: mailConfig.FromName,
+                        smtpServer: mailConfig.SmtpServer,
+                        smtpPort: mailConfig.SmtpPort,
+                        emailType: "Bill PDF"
+                    );
+
+                    return Json(new { success = true, message = "Bill sent successfully" });
+                }
+                else
+                {
+                    // Log failed attempt
+                    await LogEmailAsync(
+                        toEmail: request.CustomerEmail,
+                        subject: subject,
+                        body: body,
+                        status: "Failed",
+                        errorMessage: emailResult.ErrorMessage,
+                        processingTimeMs: emailResult.ProcessingTimeMs,
+                        fromEmail: mailConfig.FromEmail,
+                        fromName: mailConfig.FromName,
+                        smtpServer: mailConfig.SmtpServer,
+                        smtpPort: mailConfig.SmtpPort,
+                        emailType: "Bill PDF"
+                    );
+
+                    return Json(new { success = false, message = emailResult.ErrorMessage ?? "Failed to send email" });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error sending bill PDF for order {OrderId}", request?.OrderId);
+                
+                // Log unexpected exception to database
+                try
+                {
+                    var model = GetPaymentViewModel(request.OrderId);
+                    var mailConfig = await GetMailConfigurationAsync();
+                    
+                    await LogEmailAsync(
+                        toEmail: request.CustomerEmail,
+                        subject: $"Bill for Order #{model?.OrderNumber ?? request.OrderId.ToString()}",
+                        body: "Exception occurred before email body could be generated",
+                        status: "Exception",
+                        errorMessage: ex.Message + (ex.InnerException != null ? " | Inner: " + ex.InnerException.Message : ""),
+                        processingTimeMs: 0,
+                        fromEmail: mailConfig?.FromEmail ?? "N/A",
+                        fromName: mailConfig?.FromName ?? "N/A",
+                        smtpServer: mailConfig?.SmtpServer ?? "N/A",
+                        smtpPort: mailConfig?.SmtpPort ?? 0,
+                        emailType: "Bill PDF"
+                    );
+                }
+                catch (Exception logEx)
+                {
+                    _logger?.LogError(logEx, "Failed to log exception to database");
+                }
+                
+                return Json(new { success = false, message = $"Error: {ex.Message}" });
+            }
+        }
+
+        private string GenerateBillEmailBody(PaymentViewModel model, RestaurantSettings settings)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("<html><body style='font-family: Arial, sans-serif;'>");
+            sb.AppendLine($"<div style='max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd;'>");
+            sb.AppendLine($"<h2 style='text-align: center; color: #333;'>{settings?.RestaurantName ?? "Restaurant"}</h2>");
+            
+            // Build full address from components
+            var addressParts = new List<string>();
+            if (!string.IsNullOrEmpty(settings?.StreetAddress)) addressParts.Add(settings.StreetAddress);
+            if (!string.IsNullOrEmpty(settings?.City)) addressParts.Add(settings.City);
+            if (!string.IsNullOrEmpty(settings?.State)) addressParts.Add(settings.State);
+            var fullAddress = string.Join(", ", addressParts);
+            
+            if (!string.IsNullOrEmpty(fullAddress))
+                sb.AppendLine($"<p style='text-align: center; color: #666;'>{fullAddress}</p>");
+            
+            if (!string.IsNullOrEmpty(settings?.PhoneNumber))
+                sb.AppendLine($"<p style='text-align: center; color: #666;'>Phone: {settings.PhoneNumber}</p>");
+            
+            sb.AppendLine("<hr style='border: 1px solid #ddd;' />");
+            sb.AppendLine($"<h3>Order #{model.OrderNumber}</h3>");
+            sb.AppendLine($"<p><strong>Table:</strong> {model.TableName}</p>");
+            sb.AppendLine($"<p><strong>Status:</strong> {model.OrderStatusDisplay}</p>");
+            
+            if (!string.IsNullOrEmpty(model.CustomerName))
+                sb.AppendLine($"<p><strong>Customer:</strong> {model.CustomerName}</p>");
+            
+            sb.AppendLine("<hr style='border: 1px solid #ddd;' />");
+            sb.AppendLine("<h4>Order Items</h4>");
+            sb.AppendLine("<table style='width: 100%; border-collapse: collapse;'>");
+            sb.AppendLine("<tr style='background-color: #f5f5f5;'>");
+            sb.AppendLine("<th style='padding: 8px; text-align: left; border-bottom: 1px solid #ddd;'>Item</th>");
+            sb.AppendLine("<th style='padding: 8px; text-align: center; border-bottom: 1px solid #ddd;'>Qty</th>");
+            sb.AppendLine("<th style='padding: 8px; text-align: right; border-bottom: 1px solid #ddd;'>Price</th>");
+            sb.AppendLine("<th style='padding: 8px; text-align: right; border-bottom: 1px solid #ddd;'>Total</th>");
+            sb.AppendLine("</tr>");
+            
+            if (model.OrderItems != null)
+            {
+                foreach (var item in model.OrderItems)
+                {
+                    sb.AppendLine("<tr>");
+                    sb.AppendLine($"<td style='padding: 8px; border-bottom: 1px solid #eee;'>{item.Name ?? item.MenuItemName}</td>");
+                    sb.AppendLine($"<td style='padding: 8px; text-align: center; border-bottom: 1px solid #eee;'>{item.Quantity}</td>");
+                    sb.AppendLine($"<td style='padding: 8px; text-align: right; border-bottom: 1px solid #eee;'>₹{item.UnitPrice:F2}</td>");
+                    sb.AppendLine($"<td style='padding: 8px; text-align: right; border-bottom: 1px solid #eee;'>₹{item.Subtotal:F2}</td>");
+                    sb.AppendLine("</tr>");
+                }
+            }
+            
+            sb.AppendLine("</table>");
+            sb.AppendLine("<hr style='border: 1px solid #ddd;' />");
+            sb.AppendLine("<table style='width: 100%; margin-top: 20px;'>");
+            sb.AppendLine($"<tr><td style='padding: 5px;'><strong>Subtotal:</strong></td><td style='text-align: right; padding: 5px;'>₹{model.Subtotal:F2}</td></tr>");
+            sb.AppendLine($"<tr><td style='padding: 5px;'>GST ({model.GSTPercentage:F2}%):</td><td style='text-align: right; padding: 5px;'>₹{model.TaxAmount:F2}</td></tr>");
+            
+            if (model.DiscountAmount > 0)
+                sb.AppendLine($"<tr><td style='padding: 5px; color: red;'>Discount:</td><td style='text-align: right; padding: 5px; color: red;'>-₹{model.DiscountAmount:F2}</td></tr>");
+            
+            if (model.TipAmount > 0)
+                sb.AppendLine($"<tr><td style='padding: 5px;'>Tip:</td><td style='text-align: right; padding: 5px;'>₹{model.TipAmount:F2}</td></tr>");
+            
+            sb.AppendLine($"<tr style='font-size: 18px; font-weight: bold; background-color: #f5f5f5;'><td style='padding: 10px;'>TOTAL:</td><td style='text-align: right; padding: 10px;'>₹{model.TotalAmount:F2}</td></tr>");
+            sb.AppendLine("</table>");
+            
+            if (!string.IsNullOrEmpty(settings?.GSTCode))
+                sb.AppendLine($"<p style='margin-top: 20px; color: #666; font-size: 12px;'><strong>GSTIN:</strong> {settings.GSTCode}</p>");
+            
+            sb.AppendLine("<p style='margin-top: 30px; text-align: center; color: #999; font-size: 12px;'>Thank you for dining with us!</p>");
+            sb.AppendLine("</div>");
+            sb.AppendLine("</body></html>");
+            
+            return sb.ToString();
+        }
+
+        private async Task<(bool Success, string ErrorMessage, int ProcessingTimeMs)> SendEmailWithBillAsync(
+            MailConfigurationViewModel mailConfig, string toEmail, string subject, string body, PaymentViewModel model, RestaurantSettings settings)
+        {
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            
+            try
+            {
+                if (string.IsNullOrEmpty(toEmail))
+                {
+                    return (false, "Email address is empty", 0);
+                }
+
+                var smtpServer = mailConfig.SmtpServer;
+                if (!smtpServer.StartsWith("smtp.", StringComparison.OrdinalIgnoreCase) && 
+                    !smtpServer.StartsWith("mail.", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (smtpServer.Contains("gmail.com"))
+                        smtpServer = "smtp.gmail.com";
+                    else if (smtpServer.Contains("outlook.com") || smtpServer.Contains("hotmail.com"))
+                        smtpServer = "smtp.office365.com";
+                }
+
+                using (var client = new System.Net.Mail.SmtpClient(smtpServer, mailConfig.SmtpPort))
+                {
+                    client.EnableSsl = mailConfig.EnableSSL;
+                    client.UseDefaultCredentials = false;
+                    client.Credentials = new System.Net.NetworkCredential(mailConfig.SmtpUsername, mailConfig.SmtpPassword);
+                    client.DeliveryMethod = System.Net.Mail.SmtpDeliveryMethod.Network;
+                    client.Timeout = 30000;
+
+                    using (var message = new System.Net.Mail.MailMessage())
+                    {
+                        message.From = new System.Net.Mail.MailAddress(mailConfig.FromEmail, mailConfig.FromName);
+                        message.To.Add(toEmail);
+                        message.Subject = subject;
+                        message.Body = body;
+                        message.IsBodyHtml = true;
+                        message.Priority = System.Net.Mail.MailPriority.Normal;
+
+                        await client.SendMailAsync(message);
+                    }
+                }
+
+                stopwatch.Stop();
+                return (true, null, (int)stopwatch.ElapsedMilliseconds);
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+                _logger?.LogError(ex, "Error sending bill email to {Email}", toEmail);
+                return (false, ex.Message, (int)stopwatch.ElapsedMilliseconds);
+            }
+        }
+
+        private async Task<MailConfigurationViewModel> GetMailConfigurationAsync()
+        {
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+
+                var query = @"
+                    SELECT Id, SmtpServer, SmtpPort, SmtpUsername, SmtpPassword, EnableSSL, 
+                           FromEmail, FromName, AdminNotificationEmail, IsActive 
+                    FROM tbl_MailConfiguration
+                    WHERE IsActive = 1";
+
+                using (var command = new SqlCommand(query, connection))
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    if (await reader.ReadAsync())
+                    {
+                        var encryptedPassword = reader.GetString(4);
+                        var decryptedPassword = DecryptPassword(encryptedPassword);
+                        
+                        return new MailConfigurationViewModel
+                        {
+                            Id = reader.GetInt32(0),
+                            SmtpServer = reader.GetString(1),
+                            SmtpPort = reader.GetInt32(2),
+                            SmtpUsername = reader.GetString(3),
+                            SmtpPassword = decryptedPassword,
+                            EnableSSL = reader.GetBoolean(5),
+                            FromEmail = reader.GetString(6),
+                            FromName = reader.GetString(7),
+                            AdminNotificationEmail = reader.IsDBNull(8) ? null : reader.GetString(8),
+                            IsActive = reader.GetBoolean(9)
+                        };
+                    }
+                }
+            }
+            
+            return null;
+        }
+
+        private string DecryptPassword(string encryptedPassword)
+        {
+            try
+            {
+                var encryptionKey = Convert.FromBase64String(_configuration["Encryption:Key"]);
+                var encryptionIV = Convert.FromBase64String(_configuration["Encryption:IV"]);
+                
+                using (var aes = System.Security.Cryptography.Aes.Create())
+                {
+                    aes.Key = encryptionKey;
+                    aes.IV = encryptionIV;
+                    
+                    var decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
+                    var encryptedBytes = Convert.FromBase64String(encryptedPassword);
+                    
+                    using (var ms = new System.IO.MemoryStream(encryptedBytes))
+                    using (var cs = new System.Security.Cryptography.CryptoStream(ms, decryptor, System.Security.Cryptography.CryptoStreamMode.Read))
+                    using (var sr = new System.IO.StreamReader(cs))
+                    {
+                        return sr.ReadToEnd();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to decrypt password");
+                return encryptedPassword; // Return as-is if decryption fails
+            }
+        }
+
+        private async Task LogEmailAsync(string toEmail, string subject, string body, string status, 
+            string errorMessage, int processingTimeMs, string fromEmail, string fromName, 
+            string smtpServer, int smtpPort, string emailType)
+        {
+            try
+            {
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+
+                    var query = @"
+                        INSERT INTO tbl_EmailLog 
+                        (ToEmail, FromEmail, FromName, Subject, Body, EmailBody, Status, ErrorMessage, 
+                         SentAt, ProcessingTimeMs, SmtpServer, SmtpPort, SmtpUsername, 
+                         SmtpUseSsl, SmtpTimeout, EmailType, SentFrom)
+                        VALUES 
+                        (@ToEmail, @FromEmail, @FromName, @Subject, @Body, @EmailBody, @Status, @ErrorMessage, 
+                         @SentAt, @ProcessingTimeMs, @SmtpServer, @SmtpPort, @SmtpUsername, 
+                         @SmtpUseSsl, @SmtpTimeout, @EmailType, @SentFrom)";
+
+                    using (var command = new SqlCommand(query, connection))
+                    {
+                        command.Parameters.AddWithValue("@ToEmail", toEmail ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@FromEmail", fromEmail ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@FromName", fromName ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@Subject", subject ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@Body", body ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@EmailBody", body ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@Status", status ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@ErrorMessage", errorMessage ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@SentAt", DateTime.Now);
+                        command.Parameters.AddWithValue("@ProcessingTimeMs", processingTimeMs);
+                        command.Parameters.AddWithValue("@SmtpServer", smtpServer ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@SmtpPort", smtpPort);
+                        command.Parameters.AddWithValue("@SmtpUsername", fromEmail ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@SmtpUseSsl", true);
+                        command.Parameters.AddWithValue("@SmtpTimeout", 30000);
+                        command.Parameters.AddWithValue("@EmailType", emailType ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@SentFrom", "Payment System");
+
+                        await command.ExecuteNonQueryAsync();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to log email to database");
+            }
+        }
+    }
+
+    public class SendBillPDFRequest
+    {
+        public int OrderId { get; set; }
+        public string CustomerEmail { get; set; }
     }
 }

@@ -18,11 +18,17 @@ BEGIN
         o.TipAmount,
         o.DiscountAmount,
         o.TotalAmount,
-    ISNULL(SUM(p.Amount + p.TipAmount + ISNULL(p.RoundoffAdjustmentAmt,0)), 0) AS PaidAmount,
-    (o.TotalAmount - ISNULL(SUM(p.Amount + p.TipAmount + ISNULL(p.RoundoffAdjustmentAmt,0)), 0)) AS RemainingAmount,
+        ISNULL(SUM(p.Amount + p.TipAmount + ISNULL(p.RoundoffAdjustmentAmt,0)), 0) AS PaidAmount,
+        -- RemainingAmount calculation: if roundoff exists and makes remaining nearly zero, show 0
+        CASE 
+            WHEN ABS(o.TotalAmount - ISNULL(SUM(p.Amount + p.TipAmount + ISNULL(p.RoundoffAdjustmentAmt,0)), 0)) <= 1 THEN 0
+            ELSE (o.TotalAmount - ISNULL(SUM(p.Amount + p.TipAmount + ISNULL(p.RoundoffAdjustmentAmt,0)), 0))
+        END AS RemainingAmount,
         ISNULL(t.TableName, 'N/A') AS TableName,
         o.Status,
-        o.OrderType
+        o.OrderType,
+        o.Customeremailid AS CustomerEmailId,
+        o.CustomerName
     FROM 
         Orders o
     LEFT JOIN 
@@ -43,7 +49,9 @@ BEGIN
         o.TotalAmount,
         t.TableName,
         o.Status,
-        o.OrderType;
+        o.OrderType,
+        o.Customeremailid,
+        o.CustomerName;
     
     -- Get order items
     SELECT

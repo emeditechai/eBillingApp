@@ -252,6 +252,14 @@
                                         <span class="hotkey-badge ms-2">Shift+P</span>
                                     </a>
                                 }
+                                
+                                @* Send Bill Button - Only if Order is Completed and Email is available *@
+                                @if (Model.OrderStatus == 3 && !string.IsNullOrEmpty(Model.CustomerEmailId))
+                                {
+                                    <button id="sendPdfBtn" type="button" class="btn btn-outline-info btn-lg" onclick="sendBillPDF(@Model.OrderId, '@Model.CustomerEmailId')">
+                                        <i class="fas fa-envelope me-1"></i> Send Bill
+                                    </button>
+                                }
                             </div>
                         }
                         else if (Model.OrderStatus != 4) @* Not Cancelled and Not Completed *@
@@ -287,9 +295,17 @@
                                         <i class="fas fa-print me-1"></i> POS Print Bill
                                         <span class="hotkey-badge ms-2">Shift+P</span>
                                     </a>
-                                }
-                                
-                                @* Manual 'Mark as Completed' removed — orders will be auto-completed when there is no due. *@
+                            }
+                            
+                            @* Send Bill Button - Only if Order is Completed and Email is available *@
+                            @if (Model.OrderStatus == 3 && !string.IsNullOrEmpty(Model.CustomerEmailId))
+                            {
+                                <button id="sendPdfBtn" type="button" class="btn btn-outline-info btn-lg" onclick="sendBillPDF(@Model.OrderId, '@Model.CustomerEmailId')">
+                                    <i class="fas fa-envelope me-1"></i> Send Bill
+                                </button>
+                            }
+                            
+                            @* Manual 'Mark as Completed' removed — orders will be auto-completed when there is no due. *@
                             </div>
                         }
                     </div>
@@ -614,6 +630,10 @@
 </div>
 
 @section Scripts {
+    <!-- SweetAlert2 -->
+    <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
     <script>
         // Printing is handled by server-rendered actions:
         // - /Payment/PrintBill/{orderId} (A4)
@@ -902,5 +922,80 @@
             // Initialize prefix based on default selection
             setPrefix();
         })();
+
+        // Send Bill PDF via Email
+        function sendBillPDF(orderId, customerEmail) {
+            if (!customerEmail) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'No Email',
+                    text: 'Customer email not available',
+                    timer: 3000,
+                    timerProgressBar: true,
+                    showConfirmButton: false
+                });
+                return;
+            }
+            
+            const btn = document.getElementById('sendPdfBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Sending...';
+            }
+            
+            fetch('/Payment/SendBillPDF', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]').value
+                },
+                body: JSON.stringify({ 
+                    orderId: orderId,
+                    customerEmail: customerEmail
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-envelope me-1"></i> Send Bill';
+                }
+                
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Email Sent!',
+                        text: 'Bill sent successfully to ' + customerEmail,
+                        timer: 3000,
+                        timerProgressBar: true,
+                        showConfirmButton: false
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Failed to Send',
+                        text: data.message || 'Unknown error occurred',
+                        timer: 4000,
+                        timerProgressBar: true,
+                        showConfirmButton: false
+                    });
+                }
+            })
+            .catch(err => {
+                console.error('Error sending PDF:', err);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-envelope me-1"></i> Send Bill';
+                }
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Failed to send bill. Please try again.',
+                    timer: 4000,
+                    timerProgressBar: true,
+                    showConfirmButton: false
+                });
+            });
+        }
     </script>
 }

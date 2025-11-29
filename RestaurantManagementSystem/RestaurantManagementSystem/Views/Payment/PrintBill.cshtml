@@ -176,12 +176,15 @@
                     <td>Paid:</td>
                     <td class="text-end text-success">₹@Model.PaidAmount.ToString("F2")</td>
                 </tr>
-                <tr>
-                    <td><strong>Remaining:</strong></td>
-                    <td class="text-end @(Model.RemainingAmount <= 0 ? "text-success" : "text-danger")">
-                        <strong>₹@Model.RemainingAmount.ToString("F2")</strong>
-                    </td>
-                </tr>
+                @if (Model.RemainingAmount > 0)
+                {
+                    <tr>
+                        <td><strong>Remaining:</strong></td>
+                        <td class="text-end text-danger">
+                            <strong>₹@Model.RemainingAmount.ToString("F2")</strong>
+                        </td>
+                    </tr>
+                }
             </table>
             @* Debug panel - show raw values when ?debug=1 is appended to the URL *@
             @if (ViewContext.HttpContext.Request.Query["debug"] == "1")

@@ -248,6 +248,7 @@
             <dl class="row mb-0">
               <dt class="col-5">Customer</dt><dd class="col-7">@(!string.IsNullOrEmpty(Model.CustomerName)?Model.CustomerName: (string.IsNullOrEmpty(Model.GuestName)?"—":Model.GuestName))</dd>
               <dt class="col-5">Phone</dt><dd class="col-7">@(!string.IsNullOrEmpty(Model.CustomerPhone)?Model.CustomerPhone:"—")</dd>
+              <dt class="col-5">Email</dt><dd class="col-7">@(!string.IsNullOrEmpty(Model.CustomerEmailId)?Model.CustomerEmailId:"—")</dd>
               @if (Model.OrderType == 2 && !string.IsNullOrWhiteSpace(Model.CustomerAddress))
               {
                 <dt class="col-5">Address</dt><dd class="col-7">@Model.CustomerAddress</dd>

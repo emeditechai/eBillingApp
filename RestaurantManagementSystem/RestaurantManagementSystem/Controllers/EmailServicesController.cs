@@ -199,6 +199,25 @@ namespace RestaurantManagementSystem.Controllers
                         result.FailureCount++;
                         result.Errors.Add($"{guest.GuestName}: {ex.Message}");
                         _logger.LogError(ex, "Error sending email to guest {GuestId}", guest.Id);
+                        
+                        // Log exception to tbl_EmailLog
+                        try
+                        {
+                            await LogEmailAsync(
+                                toEmail: guest.Email ?? string.Empty,
+                                subject: template?.Subject ?? "Unknown",
+                                body: "Exception occurred: " + ex.Message,
+                                status: "Exception",
+                                errorMessage: ex.Message + (ex.InnerException != null ? " | Inner: " + ex.InnerException.Message : ""),
+                                processingTimeMs: 0,
+                                fromEmail: mailConfig.FromEmail,
+                                fromName: mailConfig.FromName,
+                                smtpServer: mailConfig.SmtpServer,
+                                smtpPort: mailConfig.SmtpPort,
+                                emailType: $"{request.EmailType} Campaign"
+                            );
+                        }
+                        catch { /* Ignore logging errors */ }
                     }
                 }
 
@@ -361,6 +380,25 @@ namespace RestaurantManagementSystem.Controllers
                         result.FailureCount++;
                         result.Errors.Add($"{guest.GuestName}: {ex.Message}");
                         _logger.LogError(ex, "Error sending custom email to guest {GuestId}", guest.Id);
+                        
+                        // Log exception to tbl_EmailLog
+                        try
+                        {
+                            await LogEmailAsync(
+                                toEmail: guest.Email ?? string.Empty,
+                                subject: subject ?? "Unknown",
+                                body: "Exception occurred: " + ex.Message,
+                                status: "Exception",
+                                errorMessage: ex.Message + (ex.InnerException != null ? " | Inner: " + ex.InnerException.Message : ""),
+                                processingTimeMs: 0,
+                                fromEmail: mailConfig.FromEmail,
+                                fromName: mailConfig.FromName,
+                                smtpServer: mailConfig.SmtpServer,
+                                smtpPort: mailConfig.SmtpPort,
+                                emailType: "Custom Campaign"
+                            );
+                        }
+                        catch { /* Ignore logging errors */ }
                     }
                 }
 

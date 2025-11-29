@@ -153,6 +153,7 @@ namespace RestaurantManagementSystem.Controllers
                                     command.Parameters.AddWithValue("@OrderByUserName", GetCurrentUserName());
                                     command.Parameters.AddWithValue("@CustomerName", string.IsNullOrEmpty(model.CustomerName) ? (object)DBNull.Value : model.CustomerName);
                                     command.Parameters.AddWithValue("@CustomerPhone", string.IsNullOrEmpty(model.CustomerPhone) ? (object)DBNull.Value : model.CustomerPhone);
+                                    command.Parameters.AddWithValue("@CustomerEmailId", string.IsNullOrEmpty(model.CustomerEmailId) ? (object)DBNull.Value : model.CustomerEmailId);
                                     command.Parameters.AddWithValue("@SpecialInstructions", string.IsNullOrEmpty(model.SpecialInstructions) ? (object)DBNull.Value : model.SpecialInstructions);
                                     using (Microsoft.Data.SqlClient.SqlDataReader reader = command.ExecuteReader())
                                     {
@@ -2948,6 +2949,7 @@ namespace RestaurantManagementSystem.Controllers
                         CONCAT(u.FirstName, ' ', ISNULL(u.LastName, '')) AS ServerName,
                         o.CustomerName,
                         o.CustomerPhone,
+                        o.Customeremailid AS CustomerEmailId,
                         o.Subtotal,
                         o.TaxAmount,
                         o.TipAmount,
@@ -2973,6 +2975,7 @@ namespace RestaurantManagementSystem.Controllers
                         CONCAT(u.FirstName, ' ', ISNULL(u.LastName, '')) AS ServerName,
                         o.CustomerName,
                         o.CustomerPhone,
+                        o.Customeremailid AS CustomerEmailId,
                         o.Subtotal,
                         o.TaxAmount,
                         o.TipAmount,
@@ -3043,21 +3046,22 @@ namespace RestaurantManagementSystem.Controllers
                                 ServerName = reader.IsDBNull(6) ? null : reader.GetString(6),
                                 CustomerName = reader.IsDBNull(7) ? null : reader.GetString(7),
                                 CustomerPhone = reader.IsDBNull(8) ? null : reader.GetString(8),
-                                Subtotal = reader.GetDecimal(9),
-                                TaxAmount = reader.GetDecimal(10),
-                                TipAmount = reader.GetDecimal(11),
-                                DiscountAmount = reader.GetDecimal(12),
-                                TotalAmount = reader.GetDecimal(13),
-                                SpecialInstructions = reader.IsDBNull(14) ? null : reader.GetString(14),
-                                CreatedAt = reader.GetDateTime(15),
-                                UpdatedAt = reader.GetDateTime(16), // We've handled this in the SQL query
-                                CompletedAt = reader.IsDBNull(17) ? null : (DateTime?)reader.GetDateTime(17),
-                                TableName = reader.IsDBNull(24) ? null : reader.GetString(24),
-                                GuestName = reader.IsDBNull(25) ? null : reader.GetString(25),
+                                CustomerEmailId = reader.IsDBNull(9) ? null : reader.GetString(9),
+                                Subtotal = reader.GetDecimal(10),
+                                TaxAmount = reader.GetDecimal(11),
+                                TipAmount = reader.GetDecimal(12),
+                                DiscountAmount = reader.GetDecimal(13),
+                                TotalAmount = reader.GetDecimal(14),
+                                SpecialInstructions = reader.IsDBNull(15) ? null : reader.GetString(15),
+                                CreatedAt = reader.GetDateTime(16),
+                                UpdatedAt = reader.GetDateTime(17), // We've handled this in the SQL query
+                                CompletedAt = reader.IsDBNull(18) ? null : (DateTime?)reader.GetDateTime(18),
+                                TableName = reader.IsDBNull(25) ? null : reader.GetString(25),
+                                GuestName = reader.IsDBNull(26) ? null : reader.GetString(26),
                                 // Read persisted GST metadata from Orders table
-                                GSTPercentage = reader.IsDBNull(18) ? 0m : reader.GetDecimal(18),
-                                CGSTAmount = reader.IsDBNull(22) ? 0m : reader.GetDecimal(22),
-                                SGSTAmount = reader.IsDBNull(23) ? 0m : reader.GetDecimal(23),
+                                GSTPercentage = reader.IsDBNull(19) ? 0m : reader.GetDecimal(19),
+                                CGSTAmount = reader.IsDBNull(23) ? 0m : reader.GetDecimal(23),
+                                SGSTAmount = reader.IsDBNull(24) ? 0m : reader.GetDecimal(24),
                                 Items = new List<OrderItemViewModel>(),
                                 KitchenTickets = new List<KitchenTicketViewModel>(),
                                 AvailableCourses = new List<CourseType>()

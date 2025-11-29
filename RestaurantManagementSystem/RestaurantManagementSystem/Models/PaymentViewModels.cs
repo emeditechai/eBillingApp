@@ -23,6 +23,8 @@ namespace RestaurantManagementSystem.Models
         public string OrderStatusDisplay { get; set; }
         public int OrderType { get; set; } // 0=Dine-In, 1=Takeout, 2=Delivery, 3=Online
         public string OrderTypeDisplay { get; set; }
+        public string CustomerEmailId { get; set; }
+        public string CustomerName { get; set; }
         
         // GST breakdown (dynamic based on Default GST % setting)
         public decimal GSTPercentage { get; set; }

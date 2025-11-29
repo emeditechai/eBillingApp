@@ -131,6 +131,13 @@
                                 <textarea asp-for="SpecialInstructions" class="form-control" rows="5" placeholder="E.g., Extra ice, specific brand request, serving preferences..."></textarea>
                                 <span asp-validation-for="SpecialInstructions" class="text-danger"></span>
                                 
+                                <div class="mt-3">
+                                    <label asp-for="CustomerEmailId" class="form-label">Customer Email</label>
+                                    <input asp-for="CustomerEmailId" type="email" class="form-control" placeholder="customer@example.com" />
+                                    <span asp-validation-for="CustomerEmailId" class="text-danger"></span>
+                                    <small class="form-text text-muted">Optional: For sending order confirmation and receipts</small>
+                                </div>
+                                
                                 <div class="alert alert-info mt-3" style="background-color: #ede9fe; border-color: #a855f7;">
                                     <i class="fas fa-info-circle text-purple"></i> 
                                     <strong>Bar Orders:</strong> Once created, you can add bar items to this order. The system will automatically generate BOTs (Beverage Order Tickets) for bar items.

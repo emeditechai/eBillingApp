@@ -141,6 +141,10 @@ namespace RestaurantManagementSystem.Models
         [StringLength(20)]
         public string CustomerPhone { get; set; }
         
+        [StringLength(100)]
+        [EmailAddress]
+        public string CustomerEmailId { get; set; }
+        
         [Required]
         [Range(0, 100000)]
         public decimal Subtotal { get; set; }
