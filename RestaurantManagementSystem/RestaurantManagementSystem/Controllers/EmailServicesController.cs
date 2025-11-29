@@ -17,7 +17,7 @@ using System.Security.Cryptography;
 
 namespace RestaurantManagementSystem.Controllers
 {
-    [Authorize(Roles = "Administrator,Manager")]
+    [Authorize(Roles = "Administrator,Manager,Floor Manager")]
     [RequirePermission("NAV_SETTINGS_EMAIL_SERVICES", PermissionAction.View)]
     public class EmailServicesController : Controller
     {

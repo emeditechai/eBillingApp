@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace RestaurantManagementSystem.Controllers
 {
-    [Authorize(Roles = "Administrator,Manager")]
+    [Authorize(Roles = "Administrator,Manager,Floor Manager")]
     [RequirePermission("NAV_SETTINGS_EMAIL_LOGS", PermissionAction.View)]
     public class EmailLogsController : Controller
     {
