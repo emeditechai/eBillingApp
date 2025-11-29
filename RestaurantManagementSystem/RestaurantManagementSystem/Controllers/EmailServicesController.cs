@@ -402,8 +402,9 @@ namespace RestaurantManagementSystem.Controllers
                                   (MONTH(gf.GuestBirthDate) = MONTH(GETDATE()) AND DAY(gf.GuestBirthDate) > DAY(GETDATE()))
                         THEN 1 ELSE 0 END as Age,
                         (SELECT TOP 1 SentAt FROM tbl_EmailCampaignHistory 
-                         WHERE GuestEmail = gf.Email AND CampaignType = 'Birthday' 
-                         AND YEAR(SentAt) = YEAR(GETDATE()) 
+                         WHERE GuestEmail = gf.Email 
+                         AND CampaignType = 'Birthday' 
+                         AND CAST(SentAt AS DATE) = CAST(GETDATE() AS DATE)
                          AND Status = 'Success'
                          ORDER BY SentAt DESC) as LastSentDate
                     FROM (
@@ -411,14 +412,14 @@ namespace RestaurantManagementSystem.Controllers
                             MIN(Id) as Id,
                             MAX(GuestName) as GuestName,
                             Email,
-                            MAX(GuestBirthDate) as GuestBirthDate
+                            GuestBirthDate
                         FROM GuestFeedback
                         WHERE Email IS NOT NULL 
                         AND Email <> ''
                         AND GuestBirthDate IS NOT NULL
                         AND MONTH(GuestBirthDate) = MONTH(GETDATE())
                         AND DAY(GuestBirthDate) = DAY(GETDATE())
-                        GROUP BY Email, DAY(GuestBirthDate), MONTH(GuestBirthDate)
+                        GROUP BY Email, GuestBirthDate
                     ) gf
                     ORDER BY gf.GuestName";
 
@@ -463,8 +464,9 @@ namespace RestaurantManagementSystem.Controllers
                                   (MONTH(gf.AnniversaryDate) = MONTH(GETDATE()) AND DAY(gf.AnniversaryDate) > DAY(GETDATE()))
                         THEN 1 ELSE 0 END as Years,
                         (SELECT TOP 1 SentAt FROM tbl_EmailCampaignHistory 
-                         WHERE GuestEmail = gf.Email AND CampaignType = 'Anniversary' 
-                         AND YEAR(SentAt) = YEAR(GETDATE()) 
+                         WHERE GuestEmail = gf.Email 
+                         AND CampaignType = 'Anniversary' 
+                         AND CAST(SentAt AS DATE) = CAST(GETDATE() AS DATE)
                          AND Status = 'Success'
                          ORDER BY SentAt DESC) as LastSentDate
                     FROM (
@@ -472,14 +474,14 @@ namespace RestaurantManagementSystem.Controllers
                             MIN(Id) as Id,
                             MAX(GuestName) as GuestName,
                             Email,
-                            MAX(AnniversaryDate) as AnniversaryDate
+                            AnniversaryDate
                         FROM GuestFeedback
                         WHERE Email IS NOT NULL 
                         AND Email <> ''
                         AND AnniversaryDate IS NOT NULL
                         AND MONTH(AnniversaryDate) = MONTH(GETDATE())
                         AND DAY(AnniversaryDate) = DAY(GETDATE())
-                        GROUP BY Email, DAY(AnniversaryDate), MONTH(AnniversaryDate)
+                        GROUP BY Email, AnniversaryDate
                     ) gf
                     ORDER BY gf.GuestName";
 
