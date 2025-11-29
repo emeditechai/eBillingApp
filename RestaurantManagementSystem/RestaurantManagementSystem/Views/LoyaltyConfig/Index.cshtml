@@ -1,0 +1,340 @@
+@model RestaurantManagementSystem.ViewModels.LoyaltyConfigViewModel
+@{
+    ViewData["Title"] = "Loyalty Points Configuration";
+}
+
+<style>
+    .config-container {
+        background: #0b0f14;
+        min-height: 100vh;
+        padding: 2rem;
+        color: #f2f5f7;
+    }
+    
+    .config-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .config-header i {
+        font-size: 2rem;
+        color: #0F62FE;
+    }
+    
+    .config-header h4 {
+        margin: 0;
+        font-weight: 600;
+    }
+    
+    .config-table {
+        background: #151922;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid #2a2f3a;
+    }
+    
+    .config-table table {
+        width: 100%;
+        margin: 0;
+    }
+    
+    .config-table th {
+        background: #1e2530;
+        color: #9fa5b5;
+        font-weight: 500;
+        font-size: 0.875rem;
+        padding: 1rem;
+        text-align: left;
+        border-bottom: 1px solid #2a2f3a;
+    }
+    
+    .config-table td {
+        padding: 1rem;
+        border-bottom: 1px solid #2a2f3a;
+        vertical-align: middle;
+    }
+    
+    .config-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+    
+    .config-table tbody tr:hover {
+        background: #1a1f29;
+    }
+    
+    .config-input {
+        background: #0b0f14;
+        border: 1px solid #2a2f3a;
+        color: #f2f5f7;
+        padding: 0.5rem 0.75rem;
+        border-radius: 4px;
+        width: 100%;
+        font-size: 0.875rem;
+    }
+    
+    .config-input:focus {
+        outline: none;
+        border-color: #0F62FE;
+        background: #151922;
+    }
+    
+    .config-desc {
+        color: #9fa5b5;
+        font-size: 0.8125rem;
+        margin-top: 0.25rem;
+    }
+    
+    .btn-save {
+        background: #0F62FE;
+        color: white;
+        border: none;
+        padding: 0.75rem 2rem;
+        border-radius: 4px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    
+    .btn-save:hover {
+        background: #0353e9;
+    }
+    
+    .btn-cancel {
+        background: #2a2f3a;
+        color: #f2f5f7;
+        border: none;
+        padding: 0.75rem 2rem;
+        border-radius: 4px;
+        font-weight: 500;
+        cursor: pointer;
+        margin-right: 1rem;
+        transition: background 0.2s;
+    }
+    
+    .btn-cancel:hover {
+        background: #3a3f4a;
+    }
+    
+    .alert {
+        padding: 1rem;
+        border-radius: 4px;
+        margin-bottom: 1.5rem;
+    }
+    
+    .alert-success {
+        background: rgba(36, 161, 72, 0.1);
+        color: #42be65;
+        border: 1px solid rgba(66, 190, 101, 0.3);
+    }
+    
+    .alert-danger {
+        background: rgba(218, 30, 40, 0.1);
+        color: #ff8389;
+        border: 1px solid rgba(255, 131, 137, 0.3);
+    }
+</style>
+
+<div class="config-container">
+    <div class="config-header">
+        <i class="fas fa-award"></i>
+        <h4>Loyalty Points — Configuration</h4>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success">
+            <i class="fas fa-check-circle"></i> @TempData["SuccessMessage"]
+        </div>
+    }
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-circle"></i> @TempData["ErrorMessage"]
+        </div>
+    }
+
+    <form asp-action="SaveConfiguration" method="post">
+        @Html.AntiForgeryToken()
+
+        <div class="config-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 20%;">Parameter</th>
+                        <th style="width: 30%;">Restaurant</th>
+                        <th style="width: 30%;">Bar</th>
+                        <th style="width: 20%;">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Points Earn Rate</strong></td>
+                        <td>
+                            <input type="hidden" asp-for="RestaurantConfig.Id" />
+                            <input type="hidden" asp-for="RestaurantConfig.OutletType" value="RESTAURANT" />
+                            <input type="number" step="0.01" asp-for="RestaurantConfig.EarnRate" class="config-input" placeholder="100" required />
+                            <div class="config-desc">1 point per ₹X spend</div>
+                        </td>
+                        <td>
+                            <input type="hidden" asp-for="BarConfig.Id" />
+                            <input type="hidden" asp-for="BarConfig.OutletType" value="BAR" />
+                            <input type="number" step="0.01" asp-for="BarConfig.EarnRate" class="config-input" placeholder="200" required />
+                            <div class="config-desc">1 point per ₹X spend</div>
+                        </td>
+                        <td class="config-desc">Configurable by admin</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Redemption Value</strong></td>
+                        <td>
+                            <input type="number" step="0.01" asp-for="RestaurantConfig.RedemptionValue" class="config-input" placeholder="1" required />
+                            <div class="config-desc">1 point = ₹X</div>
+                        </td>
+                        <td>
+                            <input type="number" step="0.01" asp-for="BarConfig.RedemptionValue" class="config-input" placeholder="1" required />
+                            <div class="config-desc">1 point = ₹X</div>
+                        </td>
+                        <td class="config-desc">Can be set per outlet</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Minimum Bill to Earn</strong></td>
+                        <td>
+                            <input type="number" step="0.01" asp-for="RestaurantConfig.MinBillToEarn" class="config-input" placeholder="300" required />
+                        </td>
+                        <td>
+                            <input type="number" step="0.01" asp-for="BarConfig.MinBillToEarn" class="config-input" placeholder="500" required />
+                        </td>
+                        <td class="config-desc">To control micro transactions</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Max Points per Bill</strong></td>
+                        <td>
+                            <input type="number" step="0.01" asp-for="RestaurantConfig.MaxPointsPerBill" class="config-input" placeholder="500" required />
+                        </td>
+                        <td>
+                            <input type="number" step="0.01" asp-for="BarConfig.MaxPointsPerBill" class="config-input" placeholder="300" required />
+                        </td>
+                        <td class="config-desc">Capped</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Expiry Period</strong></td>
+                        <td>
+                            <input type="number" asp-for="RestaurantConfig.ExpiryDays" class="config-input" placeholder="365" required />
+                            <div class="config-desc">days</div>
+                        </td>
+                        <td>
+                            <input type="number" asp-for="BarConfig.ExpiryDays" class="config-input" placeholder="365" required />
+                            <div class="config-desc">days</div>
+                        </td>
+                        <td class="config-desc">Auto-expiry after period</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Eligible Payment Modes</strong></td>
+                        <td>
+                            <select multiple asp-for="RestaurantConfig.EligiblePaymentModes" class="config-input" id="restaurant_payment_modes" style="height: 120px;" required>
+                            </select>
+                            <small class="form-text text-muted">Hold Ctrl/Cmd to select multiple</small>
+                        </td>
+                        <td>
+                            <select multiple asp-for="BarConfig.EligiblePaymentModes" class="config-input" id="bar_payment_modes" style="height: 120px;" required>
+                            </select>
+                            <small class="form-text text-muted">Hold Ctrl/Cmd to select multiple</small>
+                        </td>
+                        <td class="config-desc">Avoid misuse via credits</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div style="margin-top: 2rem; text-align: right;">
+            <button type="button" class="btn-cancel" onclick="window.location.href='@Url.Action("Index", "Settings")'">Cancel</button>
+            <button type="submit" class="btn-save">
+                <i class="fas fa-save"></i> Save Configuration
+            </button>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        let paymentMethods = [];
+
+        // Load payment methods on page load
+        $(document).ready(function() {
+            loadPaymentMethods();
+        });
+
+        function loadPaymentMethods() {
+            $.ajax({
+                url: '@Url.Action("GetPaymentMethods", "LoyaltyConfig")',
+                type: 'GET',
+                success: function(response) {
+                    if (response.success) {
+                        paymentMethods = response.paymentMethods;
+                        populatePaymentMethods();
+                    } else {
+                        alert('Error loading payment methods: ' + response.message);
+                    }
+                },
+                error: function() {
+                    alert('Failed to load payment methods');
+                }
+            });
+        }
+
+        function populatePaymentMethods() {
+            const restaurantSelect = $('#restaurant_payment_modes');
+            const barSelect = $('#bar_payment_modes');
+            
+            // Clear existing options
+            restaurantSelect.empty();
+            barSelect.empty();
+
+            // Get current selected values
+            const restaurantSelected = '@Model.RestaurantConfig.EligiblePaymentModes'.split(',').filter(s => s);
+            const barSelected = '@Model.BarConfig.EligiblePaymentModes'.split(',').filter(s => s);
+
+            // Populate options
+            paymentMethods.forEach(pm => {
+                const optionText = `${pm.id} - ${pm.displayName}`;
+                const optionValue = pm.id.toString();
+
+                // Restaurant dropdown
+                const restOption = $('<option></option>')
+                    .attr('value', optionValue)
+                    .text(optionText);
+                if (restaurantSelected.includes(optionValue)) {
+                    restOption.prop('selected', true);
+                }
+                restaurantSelect.append(restOption);
+
+                // Bar dropdown
+                const barOption = $('<option></option>')
+                    .attr('value', optionValue)
+                    .text(optionText);
+                if (barSelected.includes(optionValue)) {
+                    barOption.prop('selected', true);
+                }
+                barSelect.append(barOption);
+            });
+        }
+
+        // Before form submission, convert selected options to comma-separated IDs
+        $('form').on('submit', function(e) {
+            // Get selected payment method IDs
+            const restaurantIds = $('#restaurant_payment_modes').val() || [];
+            const barIds = $('#bar_payment_modes').val() || [];
+
+            // Update the hidden fields or actual select values
+            $('#restaurant_payment_modes').val(restaurantIds.join(','));
+            $('#bar_payment_modes').val(barIds.join(','));
+        });
+    </script>
+}
