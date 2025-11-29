@@ -238,13 +238,15 @@
                     <tr>
                         <td><strong>Eligible Payment Modes</strong></td>
                         <td>
-                            <select multiple asp-for="RestaurantConfig.EligiblePaymentModes" class="config-input" id="restaurant_payment_modes" style="height: 120px;" required>
+                            <select multiple class="config-input" id="restaurant_payment_modes" style="height: 120px;" required>
                             </select>
+                            <input type="hidden" name="RestaurantConfig.EligiblePaymentModes" id="restaurant_payment_modes_hidden" value="@Model.RestaurantConfig.EligiblePaymentModes" />
                             <small class="form-text text-muted">Hold Ctrl/Cmd to select multiple</small>
                         </td>
                         <td>
-                            <select multiple asp-for="BarConfig.EligiblePaymentModes" class="config-input" id="bar_payment_modes" style="height: 120px;" required>
+                            <select multiple class="config-input" id="bar_payment_modes" style="height: 120px;" required>
                             </select>
+                            <input type="hidden" name="BarConfig.EligiblePaymentModes" id="bar_payment_modes_hidden" value="@Model.BarConfig.EligiblePaymentModes" />
                             <small class="form-text text-muted">Hold Ctrl/Cmd to select multiple</small>
                         </td>
                         <td class="config-desc">Avoid misuse via credits</td>
@@ -332,9 +334,21 @@
             const restaurantIds = $('#restaurant_payment_modes').val() || [];
             const barIds = $('#bar_payment_modes').val() || [];
 
-            // Update the hidden fields or actual select values
-            $('#restaurant_payment_modes').val(restaurantIds.join(','));
-            $('#bar_payment_modes').val(barIds.join(','));
+            // Update the hidden fields with comma-separated values
+            $('#restaurant_payment_modes_hidden').val(restaurantIds.join(','));
+            $('#bar_payment_modes_hidden').val(barIds.join(','));
+
+            // Validate that at least one payment method is selected
+            if (restaurantIds.length === 0) {
+                alert('Please select at least one payment method for Restaurant');
+                e.preventDefault();
+                return false;
+            }
+            if (barIds.length === 0) {
+                alert('Please select at least one payment method for Bar');
+                e.preventDefault();
+                return false;
+            }
         });
     </script>
 }
