@@ -1,6 +1,7 @@
 // Menu Sync JavaScript
 $(document).ready(function () {
     let currentTargetId = null;
+    let loadedTargetData = null; // Store loaded target data including password
 
     // Load saved targets on page load
     loadSavedTargets();
@@ -56,6 +57,8 @@ $(document).ready(function () {
                     });
                     loadSavedTargets();
                     currentTargetId = null;
+                    loadedTargetData = null;
+                    $('#password').attr('placeholder', 'SQL Server password');
                 } else {
                     Swal.fire({
                         icon: 'error',
@@ -83,7 +86,12 @@ $(document).ready(function () {
         const serverIp = $('#serverIp').val().trim();
         const databaseName = $('#databaseName').val().trim();
         const username = $('#username').val().trim();
-        const password = $('#password').val().trim();
+        let password = $('#password').val().trim();
+
+        // If password is empty and we have a loaded target with password, use that
+        if (!password && loadedTargetData && loadedTargetData.password) {
+            password = loadedTargetData.password;
+        }
 
         if (!serverIp || !databaseName) {
             Swal.fire({
@@ -183,7 +191,12 @@ $(document).ready(function () {
         const serverIp = $('#serverIp').val().trim();
         const databaseName = $('#databaseName').val().trim();
         const username = $('#username').val().trim();
-        const password = $('#password').val().trim();
+        let password = $('#password').val().trim();
+
+        // If password is empty and we have a loaded target with password, use that
+        if (!password && loadedTargetData && loadedTargetData.password) {
+            password = loadedTargetData.password;
+        }
 
         if (!serverIp || !databaseName) {
             Swal.fire({
@@ -445,10 +458,21 @@ $(document).ready(function () {
                     const target = response.data.find(t => t.id === targetId);
                     if (target) {
                         currentTargetId = target.id;
+                        loadedTargetData = target; // Store the complete target data
+                        
                         $('#serverIp').val(target.serverIP);
                         $('#databaseName').val(target.databaseName);
                         $('#username').val(target.username || '');
-                        $('#password').val(''); // Don't show password for security
+                        
+                        // Show placeholder for password but don't display actual password
+                        if (target.password) {
+                            $('#password').attr('placeholder', '••••••••• (saved)');
+                            $('#password').val('');
+                        } else {
+                            $('#password').attr('placeholder', 'SQL Server password');
+                            $('#password').val('');
+                        }
+                        
                         $('#serverDescription').val(target.description || '');
                         $('#setAsDefault').prop('checked', target.isDefault);
                         
@@ -503,6 +527,8 @@ $(document).ready(function () {
                         if (currentTargetId === targetId) {
                             $('#syncConfigForm')[0].reset();
                             currentTargetId = null;
+                            loadedTargetData = null;
+                            $('#password').attr('placeholder', 'SQL Server password');
                         }
                     } else {
                         Swal.fire({

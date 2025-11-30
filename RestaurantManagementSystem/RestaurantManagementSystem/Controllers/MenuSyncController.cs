@@ -43,6 +43,7 @@ namespace RestaurantManagementSystem.Controllers
                         ServerIP, 
                         DatabaseName, 
                         Username,
+                        Password,
                         IsActive,
                         IsDefault,
                         Description,
@@ -64,10 +65,11 @@ namespace RestaurantManagementSystem.Controllers
                         ServerIP = reader["ServerIP"]?.ToString() ?? "",
                         DatabaseName = reader["DatabaseName"]?.ToString() ?? "",
                         Username = reader["Username"]?.ToString(),
-                        IsActive = reader.GetBoolean(5),
-                        IsDefault = reader.GetBoolean(6),
+                        Password = reader["Password"]?.ToString(),
+                        IsActive = reader.GetBoolean(6),
+                        IsDefault = reader.GetBoolean(7),
                         Description = reader["Description"]?.ToString(),
-                        LastSyncDate = reader["LastSyncDate"] != DBNull.Value ? reader.GetDateTime(8) : null,
+                        LastSyncDate = reader["LastSyncDate"] != DBNull.Value ? reader.GetDateTime(9) : null,
                         LastSyncStatus = reader["LastSyncStatus"]?.ToString()
                     });
                 }
@@ -439,6 +441,7 @@ namespace RestaurantManagementSystem.Controllers
         public string ServerIP { get; set; } = string.Empty;
         public string DatabaseName { get; set; } = string.Empty;
         public string? Username { get; set; }
+        public string? Password { get; set; }
         public bool IsActive { get; set; }
         public bool IsDefault { get; set; }
         public string? Description { get; set; }
