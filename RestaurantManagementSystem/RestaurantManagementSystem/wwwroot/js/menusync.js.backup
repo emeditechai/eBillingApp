@@ -20,11 +20,7 @@ $(document).ready(function () {
         const isDefault = $('#setAsDefault').is(':checked');
 
         if (!serverIp || !databaseName) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Missing Information',
-                text: 'Please enter both Server IP and Database Name.'
-            });
+            showAlert('danger', 'Please enter both Server IP and Database Name.');
             return;
         }
 
@@ -214,14 +210,17 @@ $(document).ready(function () {
             confirmButtonText: 'Yes, Proceed!',
             cancelButtonText: 'Cancel'
         }).then((result) => {
-            if (result.isConfirmed) {
-                performSync(serverIp, databaseName, username, password);
+            if (!result.isConfirmed) {
+                return;
             }
+            
+            performSync(serverIp, databaseName, username, password);
         });
     });
 
     // Perform sync operation
     function performSync(serverIp, databaseName, username, password) {
+
         const btn = $('#syncBtn');
         btn.prop('disabled', true);
         btn.html('<i class="fas fa-spinner fa-spin"></i> Synchronizing...');
@@ -282,7 +281,7 @@ $(document).ready(function () {
                 btn.html('<i class="fas fa-sync-alt"></i> Start Synchronization');
             }
         });
-    }
+    });
 
     // Helper function to display preview data
     function displayPreviewData(data, count) {
@@ -350,6 +349,33 @@ $(document).ready(function () {
         $('#progressBar').css('width', percentage + '%');
         $('#progressText').text(percentage + '%');
         $('#progressMessage').text(message);
+    }
+
+    // Helper function to show alerts
+    function showAlert(type, message) {
+        const alertHtml = `
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-circle' : 'info-circle'}"></i>
+                ${message}
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        `;
+        
+        $('#alertContainer').html(alertHtml);
+
+        // Auto-dismiss after 5 seconds
+        setTimeout(function () {
+            $('.alert').fadeOut('slow', function () {
+                $(this).remove();
+            });
+        }, 5000);
+
+        // Scroll to alert
+        $('html, body').animate({
+            scrollTop: $('#alertContainer').offset().top - 100
+        }, 300);
     }
 
     // Helper function to escape HTML
@@ -485,41 +511,41 @@ $(document).ready(function () {
                 return;
             }
 
-            $.ajax({
-                url: '/MenuSync/DeleteTarget',
-                type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify({ id: targetId }),
-                success: function (response) {
-                    if (response.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Deleted',
-                            text: response.message,
-                            timer: 2000
-                        });
-                        loadSavedTargets();
-                        // Clear form if this target was loaded
-                        if (currentTargetId === targetId) {
-                            $('#syncConfigForm')[0].reset();
-                            currentTargetId = null;
-                        }
-                    } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Delete Failed',
-                            text: response.message
-                        });
+        $.ajax({
+            url: '/MenuSync/DeleteTarget',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ id: targetId }),
+            success: function (response) {
+                if (response.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Deleted',
+                        text: response.message,
+                        timer: 2000
+                    });
+                    loadSavedTargets();
+                    // Clear form if this target was loaded
+                    if (currentTargetId === targetId) {
+                        $('#syncConfigForm')[0].reset();
+                        currentTargetId = null;
                     }
-                },
-                error: function () {
+                } else {
                     Swal.fire({
                         icon: 'error',
                         title: 'Delete Failed',
-                        text: 'Failed to delete target.'
+                        text: response.message
                     });
                 }
-            });
+            },
+            error: function () {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Delete Failed',
+                    text: 'Failed to delete target.'
+                });
+            }
+        });
         });
     };
 });
