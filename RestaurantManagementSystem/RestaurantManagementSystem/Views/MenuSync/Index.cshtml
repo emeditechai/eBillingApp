@@ -1,0 +1,294 @@
+@{
+    ViewData["Title"] = "Menu Sync";
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-sync-alt"></i> Menu Items Synchronization
+                    </h4>
+                    <small>Sync menu items from source view to target database server</small>
+                </div>
+                <div class="card-body">
+                    <!-- Alert Messages -->
+                    <div id="alertContainer"></div>
+
+                    <!-- Saved Targets -->
+                    <div class="card mb-4 border-info">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">
+                                <i class="fas fa-server"></i> Saved Target Servers
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row" id="savedTargetsContainer">
+                                <div class="col-12 text-center text-muted">
+                                    <i class="fas fa-spinner fa-spin"></i> Loading saved targets...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Connection Configuration -->
+                    <div class="card mb-4">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">
+                                <i class="fas fa-server"></i> Target Database Configuration
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <form id="syncConfigForm">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="serverIp" class="font-weight-bold">
+                                                <i class="fas fa-network-wired"></i> Server IP/Name <span class="text-danger">*</span>
+                                            </label>
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   id="serverIp" 
+                                                   placeholder="e.g., 192.168.1.100 or server.domain.com"
+                                                   required>
+                                            <small class="form-text text-muted">
+                                                Enter the IP address or server name of the target database
+                                            </small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="databaseName" class="font-weight-bold">
+                                                <i class="fas fa-database"></i> Database Name <span class="text-danger">*</span>
+                                            </label>
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   id="databaseName" 
+                                                   placeholder="e.g., Restaurant_Production"
+                                                   required>
+                                            <small class="form-text text-muted">
+                                                Enter the name of the target database
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="username" class="font-weight-bold">
+                                                <i class="fas fa-user"></i> Username (Optional)
+                                            </label>
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   id="username" 
+                                                   placeholder="SQL Server username"
+                                                   autocomplete="off">
+                                            <small class="form-text text-muted">
+                                                Leave blank for Windows Authentication
+                                            </small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="password" class="font-weight-bold">
+                                                <i class="fas fa-lock"></i> Password (Optional)
+                                            </label>
+                                            <input type="password" 
+                                                   class="form-control" 
+                                                   id="password" 
+                                                   placeholder="SQL Server password"
+                                                   autocomplete="off">
+                                            <small class="form-text text-muted">
+                                                Required only if username is provided
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="serverDescription" class="font-weight-bold">
+                                                <i class="fas fa-info-circle"></i> Description (Optional)
+                                            </label>
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   id="serverDescription" 
+                                                   placeholder="e.g., Production Server">
+                                            <small class="form-text text-muted">
+                                                Friendly name for this target server
+                                            </small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label class="font-weight-bold">&nbsp;</label>
+                                            <div class="form-check">
+                                                <input type="checkbox" 
+                                                       class="form-check-input" 
+                                                       id="setAsDefault">
+                                                <label class="form-check-label" for="setAsDefault">
+                                                    <strong>Set as default target</strong>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row mt-3">
+                                    <div class="col-md-12">
+                                        <button type="button" 
+                                                class="btn btn-outline-primary" 
+                                                id="testConnectionBtn">
+                                            <i class="fas fa-plug"></i> Test Connection
+                                        </button>
+                                        <button type="button" 
+                                                class="btn btn-outline-info ml-2" 
+                                                id="previewDataBtn">
+                                            <i class="fas fa-eye"></i> Preview Source Data
+                                        </button>
+                                        <button type="button" 
+                                                class="btn btn-success ml-2" 
+                                                id="saveTargetBtn">
+                                            <i class="fas fa-save"></i> Save Target Server
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Source Data Preview -->
+                    <div class="card mb-4" id="previewCard" style="display: none;">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">
+                                <i class="fas fa-list"></i> Source Data Preview
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i> 
+                                <strong>Source View:</strong> dev_Restaurant.dbo.vw_MenuItemSync
+                                <br>
+                                <strong>Total Items:</strong> <span id="previewCount">0</span>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-striped table-bordered table-sm" id="previewTable">
+                                    <thead class="thead-dark">
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Name</th>
+                                            <th>Description</th>
+                                            <th>Category</th>
+                                            <th>Group</th>
+                                            <th>Dine-In</th>
+                                            <th>Takeaway</th>
+                                            <th>Delivery</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="previewTableBody">
+                                        <!-- Data will be loaded here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sync Action -->
+                    <div class="card border-warning">
+                        <div class="card-header bg-warning text-dark">
+                            <h5 class="mb-0">
+                                <i class="fas fa-exclamation-triangle"></i> Sync Operation
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle"></i> 
+                                <strong>Warning:</strong> This operation will DELETE all existing records in the target MenuItems table and insert fresh data from the source view.
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="form-check mb-3">
+                                        <input type="checkbox" 
+                                               class="form-check-input" 
+                                               id="confirmSync">
+                                        <label class="form-check-label" for="confirmSync">
+                                            <strong>I understand that this will delete all existing menu items in the target database</strong>
+                                        </label>
+                                    </div>
+
+                                    <button type="button" 
+                                            class="btn btn-danger btn-lg" 
+                                            id="syncBtn"
+                                            disabled>
+                                        <i class="fas fa-sync-alt"></i> Start Synchronization
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sync Progress -->
+                    <div class="card mt-4" id="progressCard" style="display: none;">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">
+                                <i class="fas fa-spinner fa-spin"></i> Synchronization Progress
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="progress" style="height: 30px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" 
+                                     id="progressBar"
+                                     style="width: 0%">
+                                    <span id="progressText">0%</span>
+                                </div>
+                            </div>
+                            <p class="mt-3" id="progressMessage">Initializing...</p>
+                        </div>
+                    </div>
+
+                    <!-- Sync Results -->
+                    <div class="card mt-4" id="resultsCard" style="display: none;">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0">
+                                <i class="fas fa-check-circle"></i> Synchronization Results
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-md-6">
+                                    <div class="card border-danger">
+                                        <div class="card-body">
+                                            <h3 class="text-danger" id="deletedCount">0</h3>
+                                            <p class="mb-0">Records Deleted</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card border-success">
+                                        <div class="card-body">
+                                            <h3 class="text-success" id="insertedCount">0</h3>
+                                            <p class="mb-0">Records Inserted</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-3 text-center">
+                                <p class="lead" id="resultMessage"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/menusync.js"></script>
+}

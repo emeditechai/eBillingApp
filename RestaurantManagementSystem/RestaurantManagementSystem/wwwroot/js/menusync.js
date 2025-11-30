@@ -1,0 +1,440 @@
+// Menu Sync JavaScript
+$(document).ready(function () {
+    let currentTargetId = null;
+
+    // Load saved targets on page load
+    loadSavedTargets();
+
+    // Enable/disable sync button based on checkbox
+    $('#confirmSync').on('change', function () {
+        $('#syncBtn').prop('disabled', !this.checked);
+    });
+
+    // Save Target Button
+    $('#saveTargetBtn').on('click', function () {
+        const serverIp = $('#serverIp').val().trim();
+        const databaseName = $('#databaseName').val().trim();
+        const username = $('#username').val().trim();
+        const password = $('#password').val().trim();
+        const description = $('#serverDescription').val().trim();
+        const isDefault = $('#setAsDefault').is(':checked');
+
+        if (!serverIp || !databaseName) {
+            showAlert('danger', 'Please enter both Server IP and Database Name.');
+            return;
+        }
+
+        const btn = $(this);
+        btn.prop('disabled', true);
+        btn.html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+
+        $.ajax({
+            url: '/MenuSync/SaveTarget',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                id: currentTargetId,
+                serverName: description || serverIp,
+                serverIP: serverIp,
+                databaseName: databaseName,
+                username: username || null,
+                password: password || null,
+                isDefault: isDefault,
+                description: description || null
+            }),
+            success: function (response) {
+                if (response.success) {
+                    showAlert('success', response.message);
+                    loadSavedTargets();
+                    currentTargetId = null;
+                } else {
+                    showAlert('danger', response.message);
+                }
+            },
+            error: function (xhr) {
+                showAlert('danger', 'Failed to save target: ' + (xhr.responseText || 'Unknown error'));
+            },
+            complete: function () {
+                btn.prop('disabled', false);
+                btn.html('<i class="fas fa-save"></i> Save Target Server');
+            }
+        });
+    });
+
+    // Test Connection Button
+    $('#testConnectionBtn').on('click', function () {
+        const serverIp = $('#serverIp').val().trim();
+        const databaseName = $('#databaseName').val().trim();
+        const username = $('#username').val().trim();
+        const password = $('#password').val().trim();
+
+        if (!serverIp || !databaseName) {
+            showAlert('danger', 'Please enter both Server IP and Database Name.');
+            return;
+        }
+
+        const btn = $(this);
+        btn.prop('disabled', true);
+        btn.html('<i class="fas fa-spinner fa-spin"></i> Testing...');
+
+        $.ajax({
+            url: '/MenuSync/TestConnection',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                serverIp: serverIp,
+                databaseName: databaseName,
+                username: username || null,
+                password: password || null
+            }),
+            success: function (response) {
+                if (response.success) {
+                    showAlert('success', response.message);
+                } else {
+                    showAlert('danger', response.message);
+                }
+            },
+            error: function (xhr) {
+                showAlert('danger', 'Connection test failed: ' + (xhr.responseText || 'Unknown error'));
+            },
+            complete: function () {
+                btn.prop('disabled', false);
+                btn.html('<i class="fas fa-plug"></i> Test Connection');
+            }
+        });
+    });
+
+    // Preview Data Button
+    $('#previewDataBtn').on('click', function () {
+        const btn = $(this);
+        btn.prop('disabled', true);
+        btn.html('<i class="fas fa-spinner fa-spin"></i> Loading...');
+
+        $.ajax({
+            url: '/MenuSync/GetPreviewData',
+            type: 'POST',
+            success: function (response) {
+                if (response.success) {
+                    displayPreviewData(response.data, response.count);
+                    showAlert('success', `Loaded ${response.count} menu items from source view.`);
+                } else {
+                    showAlert('danger', response.message);
+                }
+            },
+            error: function (xhr) {
+                showAlert('danger', 'Failed to load preview data: ' + (xhr.responseText || 'Unknown error'));
+            },
+            complete: function () {
+                btn.prop('disabled', false);
+                btn.html('<i class="fas fa-eye"></i> Preview Source Data');
+            }
+        });
+    });
+
+    // Sync Button
+    $('#syncBtn').on('click', function () {
+        const serverIp = $('#serverIp').val().trim();
+        const databaseName = $('#databaseName').val().trim();
+        const username = $('#username').val().trim();
+        const password = $('#password').val().trim();
+
+        if (!serverIp || !databaseName) {
+            showAlert('danger', 'Please enter both Server IP and Database Name.');
+            return;
+        }
+
+        if (!$('#confirmSync').is(':checked')) {
+            showAlert('warning', 'Please confirm that you understand the sync operation.');
+            return;
+        }
+
+        // Confirm before proceeding
+        if (!confirm('Are you sure you want to proceed with the synchronization? This will DELETE all existing menu items in the target database.')) {
+            return;
+        }
+
+        const btn = $(this);
+        btn.prop('disabled', true);
+        btn.html('<i class="fas fa-spinner fa-spin"></i> Synchronizing...');
+
+        // Show progress card
+        $('#progressCard').show();
+        $('#resultsCard').hide();
+        updateProgress(10, 'Connecting to target database...');
+
+        $.ajax({
+            url: '/MenuSync/SyncMenuItems',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                serverIp: serverIp,
+                databaseName: databaseName,
+                username: username || null,
+                password: password || null
+            }),
+            success: function (response) {
+                updateProgress(50, 'Processing data...');
+                
+                setTimeout(function () {
+                    updateProgress(100, 'Sync completed!');
+                    
+                    setTimeout(function () {
+                        $('#progressCard').hide();
+                        
+                        if (response.success) {
+                            displayResults(response.deleted, response.inserted, response.message);
+                            showAlert('success', response.message);
+                            $('#confirmSync').prop('checked', false);
+                        } else {
+                            showAlert('danger', response.message);
+                        }
+                    }, 1000);
+                }, 500);
+            },
+            error: function (xhr) {
+                $('#progressCard').hide();
+                showAlert('danger', 'Synchronization failed: ' + (xhr.responseText || 'Unknown error'));
+            },
+            complete: function () {
+                btn.prop('disabled', false);
+                btn.html('<i class="fas fa-sync-alt"></i> Start Synchronization');
+            }
+        });
+    });
+
+    // Helper function to display preview data
+    function displayPreviewData(data, count) {
+        $('#previewCount').text(count);
+        const tbody = $('#previewTableBody');
+        tbody.empty();
+
+        if (data && data.length > 0) {
+            data.forEach(function (item, index) {
+                const row = `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td><strong>${escapeHtml(item.name)}</strong></td>
+                        <td>${escapeHtml(item.description || '-')}</td>
+                        <td>${escapeHtml(item.categoryName || '-')}</td>
+                        <td>${escapeHtml(item.menuItemGroup || '-')}</td>
+                        <td class="text-right">₹${item.dineInPrice.toFixed(2)}</td>
+                        <td class="text-right">₹${item.takeAwayPrice.toFixed(2)}</td>
+                        <td class="text-right">₹${item.deliveryPrice.toFixed(2)}</td>
+                    </tr>
+                `;
+                tbody.append(row);
+            });
+
+            // Initialize DataTable if not already initialized
+            if (!$.fn.DataTable.isDataTable('#previewTable')) {
+                $('#previewTable').DataTable({
+                    "pageLength": 10,
+                    "order": [[1, "asc"]],
+                    "responsive": true,
+                    "dom": '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
+                });
+            } else {
+                $('#previewTable').DataTable().destroy();
+                $('#previewTable').DataTable({
+                    "pageLength": 10,
+                    "order": [[1, "asc"]],
+                    "responsive": true,
+                    "dom": '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
+                });
+            }
+
+            $('#previewCard').show();
+        } else {
+            tbody.append('<tr><td colspan="8" class="text-center">No data available</td></tr>');
+            $('#previewCard').show();
+        }
+    }
+
+    // Helper function to display results
+    function displayResults(deleted, inserted, message) {
+        $('#deletedCount').text(deleted);
+        $('#insertedCount').text(inserted);
+        $('#resultMessage').text(message);
+        $('#resultsCard').show();
+
+        // Scroll to results
+        $('html, body').animate({
+            scrollTop: $('#resultsCard').offset().top - 100
+        }, 500);
+    }
+
+    // Helper function to update progress
+    function updateProgress(percentage, message) {
+        $('#progressBar').css('width', percentage + '%');
+        $('#progressText').text(percentage + '%');
+        $('#progressMessage').text(message);
+    }
+
+    // Helper function to show alerts
+    function showAlert(type, message) {
+        const alertHtml = `
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-circle' : 'info-circle'}"></i>
+                ${message}
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        `;
+        
+        $('#alertContainer').html(alertHtml);
+
+        // Auto-dismiss after 5 seconds
+        setTimeout(function () {
+            $('.alert').fadeOut('slow', function () {
+                $(this).remove();
+            });
+        }, 5000);
+
+        // Scroll to alert
+        $('html, body').animate({
+            scrollTop: $('#alertContainer').offset().top - 100
+        }, 300);
+    }
+
+    // Helper function to escape HTML
+    function escapeHtml(text) {
+        if (!text) return '';
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.toString().replace(/[&<>"']/g, function (m) { return map[m]; });
+    }
+
+    // Load saved targets
+    function loadSavedTargets() {
+        $.ajax({
+            url: '/MenuSync/GetSavedTargets',
+            type: 'GET',
+            success: function (response) {
+                if (response.success && response.data) {
+                    displaySavedTargets(response.data);
+                } else {
+                    $('#savedTargetsContainer').html('<div class="col-12 text-center text-muted">No saved targets found.</div>');
+                }
+            },
+            error: function () {
+                $('#savedTargetsContainer').html('<div class="col-12 text-center text-danger">Failed to load saved targets.</div>');
+            }
+        });
+    }
+
+    // Display saved targets
+    function displaySavedTargets(targets) {
+        const container = $('#savedTargetsContainer');
+        container.empty();
+
+        if (targets.length === 0) {
+            container.html('<div class="col-12 text-center text-muted">No saved targets found. Save a target server configuration to get started.</div>');
+            return;
+        }
+
+        targets.forEach(function (target) {
+            const lastSyncBadge = target.lastSyncStatus ? 
+                `<span class="badge badge-${target.lastSyncStatus === 'Success' ? 'success' : 'warning'}">${target.lastSyncStatus}</span>` : 
+                '<span class="badge badge-secondary">Never Synced</span>';
+            
+            const defaultBadge = target.isDefault ? '<span class="badge badge-primary ml-2">Default</span>' : '';
+            
+            const lastSyncDate = target.lastSyncDate ? 
+                new Date(target.lastSyncDate).toLocaleString() : 
+                'Never';
+
+            const card = `
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card ${target.isDefault ? 'border-primary' : ''} h-100">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                <i class="fas fa-server text-info"></i> 
+                                ${escapeHtml(target.serverName || target.serverIP)}
+                                ${defaultBadge}
+                            </h6>
+                            <p class="card-text small mb-2">
+                                <strong>Server:</strong> ${escapeHtml(target.serverIP)}<br>
+                                <strong>Database:</strong> ${escapeHtml(target.databaseName)}<br>
+                                ${target.description ? '<strong>Description:</strong> ' + escapeHtml(target.description) + '<br>' : ''}
+                                <strong>Last Sync:</strong> ${lastSyncDate} ${lastSyncBadge}
+                            </p>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="loadTarget(${target.id})">
+                                    <i class="fas fa-edit"></i> Load
+                                </button>
+                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteTarget(${target.id})">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.append(card);
+        });
+    }
+
+    // Load target into form
+    window.loadTarget = function(targetId) {
+        $.ajax({
+            url: '/MenuSync/GetSavedTargets',
+            type: 'GET',
+            success: function (response) {
+                if (response.success && response.data) {
+                    const target = response.data.find(t => t.id === targetId);
+                    if (target) {
+                        currentTargetId = target.id;
+                        $('#serverIp').val(target.serverIP);
+                        $('#databaseName').val(target.databaseName);
+                        $('#username').val(target.username || '');
+                        $('#password').val(''); // Don't show password for security
+                        $('#serverDescription').val(target.description || '');
+                        $('#setAsDefault').prop('checked', target.isDefault);
+                        showAlert('info', 'Target loaded. Update fields if needed and save again.');
+                        
+                        // Scroll to form
+                        $('html, body').animate({
+                            scrollTop: $('#syncConfigForm').offset().top - 100
+                        }, 500);
+                    }
+                }
+            }
+        });
+    };
+
+    // Delete target
+    window.deleteTarget = function(targetId) {
+        if (!confirm('Are you sure you want to delete this target server configuration?')) {
+            return;
+        }
+
+        $.ajax({
+            url: '/MenuSync/DeleteTarget',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ id: targetId }),
+            success: function (response) {
+                if (response.success) {
+                    showAlert('success', response.message);
+                    loadSavedTargets();
+                    // Clear form if this target was loaded
+                    if (currentTargetId === targetId) {
+                        $('#syncConfigForm')[0].reset();
+                        currentTargetId = null;
+                    }
+                } else {
+                    showAlert('danger', response.message);
+                }
+            },
+            error: function () {
+                showAlert('danger', 'Failed to delete target.');
+            }
+        });
+    };
+});
