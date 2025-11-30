@@ -19,265 +19,406 @@
 
 <style>
     :root {
-        --primary-color: #3498db;
-        --secondary-color: #2ecc71;
-        --accent-color: #f39c12;
-        --danger-color: #e74c3c;
-        --dark-color: #0d7ff0;
-        --light-color: #ecf0f1;
-        --info-color: #1abc9c;
+        --primary-gradient: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        --warning-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        --info-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        --danger-gradient: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        --card-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        --card-hover-shadow: 0 15px 40px rgba(0,0,0,0.12);
     }
     
     body {
-        background-color: #f8f9fb; /* soft off-white */
-        color: #22303f; /* slightly darker for text */
-        -webkit-font-smoothing:antialiased;
-        -moz-osx-font-smoothing:grayscale;
+        background: 
+            radial-gradient(at 0% 0%, rgba(102, 126, 234, 0.08) 0px, transparent 50%),
+            radial-gradient(at 100% 0%, rgba(118, 75, 162, 0.06) 0px, transparent 50%),
+            radial-gradient(at 100% 100%, rgba(67, 233, 123, 0.06) 0px, transparent 50%),
+            radial-gradient(at 0% 100%, rgba(79, 172, 254, 0.08) 0px, transparent 50%),
+            linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+        color: #2c3e50;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        min-height: 100vh;
+    }
+    
+    .dashboard-container {
+        padding: 0;
     }
     
     .dashboard-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #1e88e5 100%);
         color: #ffffff;
-        padding: 18px 20px; /* compact padding */
-        border-radius: 14px;
-        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.35), 0 1px 6px rgba(0,0,0,0.08);
+        padding: 20px 30px;
+        border-radius: 0 0 20px 20px;
+        box-shadow: 0 8px 30px rgba(30, 60, 114, 0.3);
         margin-bottom: 20px;
         position: relative;
         overflow: hidden;
     }
+    
     .dashboard-header::before {
         content: '';
         position: absolute;
         top: -50%;
         right: -10%;
-        width: 300px;
-        height: 300px;
-        background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
+        width: 500px;
+        height: 500px;
+        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
         border-radius: 50%;
+        animation: pulse 8s ease-in-out infinite;
     }
-        /* Help button (top-left to avoid overlap with brand logo on right) */
-        .dashboard-help-btn {
-            position: absolute;
-            top: 12px;
-            left: 14px;
-            z-index: 15;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: rgba(255,255,255,0.25);
-            color: #fff;
-            backdrop-filter: blur(8px);
-            border: 1.5px solid rgba(255,255,255,0.5);
-            padding: 8px 16px;
-            font-size: .85rem;
-            font-weight: 600;
-            border-radius: 30px;
-            text-decoration: none;
-            transition: all .3s ease;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-        }
-        .dashboard-help-btn:hover { 
-            background: rgba(255,255,255,0.4); 
-            box-shadow: 0 6px 20px rgba(0,0,0,0.25); 
-            color:#fff; 
-            transform: translateY(-2px);
-        }
-        .dashboard-help-btn i { font-size: 1rem; }
+    
+    .dashboard-header::after {
+        content: '';
+        position: absolute;
+        bottom: -30%;
+        left: -5%;
+        width: 400px;
+        height: 400px;
+        background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+        border-radius: 50%;
+        animation: pulse 10s ease-in-out infinite reverse;
+    }
+    
+    @@keyframes pulse {
+        0%, 100% { transform: scale(1); opacity: 0.5; }
+        50% { transform: scale(1.1); opacity: 0.8; }
+    }
+    
     .dashboard-header .brand-logo-wrapper {
         position: absolute;
-        top: 10px;
-        right: 12px;
+        top: 15px;
+        right: 30px;
         display: flex;
         align-items: center;
         gap: 10px;
-        background: linear-gradient(135deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.15) 100%);
-        padding: 6px 14px 6px 10px; /* compact */
-        border-radius: 14px; /* smaller badge */
+        background: rgba(255,255,255,0.15);
+        padding: 8px 15px;
+        border-radius: 15px;
         backdrop-filter: blur(10px);
-        box-shadow: 0 3px 10px rgba(0,0,0,0.18), inset 0 1px 1px rgba(255,255,255,0.3);
-        max-width: 260px;
-        border: 1px solid rgba(255,255,255,0.3);
+        box-shadow: 0 6px 24px rgba(0,0,0,0.1);
+        border: 1px solid rgba(255,255,255,0.2);
+        transition: all 0.3s ease;
     }
+    
+    .dashboard-header .brand-logo-wrapper:hover {
+        background: rgba(255,255,255,0.25);
+        transform: translateY(-2px);
+    }
+    
     .dashboard-header .brand-logo-wrapper img.brand-logo {
-        height: 48px;
+        height: 45px;
         width: auto;
         object-fit: contain;
-        filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35));
-        transition: transform .25s ease;
+        filter: drop-shadow(0 3px 5px rgba(0,0,0,0.3));
     }
-    .dashboard-header .brand-logo-wrapper img.brand-logo:hover {
-        transform: scale(1.04);
-    }
+    
     .dashboard-header .brand-logo-wrapper .brand-name {
         font-size: 0.95rem;
-        font-weight: 600;
-        line-height: 1.1;
-        letter-spacing: .5px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
         color: #fff;
-        text-shadow: 0 1px 2px rgba(0,0,0,0.4);
-        max-width: 170px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.3);
     }
     
     .dashboard-header h1 {
         margin: 0;
-        font-weight: 400;
-        font-size: 2.0rem; /* compact title */
+        font-weight: 700;
+        font-size: 1.8rem;
+        text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        position: relative;
+        z-index: 1;
+    }
+    
+    .dashboard-header h1 i {
+        background: linear-gradient(135deg, #fff 0%, #e3f2fd 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
     }
     
     .dashboard-header p {
-        margin-top: 6px;
-        opacity: 0.9;
-        font-size: 1.0rem; /* compact subtitle */
+        margin-top: 5px;
+        opacity: 0.95;
+        font-size: 1rem;
+        font-weight: 400;
+        position: relative;
+        z-index: 1;
     }
     
     .user-info {
-        margin-top: 15px;
-        padding-top: 15px;
-        border-top: 1px solid rgba(255,255,255,0.2);
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(255,255,255,0.15);
+        position: relative;
+        z-index: 1;
     }
     
     .user-role-badge {
         display: inline-block;
-        margin-right: 5px;
-        margin-bottom: 5px;
-        padding: 3px 8px;
-        background-color: rgba(255,255,255,0.2);
+        margin-right: 6px;
+        margin-bottom: 6px;
+        padding: 4px 10px;
+        background: rgba(255,255,255,0.2);
         color: white;
         border-radius: 15px;
-        font-size: 0.8rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        border: 1px solid rgba(255,255,255,0.3);
+        backdrop-filter: blur(5px);
     }
     
     .last-login {
-        font-size: 0.9rem;
-        margin-top: 10px;
-        opacity: 0.7;
+        font-size: 0.85rem;
+        margin-top: 8px;
+        opacity: 0.9;
+        position: relative;
+        z-index: 1;
+    }
+    
+    .stats-container {
+        margin-bottom: 20px;
     }
     
     .stats-card {
-        color: #fff;
+        background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
         border-radius: 16px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.1);
-        padding: 24px 20px;
-        margin-bottom: 20px;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        min-height: 130px;
-        display:flex;
-        flex-direction:column;
-        justify-content: center;
+        box-shadow: var(--card-shadow);
+        padding: 20px;
+        margin-bottom: 15px;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        min-height: 140px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
         position: relative;
         overflow: hidden;
+        border: 1px solid rgba(0,0,0,0.05);
+        backdrop-filter: blur(10px);
     }
+    
+    .stats-card::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    .stats-card.sales::after { background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); }
+    .stats-card.orders::after { background: linear-gradient(90deg, #f093fb 0%, #f5576c 100%); }
+    .stats-card.tables::after { background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%); }
+    .stats-card.reservations::after { background: linear-gradient(90deg, #43e97b 0%, #38f9d7 100%); }
+    
+    .stats-card:hover::after {
+        opacity: 1;
+    }
+    
     .stats-card::before {
         content: '';
         position: absolute;
-        top: -50%;
-        right: -20%;
-        width: 200px;
-        height: 200px;
-        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+        top: 0;
+        right: 0;
+        width: 150px;
+        height: 150px;
         border-radius: 50%;
+        opacity: 0.1;
+        transition: all 0.4s ease;
     }
     
+    .stats-card.sales::before { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .stats-card.orders::before { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .stats-card.tables::before { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+    .stats-card.reservations::before { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+    
     .stats-card:hover {
-        transform: translateY(-5px) scale(1.02);
-        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.22), 0 4px 10px rgba(0,0,0,0.12);
+        transform: translateY(-8px) scale(1.02);
+        box-shadow: var(--card-hover-shadow);
+    }
+    
+    .stats-card:hover::before {
+        transform: scale(1.2);
+        opacity: 0.15;
+    }
+    
+    .stats-card:active {
+        transform: translateY(-6px) scale(1.01);
     }
     
     .stats-card .icon {
         font-size: 1.6rem;
         margin-bottom: 12px;
         display: inline-flex;
-        align-items:center;
-        justify-content:center;
-        width:52px;
-        height:52px;
+        align-items: center;
+        justify-content: center;
+        width: 55px;
+        height: 55px;
         border-radius: 14px;
         color: #fff;
-        background: rgba(255,255,255,0.2);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15), inset 0 1px 2px rgba(255,255,255,0.3);
-        backdrop-filter: blur(4px);
-        border: 1px solid rgba(255,255,255,0.25);
-        transition: transform 0.3s ease;
-    }
-    .stats-card:hover .icon {
-        transform: scale(1.1) rotate(5deg);
+        box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+        transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        position: relative;
+        z-index: 1;
     }
     
-    /* gradient variants for different stats - vibrant colors */
-    .stats-card.sales { 
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    .stats-card .icon::before {
+        content: '';
+        position: absolute;
+        inset: -2px;
+        border-radius: 14px;
+        padding: 2px;
+        background: linear-gradient(45deg, rgba(255,255,255,0.3), rgba(255,255,255,0.1));
+        -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor;
+        mask-composite: exclude;
+        opacity: 0;
+        transition: opacity 0.3s ease;
     }
-    .stats-card.orders { 
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    
+    .stats-card.sales .icon { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .stats-card.orders .icon { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .stats-card.tables .icon { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+    .stats-card.reservations .icon { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+    
+    .stats-card:hover .icon {
+        transform: scale(1.15) rotate(-8deg);
+        box-shadow: 0 12px 30px rgba(0,0,0,0.2);
     }
-    .stats-card.tables { 
-        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    
+    .stats-card:hover .icon::before {
+        opacity: 1;
     }
-    .stats-card.reservations { 
-        background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    
+    .stats-card .icon i {
+        animation: float 3s ease-in-out infinite;
     }
-
-    .sparkline { position: absolute; top: 12px; right: 12px; width: 110px; height: 36px; }
-    .sparkline canvas { width: 100% !important; height: 100% !important; }
+    
+    @@keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-3px); }
+    }
+    
+    .sparkline { 
+        position: absolute; 
+        bottom: 15px; 
+        right: 15px; 
+        width: 120px; 
+        height: 50px;
+        opacity: 0.2;
+        transition: opacity 0.3s ease;
+    }
+    .sparkline canvas { 
+        width: 100% !important; 
+        height: 100% !important; 
+    }
+    .stats-card:hover .sparkline {
+        opacity: 0.4;
+    }
     
     .stats-card h3 {
-        font-size: 1.15rem;
-        margin-bottom: 8px;
+        font-size: 0.8rem;
+        margin-bottom: 10px;
         font-weight: 600;
-        color: #fff;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        letter-spacing: 0.3px;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        position: relative;
+        z-index: 1;
     }
     
     .stats-card p.number {
         font-size: 2rem;
         margin-bottom: 0;
         font-weight: 800;
-        color: #fff;
-        text-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
         letter-spacing: -0.5px;
+        position: relative;
+        z-index: 1;
+        display: inline-block;
+        transition: transform 0.3s ease;
     }
     
-    .stats-card p.text-muted {
-        font-size: 0.9rem;
+    .stats-card:hover p.number {
+        transform: scale(1.05);
     }
     
-    .chart-container {
-        background: linear-gradient(to bottom, #ffffff 0%, #f8f9fa 100%);
-        border-radius: 16px;
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
-        padding: 24px;
-        max-height: 400px;
-        overflow-y: auto;
-        margin-bottom: 24px;
-        border: 1px solid rgba(0,0,0,0.06);
-    }
-    
-    .data-table-container {
-        background: linear-gradient(to bottom, #ffffff 0%, #f8f9fa 100%);
-        border-radius: 16px;
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
-        padding: 28px;
-        margin-bottom: 24px;
-        border: 1px solid rgba(0,0,0,0.06);
-    }
-    
-    .data-table-container h3 {
-        margin-bottom: 24px;
-        color: #2d3748;
+    .stats-card.sales p.number { 
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        background-clip: text;
-        border-bottom: 3px solid transparent;
-        border-image: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        border-image-slice: 1;
-        padding-bottom: 12px;
+    }
+    .stats-card.orders p.number { 
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .stats-card.tables p.number { 
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .stats-card.reservations p.number { 
+        background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    
+    .chart-container {
+        background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
+        border-radius: 16px;
+        box-shadow: var(--card-shadow);
+        padding: 20px;
+        margin-bottom: 20px;
+        border: 1px solid rgba(0,0,0,0.05);
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+    }
+    
+    .chart-container:hover {
+        box-shadow: var(--card-hover-shadow);
+        transform: translateY(-2px);
+    }
+    
+    .data-table-container {
+        background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
+        border-radius: 16px;
+        box-shadow: var(--card-shadow);
+        padding: 20px;
+        margin-bottom: 20px;
+        border: 1px solid rgba(0,0,0,0.05);
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+    }
+    
+    .data-table-container:hover {
+        box-shadow: var(--card-hover-shadow);
+        transform: translateY(-2px);
+    }
+    
+    .data-table-container h3 {
+        margin-bottom: 18px;
+        color: #2c3e50;
         font-weight: 700;
-        font-size: 1.5rem;
+        font-size: 1.2rem;
+        position: relative;
+        padding-bottom: 10px;
+    }
+    
+    .data-table-container h3::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 50px;
+        height: 3px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 2px;
     }
     
     .action-buttons .btn {
@@ -356,7 +497,97 @@
         position: relative;
     }
     
-    /* Quick action styles moved to wwwroot/css/site.css for reuse */
+    /* Live Clock Styles */
+    .live-clock { 
+        position: static; 
+        margin-top: 8px; 
+        padding: 6px 14px; 
+        border-radius: 12px; 
+        background: rgba(255,255,255,0.15);
+        backdrop-filter: blur(10px);
+        color: #fff; 
+        font-weight: 700; 
+        display: inline-flex; 
+        align-items: center; 
+        gap: 10px; 
+        box-shadow: 0 3px 12px rgba(0,0,0,0.2);
+        border: 1px solid rgba(255,255,255,0.2);
+    } 
+    .live-clock .date { 
+        font-size: 0.8rem; 
+        opacity: 0.95;
+        font-weight: 600;
+    }
+    .live-clock .time { 
+        font-family: 'SF Mono', 'Courier New', monospace; 
+        font-size: 0.95rem; 
+        letter-spacing: 0.4px;
+        font-weight: 700;
+    }
+    
+    /* Quick Actions Section */
+    .quick-actions-section {
+        background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
+        border-radius: 16px;
+        box-shadow: var(--card-shadow);
+        padding: 20px;
+        margin-bottom: 20px;
+        border: 1px solid rgba(0,0,0,0.05);
+        backdrop-filter: blur(10px);
+        transition: all 0.3s ease;
+    }
+    
+    .quick-actions-section:hover {
+        box-shadow: var(--card-hover-shadow);
+    }
+    
+    .quick-actions-section h4 {
+        color: #2c3e50;
+        font-weight: 700;
+        font-size: 1.2rem;
+        margin-bottom: 18px;
+        position: relative;
+        padding-bottom: 10px;
+    }
+    
+    .quick-actions-section h4::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 50px;
+        height: 3px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 2px;
+        transition: width 0.3s ease;
+    }
+    
+    .quick-actions-section:hover h4::after {
+        width: 80px;
+    }
+    
+    /* Responsive */
+    @@media (max-width: 768px) { 
+        .live-clock { 
+            position: static; 
+            margin: 8px 0 0; 
+        }
+        .dashboard-header {
+            padding: 18px 15px;
+        }
+        .dashboard-header h1 {
+            font-size: 1.5rem;
+        }
+        .dashboard-header .brand-logo-wrapper {
+            position: relative;
+            top: auto;
+            right: auto;
+            margin-bottom: 15px;
+        }
+        .stats-card {
+            min-height: 130px;
+        }
+    }
 </style>
 
 @{
@@ -442,41 +673,34 @@
         </div>    <!-- Quick Action Buttons -->
     <div class="row mb-4">
         <div class="col-12">
-            <h4 class="mb-3">Quick Actions</h4>
-            <div class="quick-actions">
-                <a href="/Order/Create" class="quick-action-btn qa-order">
-                    <div class="qa-icon"><i class="fas fa-utensils"></i></div>
-                    <span class="qa-label">New Order</span>
-                    <span class="hotkey-badge">Shift+F</span>
-                </a>
-                <a href="/Reservation/Create" class="quick-action-btn qa-reservation" aria-label="Create Reservation">
-                    <span class="qa-badge">@Model.UpcomingReservations</span>
-                    <div class="qa-icon"><i class="fas fa-calendar-plus"></i></div>
-                    <span class="qa-label">Reservation</span>
-                </a>
-                <a href="/Order/Estimation" class="quick-action-btn qa-menu" id="menuItemsBtn" target="_blank" rel="noopener">
-                    <div class="qa-icon"><i class="fas fa-hamburger"></i></div>
-                    <span class="qa-label">Menu Items</span>
-                </a>
-                <a href="/TableService/Dashboard" class="quick-action-btn qa-tables" target="_blank" rel="noopener">
-                    <div class="qa-icon"><i class="fas fa-th-large"></i></div>
-                    <span class="qa-label">Available Table</span>
-                    <span class="hotkey-badge">Shift+T</span>
-                </a>
+            <div class="quick-actions-section">
+                <h4><i class="fas fa-bolt me-2"></i>Quick Actions</h4>
+                <div class="quick-actions">
+                    <a href="/Order/Create" class="quick-action-btn qa-order">
+                        <div class="qa-icon"><i class="fas fa-utensils"></i></div>
+                        <span class="qa-label">New Order</span>
+                        <span class="hotkey-badge">Shift+F</span>
+                    </a>
+                    <a href="/Reservation/Create" class="quick-action-btn qa-reservation" aria-label="Create Reservation">
+                        <span class="qa-badge">@Model.UpcomingReservations</span>
+                        <div class="qa-icon"><i class="fas fa-calendar-plus"></i></div>
+                        <span class="qa-label">Reservation</span>
+                    </a>
+                    <a href="/Order/Estimation" class="quick-action-btn qa-menu" id="menuItemsBtn" target="_blank" rel="noopener">
+                        <div class="qa-icon"><i class="fas fa-hamburger"></i></div>
+                        <span class="qa-label">Menu Items</span>
+                    </a>
+                    <a href="/TableService/Dashboard" class="quick-action-btn qa-tables" target="_blank" rel="noopener">
+                        <div class="qa-icon"><i class="fas fa-th-large"></i></div>
+                        <span class="qa-label">Available Table</span>
+                        <span class="hotkey-badge">Shift+T</span>
+                    </a>
+                </div>
             </div>
         </div>
     </div>
 
     <!-- Quick Reservation removed to simplify dashboard. -->
-
-    <!-- Live Date & Digital Time -->
-    <style>
-        .live-clock { position: static; margin-top: 6px; padding: 6px 10px; border-radius: 10px; background: rgba(0,0,0,0.28); backdrop-filter: blur(6px); color: #fff; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.22);} 
-        .live-clock .date { font-size: 0.85rem; opacity: .95; }
-        .live-clock .time { font-family: "SF Mono", Menlo, Monaco, Consolas, monospace; font-size: 1.0rem; letter-spacing: 0.4px; }
-        @@media (max-width: 768px) { .live-clock { position: static; margin: 8px 0 0; } }
-    </style>
-    @* Removed duplicate bottom-side live clock to avoid double display *@
 
     <script>
         (function(){

@@ -223,6 +223,13 @@ namespace RestaurantManagementSystem.Services
                                     s.IsKOTBillPrintRequired = !reader.IsDBNull(ord) && reader.GetBoolean(ord);
                                 }
 
+                                // New Auto Send Bill Email flag
+                                if (ColumnExists(reader, "isReqAutoSentbillEmail"))
+                                {
+                                    ord = reader.GetOrdinal("isReqAutoSentbillEmail");
+                                    s.IsReqAutoSentbillEmail = !reader.IsDBNull(ord) && reader.GetBoolean(ord);
+                                }
+
                                 ord = reader.GetOrdinal("BillFormat");
                                 s.BillFormat = reader.IsDBNull(ord) ? "A4" : reader.GetString(ord);
 
@@ -381,6 +388,7 @@ INSERT INTO dbo.RestaurantSettings (
                     currentSettings.IsDiscountApprovalRequired = settings.IsDiscountApprovalRequired;
                     currentSettings.IsCardPaymentApprovalRequired = settings.IsCardPaymentApprovalRequired;
                     currentSettings.IsKOTBillPrintRequired = settings.IsKOTBillPrintRequired;
+                    currentSettings.IsReqAutoSentbillEmail = settings.IsReqAutoSentbillEmail;
                     currentSettings.BillFormat = settings.BillFormat;
                     currentSettings.FssaiNo = settings.FssaiNo;
                     currentSettings.UpdatedAt = DateTime.Now;
@@ -429,15 +437,18 @@ BEGIN
         Is_TakeawayIncludedGST_Req = @IsTakeawayIncludedGSTReq,
         IsDiscountApprovalRequired = @IsDiscountApprovalRequired,
         IsCardPaymentApprovalRequired = @IsCardPaymentApprovalRequired,
+        IsKOTBillPrintRequired = @IsKOTBillPrintRequired,
+        isReqAutoSentbillEmail = @IsReqAutoSentbillEmail,
         BillFormat = @BillFormat,
+        FssaiNo = @FssaiNo,
         UpdatedAt = GETDATE();
 END
 ELSE
 BEGIN
     INSERT INTO dbo.RestaurantSettings (
-        RestaurantName, StreetAddress, City, State, Pincode, Country, GSTCode, PhoneNumber, Email, Website, LogoPath, CurrencySymbol, DefaultGSTPercentage, TakeAwayGSTPercentage, BarGSTPerc, IsDefaultGSTRequired, IsTakeAwayGSTRequired, Is_TakeawayIncludedGST_Req, IsDiscountApprovalRequired, IsCardPaymentApprovalRequired, BillFormat, CreatedAt, UpdatedAt
+        RestaurantName, StreetAddress, City, State, Pincode, Country, GSTCode, PhoneNumber, Email, Website, LogoPath, CurrencySymbol, DefaultGSTPercentage, TakeAwayGSTPercentage, BarGSTPerc, IsDefaultGSTRequired, IsTakeAwayGSTRequired, Is_TakeawayIncludedGST_Req, IsDiscountApprovalRequired, IsCardPaymentApprovalRequired, IsKOTBillPrintRequired, isReqAutoSentbillEmail, BillFormat, FssaiNo, CreatedAt, UpdatedAt
     ) VALUES (
-        @RestaurantName, @StreetAddress, @City, @State, @Pincode, @Country, @GSTCode, @PhoneNumber, @Email, @Website, @LogoPath, @CurrencySymbol, @DefaultGSTPercentage, @TakeAwayGSTPercentage, @BarGSTPerc, @IsDefaultGSTRequired, @IsTakeAwayGSTRequired, @IsTakeawayIncludedGSTReq, @IsDiscountApprovalRequired, @IsCardPaymentApprovalRequired, @BillFormat, GETDATE(), GETDATE()
+        @RestaurantName, @StreetAddress, @City, @State, @Pincode, @Country, @GSTCode, @PhoneNumber, @Email, @Website, @LogoPath, @CurrencySymbol, @DefaultGSTPercentage, @TakeAwayGSTPercentage, @BarGSTPerc, @IsDefaultGSTRequired, @IsTakeAwayGSTRequired, @IsTakeawayIncludedGSTReq, @IsDiscountApprovalRequired, @IsCardPaymentApprovalRequired, @IsKOTBillPrintRequired, @IsReqAutoSentbillEmail, @BillFormat, @FssaiNo, GETDATE(), GETDATE()
     );
 END";
 
@@ -466,7 +477,9 @@ END";
                             cmd.Parameters.AddWithValue("@IsDiscountApprovalRequired", settings.IsDiscountApprovalRequired);
                             cmd.Parameters.AddWithValue("@IsCardPaymentApprovalRequired", settings.IsCardPaymentApprovalRequired);
                             cmd.Parameters.AddWithValue("@IsKOTBillPrintRequired", settings.IsKOTBillPrintRequired);
+                            cmd.Parameters.AddWithValue("@IsReqAutoSentbillEmail", settings.IsReqAutoSentbillEmail);
                             cmd.Parameters.AddWithValue("@BillFormat", (object)settings.BillFormat ?? "A4");
+                            cmd.Parameters.AddWithValue("@FssaiNo", (object)settings.FssaiNo ?? DBNull.Value);
 
                             await cmd.ExecuteNonQueryAsync();
                         }

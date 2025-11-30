@@ -326,6 +326,21 @@
                                         </div>
                                     </div>
                                 </div>
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="form-group mb-3">
+                                            <label asp-for="IsReqAutoSentbillEmail" class="control-label"></label>
+                                            <div class="form-check form-switch">
+                                                <input asp-for="IsReqAutoSentbillEmail" class="form-check-input" type="checkbox" id="isReqAutoSentbillEmail">
+                                                <label class="form-check-label" for="isReqAutoSentbillEmail">
+                                                    Automatic bill send email
+                                                </label>
+                                            </div>
+                                            <span asp-validation-for="IsReqAutoSentbillEmail" class="field-validation-error"></span>
+                                            <div class="help-text">When enabled, bills will be automatically sent to customer email after order completion</div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -191,50 +191,122 @@ footer.footer {
   box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
 }
 
-/* Quick action buttons (moved from Home view) */
+/* Quick action buttons - Compact Professional Design */
 .quick-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 15px;
+  margin-bottom: 15px;
 }
 
 .quick-action-btn {
-  flex: 1 1 180px;
   text-align: center;
-  padding: 14px 16px;
-  border-radius: 12px;
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  padding: 20px 15px;
+  border-radius: 16px;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   text-decoration: none;
   color: white;
-  display: block;
-  box-shadow: 0 6px 14px rgba(35,47,63,0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.1);
   position: relative;
   overflow: hidden;
-  min-width: 140px;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.quick-action-btn::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
+  opacity: 0;
+  transition: all 0.5s ease;
+  animation: rotate 10s linear infinite;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.quick-action-btn:hover::before {
+  opacity: 1;
+}
+
+.quick-action-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(45deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%);
+  transform: translateX(-100%);
+  transition: transform 0.6s ease;
+}
+
+.quick-action-btn:hover::after {
+  transform: translateX(100%);
 }
 
 .quick-action-btn .qa-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width:44px;
-  height:44px;
-  border-radius:10px;
-  margin:0 auto 8px auto;
-  background: rgba(255,255,255,0.12);
-  box-shadow: inset 0 -2px 6px rgba(0,0,0,0.06);
+  width: 55px;
+  height: 55px;
+  border-radius: 14px;
+  margin: 0 auto 10px auto;
+  background: rgba(255,255,255,0.2);
+  box-shadow: 0 3px 12px rgba(0,0,0,0.15), inset 0 1px 2px rgba(255,255,255,0.3);
+  backdrop-filter: blur(10px);
+  transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  font-size: 1.5rem;
+  position: relative;
 }
 
-.quick-action-btn .qa-label { display:block; font-weight:600; }
+.quick-action-btn .qa-icon i {
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 1;
+}
 
-.quick-action-btn:hover { transform: translateY(-3px); box-shadow: 0 10px 22px rgba(35,47,63,0.12); }
+.quick-action-btn:hover .qa-icon {
+  transform: scale(1.15) rotate(-8deg);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+}
 
-/* Per-button gradient variants */
-.quick-action-btn.qa-order { background: linear-gradient(135deg,#ff7a7a 0%, #ff5a5a 100%); }
-.quick-action-btn.qa-reservation { background: linear-gradient(135deg,#6dd3ff 0%, #3aa3ff 100%); }
-.quick-action-btn.qa-menu { background: linear-gradient(135deg,#9b8cff 0%, #6f53ff 100%); }
-.quick-action-btn.qa-tables { background: linear-gradient(135deg,#7ef6b6 0%, #34c47a 100%); }
+.quick-action-btn:hover .qa-icon i {
+  animation: bounce 0.6s ease;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  25% { transform: translateY(-5px); }
+  50% { transform: translateY(0); }
+  75% { transform: translateY(-3px); }
+}
+
+.quick-action-btn .qa-label { 
+  display: block; 
+  font-weight: 700; 
+  font-size: 0.95rem;
+  letter-spacing: 0.3px;
+  margin-top: 3px;
+}
+
+.quick-action-btn:hover { 
+  transform: translateY(-4px); 
+  box-shadow: 0 12px 28px rgba(0,0,0,0.15); 
+}
+
+/* Per-button gradient variants - Enhanced */
+.quick-action-btn.qa-order { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+.quick-action-btn.qa-reservation { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+.quick-action-btn.qa-menu { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+.quick-action-btn.qa-tables { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
 
 /* Reservation badge */
 .qa-badge {

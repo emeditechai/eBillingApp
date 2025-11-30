@@ -106,6 +106,9 @@ namespace RestaurantManagementSystem.ViewModels
 
     [Display(Name = "KOT Bill Print Required")]
     public bool IsKOTBillPrintRequired { get; set; } = false;
+
+    [Display(Name = "Automatic Bill Send Email")]
+    public bool IsReqAutoSentbillEmail { get; set; } = false;
         
         [Required(ErrorMessage = "Bill Format is required")]
         [Display(Name = "Bill Format")]

@@ -63,7 +63,7 @@ namespace RestaurantManagementSystem.Controllers
         }
         
         // Payment Dashboard
-        public IActionResult Index(int id, bool? fromBar = null)
+        public async Task<IActionResult> Index(int id, bool? fromBar = null)
         {
             var model = GetPaymentViewModel(id);
             
@@ -116,6 +116,19 @@ namespace RestaurantManagementSystem.Controllers
                 ViewBag.BillFormat = "A4"; // default
             }
             
+            // Trigger auto bill email if order is completed
+            try
+            {
+                if (model.OrderStatus == 3) // Order is completed
+                {
+                    _logger?.LogInformation("Payment page loaded for completed order {OrderId}, triggering auto email check", id);
+                    await SendAutoBillEmailAsync(id);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error triggering auto email on payment page load for order {OrderId}", id);
+            }
 
             
             return View(model);
@@ -706,6 +719,17 @@ END", connection))
                                                                             $"Order completed - Total: ₹{orderTotal:F2}, Paid: ₹{approvedSum:F2}");
                                                                     }
                                                                     catch { /* Audit logging should not break the main flow */ }
+                                                                    
+                                                                    // Auto-send bill email if configured
+                                                                    try
+                                                                    {
+                                                                        await SendAutoBillEmailAsync(model.OrderId, connection);
+                                                                    }
+                                                                    catch (Exception emailEx)
+                                                                    {
+                                                                        _logger?.LogError(emailEx, "Failed to send auto bill email for order {OrderId}", model.OrderId);
+                                                                        // Don't break the payment flow if email fails
+                                                                    }
                                                                 }
                                                             }
                                                             else
@@ -1443,6 +1467,21 @@ END", connection))
                             throw;
                         }
                     }
+                    
+                    // Auto-send bill email if order was completed (after transaction commit)
+                    try
+                    {
+                        using (var emailConn = new SqlConnection(_connectionString))
+                        {
+                            await emailConn.OpenAsync();
+                            await SendAutoBillEmailAsync(model.OrderId, emailConn);
+                        }
+                    }
+                    catch (Exception emailEx)
+                    {
+                        _logger?.LogError(emailEx, "Failed to send auto bill email for split payment order {OrderId}", model.OrderId);
+                        // Don't break the payment flow if email fails
+                    }
                 }
 
                 // Log audit trail for split payments
@@ -1793,7 +1832,7 @@ END", connection))
         // Approve Payment
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult ApprovePayment(int id)
+        public async Task<IActionResult> ApprovePayment(int id)
         {
             try
             {
@@ -1959,6 +1998,17 @@ END", connection))
                                     }
                                     catch { /* ignore */ }
 
+                                    // Auto-send bill email if order was completed
+                                    try
+                                    {
+                                        await SendAutoBillEmailAsync(orderId, connection);
+                                    }
+                                    catch (Exception emailEx)
+                                    {
+                                        _logger?.LogError(emailEx, "Failed to send auto bill email after payment approval for order {OrderId}", orderId);
+                                        // Don't break the approval flow if email fails
+                                    }
+
                                     // Redirect back to Dashboard if the approve action was invoked from there, otherwise show the order payment index
                                     if (callerWasDashboard)
                                     {
@@ -2054,7 +2104,7 @@ END", connection))
         // Approve Payment AJAX
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult ApprovePaymentAjax(int id)
+        public async Task<IActionResult> ApprovePaymentAjax(int id)
         {
             try
             {
@@ -2216,6 +2266,17 @@ END", connection))
                                             }
                                     }
                                     catch { /* ignore */ }
+
+                                    // Auto-send bill email if order was completed
+                                    try
+                                    {
+                                        await SendAutoBillEmailAsync(orderId, connection);
+                                    }
+                                    catch (Exception emailEx)
+                                    {
+                                        _logger?.LogError(emailEx, "Failed to send auto bill email after payment approval (Ajax) for order {OrderId}", orderId);
+                                        // Don't break the approval flow if email fails
+                                    }
 
                                     return Json(new { 
                                         success = true, 
@@ -5071,6 +5132,366 @@ END", connection))
             {
                 _logger?.LogError(ex, "Failed to log email to database");
             }
+        }
+
+        // Overload for use from Index page (creates its own connection)
+        private async Task SendAutoBillEmailAsync(int orderId)
+        {
+            try
+            {
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+                    await SendAutoBillEmailAsync(orderId, connection);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error in SendAutoBillEmailAsync (standalone) for order {OrderId}", orderId);
+            }
+        }
+
+        // Original overload for use within payment processing (uses existing connection)
+        private async Task SendAutoBillEmailAsync(int orderId, SqlConnection connection)
+        {
+            try
+            {
+                _logger?.LogInformation("Auto bill email: Checking if enabled for order {OrderId}", orderId);
+                
+                // Check if auto-send is enabled and if email hasn't been sent yet
+                bool isAutoSendEnabled = false;
+                string customerEmail = null;
+                bool alreadySent = false;
+                
+                using (var cmd = new SqlCommand(@"
+                    SELECT 
+                        ISNULL(rs.isReqAutoSentbillEmail, 0), 
+                        o.Customeremailid,
+                        CASE WHEN EXISTS (
+                            SELECT 1 FROM tbl_EmailLog 
+                            WHERE Subject LIKE '%' + o.OrderNumber + '%' 
+                            AND Status = 'Success'
+                        ) THEN 1 ELSE 0 END AS AlreadySent
+                    FROM RestaurantSettings rs
+                    CROSS JOIN Orders o
+                    WHERE o.Id = @OrderId", connection))
+                {
+                    cmd.Parameters.AddWithValue("@OrderId", orderId);
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        if (await reader.ReadAsync())
+                        {
+                            isAutoSendEnabled = reader.GetBoolean(0);
+                            customerEmail = reader.IsDBNull(1) ? null : reader.GetString(1);
+                            alreadySent = reader.GetInt32(2) == 1;
+                        }
+                    }
+                }
+
+                if (!isAutoSendEnabled)
+                {
+                    _logger?.LogInformation("Auto bill email disabled in settings");
+                    return;
+                }
+
+                if (alreadySent)
+                {
+                    _logger?.LogInformation("Auto bill email already sent for order {OrderId}, skipping", orderId);
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(customerEmail))
+                {
+                    _logger?.LogInformation("No customer email for order {OrderId}, skipping auto-send", orderId);
+                    return;
+                }
+
+                _logger?.LogInformation("Auto bill email: Sending to {Email} for order {OrderId}", customerEmail, orderId);
+
+                // Use the same logic as manual Send Bill button
+                var request = new SendBillPDFRequest
+                {
+                    OrderId = orderId,
+                    CustomerEmail = customerEmail
+                };
+
+                var result = await SendBillPDF(request);
+                
+                var jsonResult = result as JsonResult;
+                var data = jsonResult?.Value as dynamic;
+                
+                if (data?.success == true)
+                {
+                    _logger?.LogInformation("Auto bill email sent successfully to {Email} for order {OrderId}", customerEmail, orderId);
+                }
+                else
+                {
+                    _logger?.LogWarning("Failed to send auto bill email to {Email} for order {OrderId}", customerEmail, orderId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error sending auto bill email for order {OrderId}", orderId);
+            }
+        }
+
+        private async Task<(bool Success, string ErrorMessage)> SendEmailAsync(
+            MailConfigurationData mailConfig, string toEmail, string subject, string body)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(toEmail))
+                {
+                    return (false, "Email address is empty");
+                }
+
+                var smtpServer = mailConfig.SmtpServer;
+                if (!smtpServer.StartsWith("smtp.", StringComparison.OrdinalIgnoreCase) && 
+                    !smtpServer.StartsWith("mail.", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (smtpServer.Contains("gmail.com"))
+                        smtpServer = "smtp.gmail.com";
+                    else if (smtpServer.Contains("outlook.com") || smtpServer.Contains("hotmail.com"))
+                        smtpServer = "smtp.office365.com";
+                }
+
+                using (var client = new System.Net.Mail.SmtpClient(smtpServer, mailConfig.SmtpPort))
+                {
+                    client.EnableSsl = mailConfig.EnableSSL;
+                    client.UseDefaultCredentials = false;
+                    client.Credentials = new System.Net.NetworkCredential(mailConfig.SmtpUsername, mailConfig.SmtpPassword);
+                    client.DeliveryMethod = System.Net.Mail.SmtpDeliveryMethod.Network;
+                    client.Timeout = 30000;
+
+                    using (var message = new System.Net.Mail.MailMessage())
+                    {
+                        message.From = new System.Net.Mail.MailAddress(mailConfig.FromEmail, mailConfig.FromName);
+                        message.To.Add(toEmail);
+                        message.Subject = subject;
+                        message.Body = body;
+                        message.IsBodyHtml = true;
+                        message.Priority = System.Net.Mail.MailPriority.Normal;
+
+                        await client.SendMailAsync(message);
+                    }
+                }
+
+                return (true, null);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error sending email to {Email}", toEmail);
+                return (false, ex.Message);
+            }
+        }
+
+        private async Task<MailConfigurationData> GetMailConfigurationForBillAsync(SqlConnection connection)
+        {
+            try
+            {
+                var query = @"
+                    SELECT SmtpServer, SmtpPort, SmtpUsername, SmtpPassword, EnableSSL, 
+                           FromEmail, FromName
+                    FROM tbl_MailConfiguration
+                    WHERE IsActive = 1";
+
+                using (var command = new SqlCommand(query, connection))
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    if (await reader.ReadAsync())
+                    {
+                        var encryptedPassword = reader.GetString(3);
+                        var decryptedPassword = DecryptPassword(encryptedPassword);
+                        
+                        return new MailConfigurationData
+                        {
+                            SmtpServer = reader.GetString(0),
+                            SmtpPort = reader.GetInt32(1),
+                            SmtpUsername = reader.GetString(2),
+                            SmtpPassword = decryptedPassword,
+                            EnableSSL = reader.GetBoolean(4),
+                            FromEmail = reader.GetString(5),
+                            FromName = reader.GetString(6)
+                        };
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error getting mail configuration");
+            }
+            
+            return null;
+        }
+
+        private async Task<string> GenerateBillEmailBodyAsync(int orderId, string orderNumber, 
+            string customerName, decimal totalAmount, SqlConnection connection)
+        {
+            try
+            {
+                // Get restaurant settings
+                string restaurantName = "Restaurant";
+                string restaurantAddress = "";
+                string restaurantPhone = "";
+                string restaurantEmail = "";
+                string gstCode = "";
+                
+                using (var settingsCmd = new SqlCommand(@"
+                    SELECT TOP 1 RestaurantName, StreetAddress, City, State, Pincode, PhoneNumber, Email, GSTCode
+                    FROM RestaurantSettings 
+                    ORDER BY Id DESC", connection))
+                using (var reader = await settingsCmd.ExecuteReaderAsync())
+                {
+                    if (await reader.ReadAsync())
+                    {
+                        restaurantName = reader.IsDBNull(0) ? "Restaurant" : reader.GetString(0);
+                        var street = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                        var city = reader.IsDBNull(2) ? "" : reader.GetString(2);
+                        var state = reader.IsDBNull(3) ? "" : reader.GetString(3);
+                        var pincode = reader.IsDBNull(4) ? "" : reader.GetString(4);
+                        restaurantAddress = $"{street}, {city}, {state} - {pincode}".Trim(' ', ',', '-');
+                        restaurantPhone = reader.IsDBNull(5) ? "" : reader.GetString(5);
+                        restaurantEmail = reader.IsDBNull(6) ? "" : reader.GetString(6);
+                        gstCode = reader.IsDBNull(7) ? "" : reader.GetString(7);
+                    }
+                }
+
+                // Get order items
+                var itemsHtml = new StringBuilder();
+                decimal subtotal = 0m;
+                decimal gstAmount = 0m;
+                
+                using (var itemsCmd = new SqlCommand(@"
+                    SELECT oi.MenuItemName, oi.Quantity, oi.Price, oi.Subtotal, oi.GSTAmount
+                    FROM OrderItems oi
+                    WHERE oi.OrderId = @OrderId AND ISNULL(oi.Status, 0) <> 5
+                    ORDER BY oi.Id", connection))
+                {
+                    itemsCmd.Parameters.AddWithValue("@OrderId", orderId);
+                    using (var reader = await itemsCmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var itemName = reader.GetString(0);
+                            var quantity = reader.GetInt32(1);
+                            var price = reader.GetDecimal(2);
+                            var itemSubtotal = reader.GetDecimal(3);
+                            var itemGst = reader.IsDBNull(4) ? 0m : reader.GetDecimal(4);
+                            
+                            subtotal += itemSubtotal;
+                            gstAmount += itemGst;
+                            
+                            itemsHtml.AppendLine($@"
+                                <tr>
+                                    <td style='padding: 8px; border-bottom: 1px solid #eee;'>{itemName}</td>
+                                    <td style='padding: 8px; border-bottom: 1px solid #eee; text-align: center;'>{quantity}</td>
+                                    <td style='padding: 8px; border-bottom: 1px solid #eee; text-align: right;'>₹{price:F2}</td>
+                                    <td style='padding: 8px; border-bottom: 1px solid #eee; text-align: right;'>₹{itemSubtotal:F2}</td>
+                                </tr>");
+                        }
+                    }
+                }
+
+                // Build HTML email
+                var html = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <title>Bill - {orderNumber}</title>
+</head>
+<body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;'>
+    <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;'>
+        <h1 style='margin: 0; font-size: 28px;'>{restaurantName}</h1>
+        <p style='margin: 10px 0 0 0; opacity: 0.9;'>{restaurantAddress}</p>
+        {(!string.IsNullOrEmpty(restaurantPhone) ? $"<p style='margin: 5px 0 0 0; opacity: 0.9;'>Phone: {restaurantPhone}</p>" : "")}
+        {(!string.IsNullOrEmpty(gstCode) ? $"<p style='margin: 5px 0 0 0; opacity: 0.9;'>GST: {gstCode}</p>" : "")}
+    </div>
+    
+    <div style='background: #f8f9fa; padding: 20px; border-left: 4px solid #667eea;'>
+        <h2 style='margin: 0 0 10px 0; color: #667eea;'>Order Details</h2>
+        <p style='margin: 5px 0;'><strong>Order Number:</strong> {orderNumber}</p>
+        <p style='margin: 5px 0;'><strong>Customer:</strong> {customerName ?? "Guest"}</p>
+        <p style='margin: 5px 0;'><strong>Date:</strong> {DateTime.Now:dd MMM yyyy, hh:mm tt}</p>
+    </div>
+    
+    <div style='margin-top: 20px;'>
+        <table style='width: 100%; border-collapse: collapse;'>
+            <thead>
+                <tr style='background: #667eea; color: white;'>
+                    <th style='padding: 12px 8px; text-align: left;'>Item</th>
+                    <th style='padding: 12px 8px; text-align: center;'>Qty</th>
+                    <th style='padding: 12px 8px; text-align: right;'>Price</th>
+                    <th style='padding: 12px 8px; text-align: right;'>Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {itemsHtml}
+            </tbody>
+        </table>
+    </div>
+    
+    <div style='margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 5px;'>
+        <div style='display: flex; justify-content: space-between; margin-bottom: 10px;'>
+            <span>Subtotal:</span>
+            <span style='font-weight: bold;'>₹{subtotal:F2}</span>
+        </div>
+        <div style='display: flex; justify-content: space-between; margin-bottom: 10px;'>
+            <span>GST:</span>
+            <span style='font-weight: bold;'>₹{gstAmount:F2}</span>
+        </div>
+        <div style='display: flex; justify-content: space-between; padding-top: 10px; border-top: 2px solid #667eea;'>
+            <span style='font-size: 18px; font-weight: bold;'>Total Amount:</span>
+            <span style='font-size: 18px; font-weight: bold; color: #667eea;'>₹{totalAmount:F2}</span>
+        </div>
+    </div>
+    
+    <div style='margin-top: 30px; padding: 20px; background: #e8f5e9; border-radius: 5px; text-align: center;'>
+        <p style='margin: 0; color: #2e7d32; font-weight: bold;'>✓ Payment Completed</p>
+        <p style='margin: 10px 0 0 0; font-size: 14px; color: #555;'>Thank you for dining with us!</p>
+    </div>
+    
+    <div style='margin-top: 20px; text-align: center; font-size: 12px; color: #999;'>
+        <p>This is an automated email. Please do not reply.</p>
+        {(!string.IsNullOrEmpty(restaurantEmail) ? $"<p>For queries, contact us at {restaurantEmail}</p>" : "")}
+    </div>
+</body>
+</html>";
+
+                return html;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error generating bill email body for order {OrderId}", orderId);
+                return $"<html><body><h1>Bill for Order {orderNumber}</h1><p>Total Amount: ₹{totalAmount:F2}</p></body></html>";
+            }
+        }
+
+        private bool IsValidEmail(string email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+                return false;
+
+            try
+            {
+                var addr = new System.Net.Mail.MailAddress(email);
+                return addr.Address == email;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private class MailConfigurationData
+        {
+            public string SmtpServer { get; set; }
+            public int SmtpPort { get; set; }
+            public string SmtpUsername { get; set; }
+            public string SmtpPassword { get; set; }
+            public bool EnableSSL { get; set; }
+            public string FromEmail { get; set; }
+            public string FromName { get; set; }
         }
     }
 
