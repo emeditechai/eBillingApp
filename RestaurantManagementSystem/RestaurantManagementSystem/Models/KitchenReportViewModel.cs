@@ -15,6 +15,7 @@ namespace RestaurantManagementSystem.Models
     {
         public int OrderId { get; set; }
         public string OrderNumber { get; set; }
+        public string KOTNumber { get; set; }
         public string TableName { get; set; }
         public string ItemName { get; set; }
         public int Quantity { get; set; }

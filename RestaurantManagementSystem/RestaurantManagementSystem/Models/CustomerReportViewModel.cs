@@ -66,8 +66,9 @@ namespace RestaurantManagementSystem.Models
     {
         public string Name { get; set; } = "";
         public string Phone { get; set; } = "";
+        public string Email { get; set; } = "";
         public string Address { get; set; } = "";
-        public string OrderType { get; set; } = ""; // Takeout / Delivery
+        public string OrderType { get; set; } = ""; // Dine-In / Takeout / Delivery
         public int Visits { get; set; }
     }
 }

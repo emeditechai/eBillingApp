@@ -57,7 +57,7 @@ namespace RestaurantManagementSystem.Models
         public decimal TotalRevenue { get; set; }
         public decimal AverageOrderValue { get; set; }
         public int DineInOrders { get; set; }
-        public int TakeawayOrders { get; set; }
+        public int TakeoutOrders { get; set; }
         public int DeliveryOrders { get; set; }
 
         // Calculated properties
@@ -115,9 +115,9 @@ namespace RestaurantManagementSystem.Models
         // Order type badge class for UI
         public string OrderTypeBadgeClass => OrderType switch
         {
-            0 => "badge bg-secondary text-white", // Walk-In
-            1 => "badge bg-primary text-white",   // Dine-In
-            2 => "badge bg-warning text-dark",    // Takeaway
+            0 => "badge bg-primary text-white",   // Dine-In
+            1 => "badge bg-warning text-dark",    // Takeout
+            2 => "badge bg-info text-white",      // Delivery
             3 => "badge bg-info text-white",      // Delivery
             _ => "badge bg-secondary text-white"
         };

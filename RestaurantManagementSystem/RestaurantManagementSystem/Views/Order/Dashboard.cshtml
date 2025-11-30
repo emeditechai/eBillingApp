@@ -301,9 +301,29 @@
                             </table>
                         </div>
                         <div class="alert mt-2 mb-0 py-2" style="background-color: #ccfbf1; border-color: #0d9488; color: #134e4a;">
-                            <strong>Total Completed:</strong> @Model.CompletedOrdersCount
-                            <span class="mx-2">|</span>
-                            <strong>Total Sales:</strong> ₹@Model.TotalSales.ToString("F2")
+                            <div class="d-flex justify-content-between align-items-center flex-wrap">
+                                <div>
+                                    <strong>Total Completed:</strong> @Model.CompletedOrdersCount
+                                    <span class="mx-2">|</span>
+                                    <strong>Total Sales:</strong> ₹@Model.TotalSales.ToString("F2")
+                                </div>
+                                <div class="d-flex gap-3">
+                                    @{
+                                        var dineInCount = Model.CompletedOrders.Count(o => o.OrderType == 0);
+                                        var takeoutCount = Model.CompletedOrders.Count(o => o.OrderType == 1);
+                                        var deliveryCount = Model.CompletedOrders.Count(o => o.OrderType == 2);
+                                    }
+                                    <span class="badge" style="background-color: #0d9488; font-size: 0.85rem;">
+                                        <i class="fas fa-utensils me-1"></i>Dine In: @dineInCount
+                                    </span>
+                                    <span class="badge" style="background-color: #059669; font-size: 0.85rem;">
+                                        <i class="fas fa-shopping-bag me-1"></i>Takeout: @takeoutCount
+                                    </span>
+                                    <span class="badge" style="background-color: #0891b2; font-size: 0.85rem;">
+                                        <i class="fas fa-motorcycle me-1"></i>Delivery: @deliveryCount
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                     }
                     else

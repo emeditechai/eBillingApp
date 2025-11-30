@@ -448,29 +448,32 @@ namespace RestaurantManagementSystem.Controllers
                 using var connection = new SqlConnection(_connectionString);
                 await connection.OpenAsync();
 
-                using var cmd = new SqlCommand("usp_GetKitchenKOTReport", connection) { CommandType = CommandType.StoredProcedure };
-                cmd.Parameters.AddWithValue("@FromDate", from.HasValue ? (object)from.Value.Date : DBNull.Value);
-                cmd.Parameters.AddWithValue("@ToDate", to.HasValue ? (object)to.Value.Date : DBNull.Value);
-                cmd.Parameters.AddWithValue("@Station", !string.IsNullOrWhiteSpace(station) ? (object)station : DBNull.Value);
-
-                using var reader = await cmd.ExecuteReaderAsync();
-                while (await reader.ReadAsync())
+                using (var cmd = new SqlCommand("usp_GetKitchenKOTReport", connection) { CommandType = CommandType.StoredProcedure })
                 {
-                    model.Items.Add(new KOTItem
+                    cmd.Parameters.AddWithValue("@FromDate", from.HasValue ? (object)from.Value.Date : DBNull.Value);
+                    cmd.Parameters.AddWithValue("@ToDate", to.HasValue ? (object)to.Value.Date : DBNull.Value);
+                    cmd.Parameters.AddWithValue("@Station", !string.IsNullOrWhiteSpace(station) ? (object)station : DBNull.Value);
+
+                    using var reader = await cmd.ExecuteReaderAsync();
+                    while (await reader.ReadAsync())
                     {
-                        OrderId = reader.GetInt32("OrderId"),
-                        OrderNumber = reader.GetString("OrderNumber"),
-                        TableName = reader.IsDBNull("TableName") ? "" : reader.GetString("TableName"),
-                        ItemName = reader.IsDBNull("ItemName") ? "" : reader.GetString("ItemName"),
-                        Quantity = reader.IsDBNull("Quantity") ? 0 : reader.GetInt32("Quantity"),
-                        Station = reader.IsDBNull("Station") ? "" : reader.GetString("Station"),
-                        Status = reader.IsDBNull("Status") ? "" : reader.GetString("Status"),
-                        RequestedAt = reader.IsDBNull("RequestedAt") ? DateTime.MinValue : reader.GetDateTime("RequestedAt")
-                    });
+                        model.Items.Add(new KOTItem
+                        {
+                            OrderId = reader.GetInt32("OrderId"),
+                            OrderNumber = reader.GetString("OrderNumber"),
+                            KOTNumber = reader.IsDBNull("KOTNumber") ? "" : reader.GetString("KOTNumber"),
+                            TableName = reader.IsDBNull("TableName") ? "" : reader.GetString("TableName"),
+                            ItemName = reader.IsDBNull("ItemName") ? "" : reader.GetString("ItemName"),
+                            Quantity = reader.IsDBNull("Quantity") ? 0 : reader.GetInt32("Quantity"),
+                            Station = reader.IsDBNull("Station") ? "" : reader.GetString("Station"),
+                            Status = reader.IsDBNull("Status") ? "" : reader.GetString("Status"),
+                            RequestedAt = reader.IsDBNull("RequestedAt") ? DateTime.MinValue : reader.GetDateTime("RequestedAt")
+                        });
+                    }
                 }
 
-                // Load stations list
-                using var cmd2 = new SqlCommand(@"SELECT DISTINCT s.Name FROM Stations s ORDER BY s.Name", connection);
+                // Load stations list (after first reader is closed)
+                using var cmd2 = new SqlCommand(@"SELECT DISTINCT s.Name FROM KitchenStations s WHERE s.Name <> 'Bar' AND s.IsActive = 1 ORDER BY s.Name", connection);
                 using var reader2 = await cmd2.ExecuteReaderAsync();
                 while (await reader2.ReadAsync()) model.AvailableStations.Add(reader2.GetString(0));
             }
@@ -988,7 +991,7 @@ namespace RestaurantManagementSystem.Controllers
                         TotalRevenue = reader.GetDecimal("TotalRevenue"),
                         AverageOrderValue = reader.GetDecimal("AverageOrderValue"),
                         DineInOrders = reader.GetInt32("DineInOrders"),
-                        TakeawayOrders = reader.GetInt32("TakeawayOrders"),
+                        TakeoutOrders = reader.GetInt32("TakeoutOrders"),
                         DeliveryOrders = reader.GetInt32("DeliveryOrders")
                     };
                 }
@@ -1314,18 +1317,19 @@ namespace RestaurantManagementSystem.Controllers
                     SELECT 
                         ISNULL(NULLIF(o.CustomerName,''), 'Unknown') AS Name,
                         ISNULL(NULLIF(o.CustomerPhone,''), '') AS Phone,
-                        MAX(ISNULL(NULLIF(o.CustomerAddress,''), '')) AS Address,
-                        CASE o.OrderType WHEN 1 THEN 'Takeout' WHEN 2 THEN 'Delivery' ELSE 'Other' END AS OrderType,
+                        MAX(ISNULL(o.Customeremailid,'')) AS Email,
+                        MAX(ISNULL(o.CustomerAddress,'')) AS Address,
+                        CASE o.OrderType WHEN 0 THEN 'Dine-In' WHEN 1 THEN 'Takeout' WHEN 2 THEN 'Delivery' ELSE 'Other' END AS OrderType,
                         COUNT(*) AS Visits
                     FROM Orders o WITH (NOLOCK)
-                    WHERE o.OrderType IN (1,2)
+                    WHERE o.OrderType IN (0,1,2)
                       AND (@From IS NULL OR o.CreatedAt >= @From)
                       AND (@To IS NULL OR o.CreatedAt < DATEADD(DAY,1,@To))
                     GROUP BY 
                         ISNULL(NULLIF(o.CustomerName,''), 'Unknown'),
                         ISNULL(NULLIF(o.CustomerPhone,''), ''),
-                        CASE o.OrderType WHEN 1 THEN 'Takeout' WHEN 2 THEN 'Delivery' ELSE 'Other' END
-                    HAVING ISNULL(NULLIF(o.CustomerPhone,''), '') <> ''
+                        CASE o.OrderType WHEN 0 THEN 'Dine-In' WHEN 1 THEN 'Takeout' WHEN 2 THEN 'Delivery' ELSE 'Other' END
+                    HAVING (ISNULL(NULLIF(o.CustomerPhone,''), '') <> '' OR MAX(ISNULL(o.Customeremailid,'')) <> '')
                     ORDER BY Visits DESC, Name ASC
                 ", connection2)
                 {
@@ -1343,6 +1347,7 @@ namespace RestaurantManagementSystem.Controllers
                     {
                         Name = r.IsDBNull(r.GetOrdinal("Name")) ? string.Empty : r.GetString(r.GetOrdinal("Name")),
                         Phone = r.IsDBNull(r.GetOrdinal("Phone")) ? string.Empty : r.GetString(r.GetOrdinal("Phone")),
+                        Email = r.IsDBNull(r.GetOrdinal("Email")) ? string.Empty : r.GetString(r.GetOrdinal("Email")),
                         Address = r.IsDBNull(r.GetOrdinal("Address")) ? string.Empty : r.GetString(r.GetOrdinal("Address")),
                         OrderType = r.IsDBNull(r.GetOrdinal("OrderType")) ? string.Empty : r.GetString(r.GetOrdinal("OrderType")),
                         Visits = r.IsDBNull(r.GetOrdinal("Visits")) ? 0 : r.GetInt32(r.GetOrdinal("Visits"))

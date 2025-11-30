@@ -31,52 +31,57 @@
         </div>
     </div>
 
-    <form method="get" asp-action="Kitchen" class="row g-3 align-items-end mb-4">
-        <div class="col-auto">
-            <label class="form-label">From</label>
-            <input name="from" type="date" class="form-control" value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" />
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" asp-action="Kitchen" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">From</label>
+                    <input name="from" type="date" class="form-control" value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">To</label>
+                    <input name="to" type="date" class="form-control" value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Station</label>
+                    <select name="station" class="form-control">
+                        <option value="">All Stations</option>
+                        @foreach(var s in Model.AvailableStations)
+                        {
+                            <option value="@s" selected="@(Model.Filter.Station == s ? "selected" : null)">@s</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary me-2">Run Report</button>
+                    <a class="btn btn-outline-secondary" href="@Url.Action("KitchenExport", "Reports", new { from = Model.Filter.FromDate?.ToString("yyyy-MM-dd"), to = Model.Filter.ToDate?.ToString("yyyy-MM-dd"), station = Model.Filter.Station })">Export CSV</a>
+                </div>
+            </form>
         </div>
-        <div class="col-auto">
-            <label class="form-label">To</label>
-            <input name="to" type="date" class="form-control" value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" />
-        </div>
-        <div class="col-auto">
-            <label class="form-label">Station</label>
-            <select name="station" class="form-control">
-                <option value="">All Stations</option>
-                @foreach(var s in Model.AvailableStations)
-                {
-                    <option value="@s" selected="@(Model.Filter.Station == s ? "selected" : null)">@s</option>
-                }
-            </select>
-        </div>
-        <div class="col-auto">
-            <button type="submit" class="btn btn-primary">Run Report</button>
-            <a class="btn btn-outline-secondary ms-2" href="@Url.Action("KitchenExport", "Reports", new { from = Model.Filter.FromDate?.ToString("yyyy-MM-dd"), to = Model.Filter.ToDate?.ToString("yyyy-MM-dd"), station = Model.Filter.Station })">Export CSV</a>
-        </div>
-    </form>
+    </div>
 
     <!-- DataTables assets (re-enabled) -->
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" />
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 
-    <!-- Station summary sparklines & quick filters -->
+    <!-- Status filters -->
     <div class="row mb-3">
-        <div class="col-12 d-flex align-items-center justify-content-between">
-            <div>
-                <div class="btn-group" role="group" aria-label="Status filters">
-                    <button type="button" class="btn btn-sm btn-outline-secondary status-filter" data-status="">All</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary status-filter" data-status="Pending">Pending</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary status-filter" data-status="Completed">Completed</button>
-                </div>
+        <div class="col-12">
+            <div class="btn-group" role="group" aria-label="Status filters">
+                <button type="button" class="btn btn-sm btn-outline-secondary status-filter active" data-status="">All</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary status-filter" data-status="Pending">Pending</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary status-filter" data-status="Completed">Completed</button>
             </div>
-            <div class="d-flex gap-2" id="station-summaries">
+        </div>
+    </div>
+
+    <!-- Station summary chips -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="d-flex flex-wrap gap-2" id="station-summaries">
                 @foreach(var st in Model.AvailableStations)
                 {
-                    <div class="me-2 text-center" style="min-width:120px;">
-                        <div class="small text-muted">@st</div>
-                        <canvas id="spark-@Html.Raw(st.Replace(" ","-"))" width="120" height="36"></canvas>
-                    </div>
+                    <div class="badge bg-secondary">@st</div>
                 }
             </div>
         </div>
@@ -127,6 +132,7 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Order #</th>
+                                <th>KOT #</th>
                                 <th>Table</th>
                                 <th>Item</th>
                                 <th>Qty</th>
@@ -140,6 +146,7 @@
                             {
                                 <tr>
                                     <td>@it.OrderNumber</td>
+                                    <td>@it.KOTNumber</td>
                                     <td>@it.TableName</td>
                                     <td>@it.ItemName</td>
                                     <td>@it.Quantity</td>
@@ -151,13 +158,7 @@
                             @if(!Model.Items.Any())
                             {
                                 <tr>
-                                    <td class="text-center">No items found for selected criteria</td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
+                                    <td colspan="8" class="text-center">No items found for selected criteria</td>
                                 </tr>
                             }
                         </tbody>
@@ -169,13 +170,16 @@
 </div>
 
 @section Scripts {
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        (function(){
-            var items = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Items.Select(i => new { i.Station, RequestedAt = i.RequestedAt.ToString("o"), Status = i.Status } )));
-
+        $(document).ready(function(){
             // init DataTable
-            var table = $('#kotTable').DataTable({"pageLength":50, "order": [[6, 'desc']]});
+            var table = $('#kotTable').DataTable({
+                "pageLength": 50, 
+                "order": [[7, 'desc']],
+                "language": {
+                    "emptyTable": "No items found for selected criteria"
+                }
+            });
 
             // status filter buttons
             $('.status-filter').on('click', function(){
@@ -183,43 +187,12 @@
                 $('.status-filter').removeClass('active');
                 $(this).addClass('active');
                 if(!status) {
-                    table.column(5).search('').draw();
+                    table.column(6).search('').draw();
                 } else {
-                    table.column(5).search('^' + status + '$', true, false).draw();
+                    table.column(6).search('^' + status + '$', true, false).draw();
                 }
             });
-
-            // build per-station sparklines (daily counts)
-            try {
-                var stations = {};
-                items.forEach(function(it){
-                    var s = it.Station || 'Unassigned';
-                    stations[s] = stations[s] || [];
-                    stations[s].push(new Date(it.RequestedAt));
-                });
-
-                Object.keys(stations).forEach(function(st){
-                    var dates = stations[st];
-                    if(dates.length === 0) return;
-                    // bucket by day
-                    var counts = {};
-                    dates.forEach(function(d){
-                        var key = d.toISOString().slice(0,10);
-                        counts[key] = (counts[key] || 0) + 1;
-                    });
-                    var labels = Object.keys(counts).sort();
-                    var data = labels.map(function(k){ return counts[k]; });
-                    var canvasId = '#spark-' + st.replace(/\s+/g,'-');
-                    var el = document.querySelector(canvasId);
-                    if (!el) return;
-                    new Chart(el.getContext('2d'), {
-                        type: 'line',
-                        data: { labels: labels, datasets: [{ data: data, borderColor: '#ffffff', backgroundColor: 'rgba(255,255,255,0.12)', fill:true, tension:0.3 }] },
-                        options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{display:false}, y:{display:false}}, elements:{point:{radius:0}} }
-                    });
-                });
-            } catch(e){ console.warn('sparkline error', e); }
-        })();
+        });
     </script>
 }
 

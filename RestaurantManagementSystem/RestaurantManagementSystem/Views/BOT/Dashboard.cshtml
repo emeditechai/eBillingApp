@@ -220,7 +220,23 @@
             <div class="card bar-col-card mb-4">
                 <div class="card-header text-white bar-grad-5 d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">Delivered Today (@Model.DeliveredTickets.Count)</h5>
-                    <small>Showing only beverage tickets delivered today</small>
+                    <div class="d-flex align-items-center gap-2">
+                        @{
+                            var dineInCount = Model.DeliveredTickets.Count(t => t.OrderType == 0);
+                            var takeoutCount = Model.DeliveredTickets.Count(t => t.OrderType == 1);
+                            var deliveryCount = Model.DeliveredTickets.Count(t => t.OrderType == 2);
+                        }
+                        <span class="badge bg-light text-dark" style="font-size: 0.85rem;">
+                            <i class="fas fa-utensils me-1"></i>Dine In: @dineInCount
+                        </span>
+                        <span class="badge bg-light text-dark" style="font-size: 0.85rem;">
+                            <i class="fas fa-shopping-bag me-1"></i>Takeout: @takeoutCount
+                        </span>
+                        <span class="badge bg-light text-dark" style="font-size: 0.85rem;">
+                            <i class="fas fa-motorcycle me-1"></i>Delivery: @deliveryCount
+                        </span>
+                        <small class="ms-2">Showing only beverage tickets delivered today</small>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     <div class="list-group list-group-flush bar-ticket-list">

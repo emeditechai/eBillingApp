@@ -34,8 +34,8 @@ BEGIN
         COALESCE(SUM(o.TotalAmount), 0) as TotalRevenue,
         COALESCE(AVG(o.TotalAmount), 0) as AverageOrderValue,
         COUNT(CASE WHEN o.OrderType = 0 THEN 1 END) as DineInOrders,
-        COUNT(CASE WHEN o.OrderType = 2 THEN 1 END) as TakeawayOrders,
-        COUNT(CASE WHEN o.OrderType = 3 THEN 1 END) as DeliveryOrders
+        COUNT(CASE WHEN o.OrderType = 1 THEN 1 END) as TakeoutOrders,
+        COUNT(CASE WHEN o.OrderType = 2 THEN 1 END) as DeliveryOrders
     FROM Orders o
     LEFT JOIN Users u ON o.UserId = u.Id
     WHERE 
@@ -61,10 +61,9 @@ BEGIN
         COALESCE(u.FirstName + ' ' + u.LastName, 'Unknown') as WaiterName,
         o.OrderType,
         CASE o.OrderType 
-            WHEN 0 THEN 'Walk-In'
-            WHEN 1 THEN 'Dine-In'
-            WHEN 2 THEN 'Takeaway'
-            WHEN 3 THEN 'Delivery'
+            WHEN 0 THEN 'Dine-In'
+            WHEN 1 THEN 'Takeout'
+            WHEN 2 THEN 'Delivery'
             ELSE 'Unknown'
         END as OrderTypeName,
         o.Status,

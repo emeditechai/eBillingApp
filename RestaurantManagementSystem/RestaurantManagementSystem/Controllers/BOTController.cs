@@ -152,7 +152,8 @@ namespace RestaurantManagementSystem.Controllers
                     kt.CreatedAt,
                     kt.CompletedAt,
                     DATEDIFF(MINUTE, kt.CreatedAt, GETDATE()) AS MinutesSinceCreated,
-                    COALESCE(t.TableName, t.TableNumber, CONCAT('Table ', t.Id), '-') AS TableName
+                    COALESCE(t.TableName, t.TableNumber, CONCAT('Table ', t.Id), '-') AS TableName,
+                    o.OrderType
                 FROM KitchenTickets kt
                 INNER JOIN Orders o ON kt.OrderId = o.Id
                 LEFT JOIN TableTurnovers tt ON o.TableTurnoverId = tt.Id
@@ -189,7 +190,8 @@ namespace RestaurantManagementSystem.Controllers
                         CreatedAt = reader.GetDateTime(7),
                         CompletedAt = reader.IsDBNull(8) ? null : reader.GetDateTime(8),
                         MinutesSinceCreated = reader.GetInt32(9),
-                        TableName = reader.GetString(10)
+                        TableName = reader.GetString(10),
+                        OrderType = reader.IsDBNull(11) ? null : reader.GetInt32(11)
                     });
                 }
             }
@@ -284,7 +286,8 @@ namespace RestaurantManagementSystem.Controllers
                     kt.CreatedAt,
                     kt.CompletedAt,
                     DATEDIFF(MINUTE, kt.CreatedAt, GETDATE()) AS MinutesSinceCreated,
-                    COALESCE(t.TableName, t.TableNumber, CONCAT('Table ', t.Id), '-') AS TableName
+                    COALESCE(t.TableName, t.TableNumber, CONCAT('Table ', t.Id), '-') AS TableName,
+                    o.OrderType
                 FROM KitchenTickets kt
                 INNER JOIN Orders o ON kt.OrderId = o.Id
                 LEFT JOIN TableTurnovers tt ON o.TableTurnoverId = tt.Id
@@ -314,7 +317,8 @@ namespace RestaurantManagementSystem.Controllers
                             CreatedAt = reader.GetDateTime(7),
                             CompletedAt = reader.IsDBNull(8) ? null : reader.GetDateTime(8),
                             MinutesSinceCreated = reader.GetInt32(9),
-                            TableName = reader.GetString(10)
+                            TableName = reader.GetString(10),
+                            OrderType = reader.IsDBNull(11) ? null : reader.GetInt32(11)
                         });
                     }
                 }

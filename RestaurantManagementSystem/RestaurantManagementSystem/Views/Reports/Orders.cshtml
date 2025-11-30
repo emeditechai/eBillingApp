@@ -60,10 +60,9 @@
                                 <label asp-for="Filter.OrderType" class="form-label">Order Type</label>
                                 <select asp-for="Filter.OrderType" class="form-select">
                                     <option value="">All Types</option>
-                                    <option value="0">Walk-In</option>
-                                    <option value="1">Dine-In</option>
-                                    <option value="2">Takeaway</option>
-                                    <option value="3">Delivery</option>
+                                    <option value="0">Dine-In</option>
+                                    <option value="1">Takeout</option>
+                                    <option value="2">Delivery</option>
                                 </select>
                             </div>
                         </div>
@@ -209,14 +208,14 @@
                     <div class="row">
                         <div class="col-12 mb-3">
                             <div class="d-flex justify-content-between">
-                                <span class="text-muted">Walk-In:</span>
-                                <span class="badge bg-secondary text-white">@Model.Summary.DineInOrders</span>
+                                <span class="text-muted">Dine-In:</span>
+                                <span class="badge bg-primary text-white">@Model.Summary.DineInOrders</span>
                             </div>
                         </div>
                         <div class="col-12 mb-3">
                             <div class="d-flex justify-content-between">
-                                <span class="text-muted">Takeaway:</span>
-                                <span class="badge bg-warning text-dark">@Model.Summary.TakeawayOrders</span>
+                                <span class="text-muted">Takeout:</span>
+                                <span class="badge bg-warning text-dark">@Model.Summary.TakeoutOrders</span>
                             </div>
                         </div>
                         <div class="col-12 mb-3">

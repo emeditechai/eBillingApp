@@ -78,6 +78,23 @@ namespace RestaurantManagementSystem.Models
         public DateTime? CompletedAt { get; set; }
         public int MinutesSinceCreated { get; set; }
         
+        // Order type for categorization (0=Dine-In, 1=Takeout, 2=Delivery, 3=Online)
+        public int? OrderType { get; set; }
+        public string OrderTypeDisplay
+        {
+            get
+            {
+                return OrderType switch
+                {
+                    0 => "Dine In",
+                    1 => "Takeout",
+                    2 => "Delivery",
+                    3 => "Online",
+                    _ => "-"
+                };
+            }
+        }
+        
         // Navigation properties
         public List<KitchenTicketItem> Items { get; set; } = new List<KitchenTicketItem>();
     }

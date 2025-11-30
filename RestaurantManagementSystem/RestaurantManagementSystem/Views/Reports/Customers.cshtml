@@ -159,7 +159,7 @@
         <div class="col-12">
             <div class="card mb-3">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <span>Customer List (Takeout & Delivery)</span>
+                    <span>Customer List (All Order Types)</span>
                     <span class="small text-muted">Period: @Model.Filter.From?.ToString("dd MMM yyyy") – @Model.Filter.To?.ToString("dd MMM yyyy")</span>
                 </div>
                 <div class="card-body">
@@ -169,6 +169,7 @@
                                 <tr>
                                     <th>Name</th>
                                     <th>Phone</th>
+                                    <th>Email</th>
                                     <th>Address</th>
                                     <th>Order Type</th>
                                     <th class="text-end">Visits</th>
@@ -180,10 +181,12 @@
                                     <tr>
                                         <td>@row.Name</td>
                                         <td>@row.Phone</td>
-                                        <td class="text-truncate" style="max-width: 320px;" title="@row.Address">@row.Address</td>
+                                        <td>@(string.IsNullOrEmpty(row.Email) ? "-" : row.Email)</td>
+                                        <td class="text-truncate" style="max-width: 280px;" title="@row.Address">@row.Address</td>
                                         <td>
-                                            @if (row.OrderType == "Delivery") { <span class="badge bg-primary">Delivery</span>; }
-                                            else if (row.OrderType == "Takeout") { <span class="badge bg-info text-dark">Takeout</span>; }
+                                            @if (row.OrderType == "Delivery") { <span class="badge bg-info text-white">Delivery</span>; }
+                                            else if (row.OrderType == "Takeout") { <span class="badge bg-warning text-dark">Takeout</span>; }
+                                            else if (row.OrderType == "Dine-In") { <span class="badge bg-primary text-white">Dine-In</span>; }
                                             else { <span class="badge bg-secondary">@row.OrderType</span>; }
                                         </td>
                                         <td class="text-end"><span class="badge bg-secondary">@row.Visits</span></td>
