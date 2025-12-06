@@ -441,6 +441,9 @@ namespace RestaurantManagementSystem.Controllers
         {
             ViewData["Title"] = "Kitchen KOT Report";
             var model = new KitchenReportViewModel();
+            model.Filter.FromDate = from;
+            model.Filter.ToDate = to;
+            model.Filter.Station = station;
             await SetViewPermissionsAsync(MenuCodes.Kitchen);
 
             try
