@@ -114,16 +114,6 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div id="customerSection" class="mt-3 d-none">
-                                    <label asp-for="CustomerName" class="form-label">Customer Name</label>
-                                    <input asp-for="CustomerName" class="form-control" />
-                                    <span asp-validation-for="CustomerName" class="text-danger"></span>
-                                </div>
-                                <div id="phoneSection" class="mt-3 d-none">
-                                    <label asp-for="CustomerPhone" class="form-label">Customer Phone</label>
-                                    <input asp-for="CustomerPhone" class="form-control" />
-                                    <span asp-validation-for="CustomerPhone" class="text-danger"></span>
-                                </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-2 text-secondary fw-bold" style="font-size:1.1rem;">Special Instructions</div>
@@ -136,6 +126,17 @@
                                     <input asp-for="CustomerEmailId" type="email" class="form-control" placeholder="customer@example.com" />
                                     <span asp-validation-for="CustomerEmailId" class="text-danger"></span>
                                     <small class="form-text text-muted">Optional: For sending order confirmation and receipts</small>
+                                </div>
+
+                                <div id="customerSection" class="mt-3 d-none">
+                                    <label asp-for="CustomerName" class="form-label">Customer Name</label>
+                                    <input asp-for="CustomerName" class="form-control" />
+                                    <span asp-validation-for="CustomerName" class="text-danger"></span>
+                                </div>
+                                <div id="phoneSection" class="mt-3 d-none">
+                                    <label asp-for="CustomerPhone" class="form-label">Customer Phone</label>
+                                    <input asp-for="CustomerPhone" class="form-control" />
+                                    <span asp-validation-for="CustomerPhone" class="text-danger"></span>
                                 </div>
                                 
                                 <div class="alert alert-info mt-3" style="background-color: #ede9fe; border-color: #a855f7;">
@@ -166,7 +167,7 @@
                 var orderType = $('#orderType').val();
                 if (orderType === '0') {
                     $('#tableSection').removeClass('d-none');
-                    $('#customerSection, #phoneSection').addClass('d-none');
+                    $('#customerSection, #phoneSection').removeClass('d-none');
                     $('#mergeTablesWrapper').removeClass('d-none');
                 } else {
                     $('#tableSection').addClass('d-none');

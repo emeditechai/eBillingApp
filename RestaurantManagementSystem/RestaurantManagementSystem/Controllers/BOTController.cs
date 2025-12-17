@@ -944,7 +944,8 @@ namespace RestaurantManagementSystem.Controllers
                                     if (model.SelectedTableId.HasValue)
                                     {
                                         // Need to seat guests at this table first
-                                        int turnoverId = SeatGuestsAtTable(model.SelectedTableId.Value, "Walk-in", 2, connection, transaction);
+                                        var guestName = string.IsNullOrWhiteSpace(model.CustomerName) ? "Walk-in" : model.CustomerName;
+                                        int turnoverId = SeatGuestsAtTable(model.SelectedTableId.Value, guestName, 2, connection, transaction);
                                         model.TableTurnoverId = turnoverId;
                                     }
                                     else if (model.TableTurnoverId.HasValue && model.TableTurnoverId < 0)
