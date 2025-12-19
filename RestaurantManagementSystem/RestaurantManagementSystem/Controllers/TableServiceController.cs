@@ -404,6 +404,116 @@ namespace RestaurantManagementSystem.Controllers
                         }
                     }
                 }
+                
+                // ===== REAL-TIME ANALYTICS & PERFORMANCE METRICS =====
+                
+                // 1. Average Table Turnover Time (completed turnovers today)
+                using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    SELECT AVG(DATEDIFF(MINUTE, SeatedAt, DepartedAt))
+                    FROM TableTurnovers
+                    WHERE Status = 5 -- Departed
+                    AND CAST(SeatedAt AS DATE) = CAST(GETDATE() AS DATE)
+                    AND DepartedAt IS NOT NULL", connection))
+                {
+                    var result = command.ExecuteScalar();
+                    model.AverageTurnoverTime = result == DBNull.Value ? 0 : Convert.ToDecimal(result);
+                }
+                
+                // 2. Today's Revenue and Revenue per Table
+                using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    SELECT 
+                        ISNULL(SUM(o.TotalAmount), 0) AS TodayRevenue,
+                        COUNT(DISTINCT CASE WHEN tt.TableId IS NOT NULL THEN tt.TableId END) AS TablesUsed
+                    FROM Orders o
+                    LEFT JOIN TableTurnovers tt ON o.TableTurnoverId = tt.Id
+                    WHERE CAST(o.CreatedAt AS DATE) = CAST(GETDATE() AS DATE)
+                    AND o.Status != 4", connection)) // Exclude cancelled orders
+                {
+                    using (Microsoft.Data.SqlClient.SqlDataReader reader = command.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            model.TodayRevenue = reader.IsDBNull(0) ? 0 : reader.GetDecimal(0);
+                            var tablesUsed = reader.IsDBNull(1) ? 0 : reader.GetInt32(1);
+                            model.AverageRevenuePerTable = tablesUsed > 0 ? model.TodayRevenue / tablesUsed : 0;
+                        }
+                    }
+                }
+                
+                // 3. Peak Hours Data (hourly order count and revenue for today)
+                using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    SELECT 
+                        DATEPART(HOUR, o.CreatedAt) AS Hour,
+                        COUNT(*) AS OrderCount,
+                        ISNULL(SUM(o.TotalAmount), 0) AS Revenue
+                    FROM Orders o
+                    WHERE CAST(o.CreatedAt AS DATE) = CAST(GETDATE() AS DATE)
+                    AND o.Status != 4 -- Exclude cancelled
+                    GROUP BY DATEPART(HOUR, o.CreatedAt)
+                    ORDER BY OrderCount DESC", connection))
+                {
+                    using (Microsoft.Data.SqlClient.SqlDataReader reader = command.ExecuteReader())
+                    {
+                        var peakHoursList = new List<PeakHourData>();
+                        while (reader.Read())
+                        {
+                            peakHoursList.Add(new PeakHourData
+                            {
+                                Hour = reader.GetInt32(0),
+                                OrderCount = reader.GetInt32(1),
+                                Revenue = reader.GetDecimal(2)
+                            });
+                        }
+                        
+                        // Mark top 3 hours as peak hours
+                        for (int i = 0; i < Math.Min(3, peakHoursList.Count); i++)
+                        {
+                            peakHoursList[i].IsPeakHour = true;
+                        }
+                        
+                        model.PeakHours = peakHoursList.OrderBy(p => p.Hour).ToList();
+                    }
+                }
+                
+                // 4. Server Performance Stats (active tables, today's orders, today's revenue)
+                using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    SELECT 
+                        u.Id AS ServerId,
+                        (u.FirstName + ' ' + ISNULL(u.LastName, '')) AS ServerName,
+                        COUNT(DISTINCT sa.TableId) AS ActiveTables,
+                        COUNT(DISTINCT o.Id) AS TotalOrders,
+                        ISNULL(SUM(o.TotalAmount), 0) AS TotalRevenue
+                    FROM Users u
+                    LEFT JOIN ServerAssignments sa ON u.Id = sa.ServerId AND sa.IsActive = 1
+                    LEFT JOIN TableTurnovers tt ON sa.TableId = tt.TableId AND tt.Status < 5
+                    LEFT JOIN Orders o ON tt.Id = o.TableTurnoverId 
+                        AND CAST(o.CreatedAt AS DATE) = CAST(GETDATE() AS DATE)
+                        AND o.Status != 4
+                    WHERE u.IsActive = 1
+                    AND EXISTS (
+                        SELECT 1 FROM UserRoles ur
+                        INNER JOIN Roles r ON ur.RoleId = r.Id
+                        WHERE ur.UserId = u.Id AND r.Name IN ('Server', 'Waiter', 'Staff')
+                    )
+                    GROUP BY u.Id, u.FirstName, u.LastName
+                    HAVING COUNT(DISTINCT sa.TableId) > 0 OR COUNT(DISTINCT o.Id) > 0
+                    ORDER BY ActiveTables DESC, TotalRevenue DESC", connection))
+                {
+                    using (Microsoft.Data.SqlClient.SqlDataReader reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            model.ServerPerformance.Add(new ServerPerformanceData
+                            {
+                                ServerId = reader.GetInt32(0),
+                                ServerName = reader.GetString(1),
+                                ActiveTables = reader.GetInt32(2),
+                                TotalOrders = reader.GetInt32(3),
+                                TotalRevenue = reader.GetDecimal(4)
+                            });
+                        }
+                    }
+                }
             }
             
             return model;

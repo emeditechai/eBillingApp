@@ -104,5 +104,32 @@ namespace RestaurantManagementSystem.Models
         public int WaitlistCount { get; set; }
         public List<ActiveTableViewModel> CurrentTurnovers { get; set; } = new List<ActiveTableViewModel>();
         public List<TableViewModel> UnoccupiedTables { get; set; } = new List<TableViewModel>();
+        
+        // Real-Time Analytics & Performance Metrics
+        public decimal AverageTurnoverTime { get; set; } // In minutes
+        public decimal TodayRevenue { get; set; }
+        public decimal AverageRevenuePerTable { get; set; }
+        public List<PeakHourData> PeakHours { get; set; } = new List<PeakHourData>();
+        public List<ServerPerformanceData> ServerPerformance { get; set; } = new List<ServerPerformanceData>();
+    }
+    
+    public class PeakHourData
+    {
+        public int Hour { get; set; } // 0-23
+        public int OrderCount { get; set; }
+        public decimal Revenue { get; set; }
+        public string HourDisplay => Hour == 0 ? "12 AM" : Hour < 12 ? $"{Hour} AM" : Hour == 12 ? "12 PM" : $"{Hour - 12} PM";
+        public bool IsPeakHour { get; set; }
+    }
+    
+    public class ServerPerformanceData
+    {
+        public int ServerId { get; set; }
+        public string ServerName { get; set; }
+        public int ActiveTables { get; set; }
+        public int TotalOrders { get; set; }
+        public decimal TotalRevenue { get; set; }
+        public string WorkloadLevel => ActiveTables == 0 ? "idle" : ActiveTables <= 2 ? "low" : ActiveTables <= 4 ? "medium" : "high";
+        public string WorkloadColor => ActiveTables == 0 ? "secondary" : ActiveTables <= 2 ? "success" : ActiveTables <= 4 ? "warning" : "danger";
     }
 }

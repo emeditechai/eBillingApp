@@ -1203,7 +1203,134 @@ namespace RestaurantManagementSystem.Controllers
                     }
                 }
             }
-            return tables;
+            
+            // Apply smart recommendation scoring
+            return ApplySmartTableScoring(tables, partySize, reservationDateTime);
+        }
+        
+        /// <summary>
+        /// Smart Table Recommendation Algorithm
+        /// Scores tables based on multiple factors to recommend the best match
+        /// </summary>
+        private List<Table> ApplySmartTableScoring(List<Table> tables, int partySize, DateTime reservationDateTime)
+        {
+            var scoredTables = new List<(Table table, double score, string reason)>();
+            
+            foreach (var table in tables)
+            {
+                double score = 0;
+                var reasons = new List<string>();
+                
+                // 1. CAPACITY MATCH (40 points) - Most important factor
+                int capacityDiff = table.Capacity - partySize;
+                if (capacityDiff == 0)
+                {
+                    score += 40;
+                    reasons.Add("Perfect fit");
+                }
+                else if (capacityDiff == 1)
+                {
+                    score += 35;
+                    reasons.Add("Excellent match");
+                }
+                else if (capacityDiff == 2)
+                {
+                    score += 30;
+                    reasons.Add("Good match");
+                }
+                else if (capacityDiff <= 4)
+                {
+                    score += 20;
+                    reasons.Add("Suitable");
+                }
+                else
+                {
+                    score += 10;
+                    if (capacityDiff > 6)
+                        reasons.Add("Oversized");
+                }
+                
+                // 2. TIME SLOT OPTIMIZATION (25 points)
+                int hour = reservationDateTime.Hour;
+                bool isPeakHour = (hour >= 12 && hour <= 14) || (hour >= 18 && hour <= 21);
+                
+                if (isPeakHour)
+                {
+                    if (capacityDiff <= 1)
+                    {
+                        score += 25;
+                        reasons.Add("Peak hour optimal");
+                    }
+                    else if (capacityDiff <= 3)
+                    {
+                        score += 15;
+                    }
+                    else
+                    {
+                        score += 5;
+                    }
+                }
+                else
+                {
+                    score += 20;
+                    if (capacityDiff > 4)
+                        reasons.Add("Off-peak flexible");
+                }
+                
+                // 3. SECTION PREFERENCE (15 points)
+                if (!string.IsNullOrEmpty(table.Section))
+                {
+                    if ((table.Section.Contains("Window", StringComparison.OrdinalIgnoreCase) || 
+                         table.Section.Contains("Patio", StringComparison.OrdinalIgnoreCase)) &&
+                        partySize == 2 && hour >= 18)
+                    {
+                        score += 15;
+                        reasons.Add("Romantic setting");
+                    }
+                    else if ((table.Section.Contains("Private", StringComparison.OrdinalIgnoreCase) ||
+                             table.Section.Contains("Back", StringComparison.OrdinalIgnoreCase)) &&
+                            partySize >= 6)
+                    {
+                        score += 15;
+                        reasons.Add("Group-friendly");
+                    }
+                    else
+                    {
+                        score += 10;
+                    }
+                }
+                else
+                {
+                    score += 5;
+                }
+                
+                // 4. AVAILABILITY & FRESHNESS (10 points)
+                if (table.Status == TableStatus.Available)
+                {
+                    score += 10;
+                    
+                    if (table.LastOccupiedAt.HasValue)
+                    {
+                        var minutesSinceOccupied = (DateTime.Now - table.LastOccupiedAt.Value).TotalMinutes;
+                        if (minutesSinceOccupied > 30)
+                        {
+                            score += 5;
+                            reasons.Add("Ready to use");
+                        }
+                    }
+                }
+                
+                // 5. LOAD BALANCING (10 points)
+                score += 5;
+                
+                scoredTables.Add((table, score, string.Join(", ", reasons)));
+            }
+            
+            // Sort by score descending
+            return scoredTables
+                .OrderByDescending(x => x.score)
+                .Select(x => x.table)
+                .ToList();
         }
 
         #endregion
