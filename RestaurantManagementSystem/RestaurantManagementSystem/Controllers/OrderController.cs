@@ -20,6 +20,71 @@ namespace RestaurantManagementSystem.Controllers
             _connectionString = _configuration.GetConnectionString("DefaultConnection");
             _encryptionService = encryptionService;
         }
+
+        [HttpGet]
+        public IActionResult GetOrderTotalsJson(int orderId)
+        {
+            if (orderId <= 0)
+            {
+                return Json(new { success = false, message = "Invalid order." });
+            }
+
+            try
+            {
+                using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    connection.Open();
+
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        SELECT 
+                            ISNULL(Subtotal, 0) AS Subtotal,
+                            ISNULL(TaxAmount, 0) AS TaxAmount,
+                            ISNULL(TotalAmount, 0) AS TotalAmount,
+                            ISNULL(DiscountAmount, 0) AS DiscountAmount,
+                            ISNULL(GSTPercentage, 0) AS GSTPercentage,
+                            ISNULL(CGSTAmount, 0) AS CGSTAmount,
+                            ISNULL(SGSTAmount, 0) AS SGSTAmount
+                        FROM Orders
+                        WHERE Id = @OrderId;", connection))
+                    {
+                        cmd.Parameters.AddWithValue("@OrderId", orderId);
+
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            if (!reader.Read())
+                            {
+                                return Json(new { success = false, message = "Order not found." });
+                            }
+
+                            var subtotal = reader.IsDBNull(0) ? 0m : reader.GetDecimal(0);
+                            var taxAmount = reader.IsDBNull(1) ? 0m : reader.GetDecimal(1);
+                            var totalAmount = reader.IsDBNull(2) ? 0m : reader.GetDecimal(2);
+                            var discountAmount = reader.IsDBNull(3) ? 0m : reader.GetDecimal(3);
+                            var gstPercentage = reader.IsDBNull(4) ? 0m : reader.GetDecimal(4);
+                            var cgstAmount = reader.IsDBNull(5) ? 0m : reader.GetDecimal(5);
+                            var sgstAmount = reader.IsDBNull(6) ? 0m : reader.GetDecimal(6);
+
+                            return Json(new
+                            {
+                                success = true,
+                                orderId,
+                                subtotal,
+                                taxAmount,
+                                totalAmount,
+                                discountAmount,
+                                gstPercentage,
+                                cgstAmount,
+                                sgstAmount
+                            });
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "Error loading totals: " + ex.Message });
+            }
+        }
         
         // Order Dashboard
         [RequirePermission("NAV_ORDERS_DASH", PermissionAction.View)]

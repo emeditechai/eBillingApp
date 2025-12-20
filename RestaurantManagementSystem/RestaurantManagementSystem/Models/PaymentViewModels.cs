@@ -12,6 +12,7 @@ namespace RestaurantManagementSystem.Models
         public int OrderId { get; set; }
         public string OrderNumber { get; set; }
         public string TableName { get; set; }
+        public DateTime? LastActivityAt { get; set; }
         public decimal Subtotal { get; set; }
         public decimal TaxAmount { get; set; }
         public decimal TipAmount { get; set; }

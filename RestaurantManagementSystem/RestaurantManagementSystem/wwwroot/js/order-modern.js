@@ -12,8 +12,40 @@
   const subtotalCell = document.getElementById('orderSubtotalCell');
   const taxCell = document.getElementById('orderTaxCell');
   const totalCell = document.getElementById('orderTotalCell');
+  const subtotalCellSide = document.getElementById('orderSubtotalCellSide');
+  const taxCellSide = document.getElementById('orderTaxCellSide');
+  const totalCellSide = document.getElementById('orderTotalCellSide');
+  const subtotalCellMobile = document.getElementById('orderSubtotalCellMobile');
+  const totalCellMobile = document.getElementById('orderTotalCellMobile');
   const selectAllFire = document.getElementById('selectAllFire');
   let tempIdCounter = -1;
+
+  function setTotalsUI(subtotal, tax, total){
+    if(subtotalCell) subtotalCell.textContent = formatMoney(subtotal);
+    if(taxCell) taxCell.textContent = formatMoney(tax);
+    if(totalCell) totalCell.textContent = formatMoney(total);
+    if(subtotalCellSide) subtotalCellSide.textContent = formatMoney(subtotal);
+    if(taxCellSide) taxCellSide.textContent = formatMoney(tax);
+    if(totalCellSide) totalCellSide.textContent = formatMoney(total);
+    if(subtotalCellMobile) subtotalCellMobile.textContent = formatMoney(subtotal);
+    if(totalCellMobile) totalCellMobile.textContent = formatMoney(total);
+  }
+
+  async function refreshTotalsFromServer(){
+    try{
+      const res = await fetch(`/Order/GetOrderTotalsJson?orderId=${encodeURIComponent(orderId)}`);
+      const data = await res.json().catch(()=>null);
+      if(!res.ok || !data || !data.success){
+        return;
+      }
+      const subtotal = Number(data.subtotal ?? 0);
+      const tax = Number(data.taxAmount ?? 0);
+      const total = Number(data.totalAmount ?? (subtotal + tax));
+      setTotalsUI(subtotal, tax, total);
+    }catch{
+      // non-fatal
+    }
+  }
 
   // Nice confirm modal helper (falls back to window.confirm)
   async function showConfirm(message){
@@ -87,6 +119,33 @@
     paymentBtn.style.pointerEvents = 'none';
   }
 
+  function enablePaymentButtonIfAllowed(){
+    const paymentBtn = document.querySelector('a[href*="/Payment/Index/"]');
+    if(!paymentBtn) return;
+    if(root.getAttribute('data-is-fully-paid') === 'true') return;
+    paymentBtn.classList.remove('btn-disabled');
+    paymentBtn.removeAttribute('aria-disabled');
+    paymentBtn.style.pointerEvents = '';
+  }
+
+  function setFireEnabled(enabled){
+    const fireBtn = document.getElementById('fireItemsBtn');
+    if(!fireBtn) return;
+    if(enabled){
+      fireBtn.classList.remove('disabled');
+      fireBtn.removeAttribute('disabled');
+      fireBtn.style.pointerEvents = '';
+    } else {
+      fireBtn.classList.add('disabled');
+      fireBtn.setAttribute('disabled','disabled');
+      fireBtn.style.pointerEvents = 'none';
+    }
+  }
+
+  function hasPendingUndoDelete(){
+    return !!tbody.querySelector('tr.pending-delete');
+  }
+
   function getAntiForgery(){
     const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
     return tokenInput ? tokenInput.value : '';
@@ -104,15 +163,79 @@
     let subtotal = 0;
     tbody.querySelectorAll('tr').forEach(tr=>{
       if(tr.classList.contains('cancelled-row') || tr.getAttribute('data-cancelled') === 'true') return;
+      if(tr.classList.contains('pending-delete')) return;
       const subCell = tr.querySelector('.subtotal-cell');
       if(subCell){
         subtotal += parsePrice(subCell.textContent);
       }
     });
-    subtotalCell.textContent = formatMoney(subtotal);
+    if(subtotalCell) subtotalCell.textContent = formatMoney(subtotal);
+    if(subtotalCellSide) subtotalCellSide.textContent = formatMoney(subtotal);
+    if(subtotalCellMobile) subtotalCellMobile.textContent = formatMoney(subtotal);
     // tax + total: keep existing tax value; recompute total (subtotal + tax for now)
-    const tax = parsePrice(taxCell.textContent);
-    totalCell.textContent = formatMoney(subtotal + tax);
+    const tax = taxCell ? parsePrice(taxCell.textContent) : (taxCellSide ? parsePrice(taxCellSide.textContent) : 0);
+    if(taxCellSide && taxCell) taxCellSide.textContent = taxCell.textContent;
+    if(totalCell) totalCell.textContent = formatMoney(subtotal + tax);
+    if(totalCellSide) totalCellSide.textContent = formatMoney(subtotal + tax);
+    if(totalCellMobile) totalCellMobile.textContent = formatMoney(subtotal + tax);
+  }
+
+  // Undo toast (5–10s) for safe delete
+  function showUndoToast(message, seconds, onUndo, onExpire){
+    const timeoutMs = Math.max(5000, Math.min(10000, (seconds||7) * 1000));
+    let container = document.getElementById('orderUndoToastContainer');
+    if(!container){
+      container = document.createElement('div');
+      container.id = 'orderUndoToastContainer';
+      container.style.position = 'fixed';
+      container.style.right = '16px';
+      container.style.bottom = '16px';
+      container.style.zIndex = '2060';
+      container.style.display = 'flex';
+      container.style.flexDirection = 'column';
+      container.style.gap = '8px';
+      document.body.appendChild(container);
+    }
+    const toastEl = document.createElement('div');
+    toastEl.className = 'alert alert-dark shadow-sm mb-0';
+    toastEl.style.minWidth = '280px';
+    toastEl.style.display = 'flex';
+    toastEl.style.alignItems = 'center';
+    toastEl.style.justifyContent = 'space-between';
+    toastEl.style.gap = '12px';
+    toastEl.innerHTML = `
+      <div style="font-size:0.9rem;">${message || 'Item removed'}</div>
+      <button type="button" class="btn btn-sm btn-outline-light">Undo</button>
+    `;
+    const undoBtn = toastEl.querySelector('button');
+    container.appendChild(toastEl);
+
+    let done = false;
+    const cleanup = ()=>{
+      if(done) return;
+      done = true;
+      try{ undoBtn.removeEventListener('click', onUndoClick); }catch{}
+      try{ toastEl.remove(); }catch{}
+    };
+    const onUndoClick = ()=>{
+      cleanup();
+      try{ onUndo && onUndo(); }catch{}
+    };
+    undoBtn.addEventListener('click', onUndoClick);
+
+    const t = setTimeout(()=>{
+      cleanup();
+      try{ onExpire && onExpire(); }catch{}
+    }, timeoutMs);
+
+    // If the toast is removed externally, ensure timer doesn’t leak
+    const mo = new MutationObserver(()=>{
+      if(!document.body.contains(toastEl)){
+        clearTimeout(t);
+        mo.disconnect();
+      }
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
   }
 
   function buildExistingRowPayload(tr){
@@ -161,40 +284,93 @@
     const removeBtn = tr.querySelector('.remove-existing, .remove-new');
     if(removeBtn){
       removeBtn.addEventListener('click', async ()=>{
-        // For new rows just remove; for existing, call cancel API
+        // Safe delete:
+        // - New rows: immediate hide + Undo; expire removes row.
+        // - Existing rows (status=0 only in UI): hide + Undo; expire calls server cancel.
+        if(tr.classList.contains('pending-delete')) return;
+
         if(tr.classList.contains('existing-item-row')){
           const id = parseInt(tr.getAttribute('data-order-item-id'),10);
-          if(!id) { tr.remove(); recalcTotals(); return; }
-          const ok = await showConfirm('Cancel this item?');
-          if(!ok) return;
-          const originalHtml = removeBtn.innerHTML; 
-          removeBtn.disabled = true; removeBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-          try{
-            const token = (document.querySelector('input[name="__RequestVerificationToken"]').value)||'';
-            const res = await fetch('/Order/CancelItem',{
-              method:'POST',
-              headers:{ 'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8', 'RequestVerificationToken': token },
-              body:`orderItemId=${encodeURIComponent(id)}`
-            });
-            const data = await res.json().catch(()=>({success:false,message:'Invalid response'}));
-            if(!res.ok || !data.success){ throw new Error(data.message||'Cancel failed'); }
-            // Mark cancelled and remove the row (billing excludes cancelled items)
-            tr.setAttribute('data-cancelled','true');
-            const subCell = tr.querySelector('.subtotal-cell');
-            if(subCell){ subCell.textContent = formatMoney(0); }
-            setTimeout(()=>{ tr.remove(); recalcTotals(); }, 150);
-            if(window.toastr){ toastr.success('Item cancelled'); }
-            // Mark page dirty: enable save, disable payment until saved
-            const saveBtnEl = document.getElementById('saveOrderBtn');
-            if(saveBtnEl){ saveBtnEl.disabled = false; }
-            disablePaymentButton();
-          }catch(err){
-            if(window.toastr){ toastr.error(err.message||'Cancel failed'); }
-            removeBtn.disabled = false; removeBtn.innerHTML = originalHtml;
-            return;
+          const status = parseInt(tr.getAttribute('data-item-status') || '0', 10) || 0;
+          if(!id){ tr.remove(); recalcTotals(); return; }
+
+          // Defensive: if somehow fired/printed item shows a delete button, require confirm.
+          if(status > 0 && status !== 5){
+            const ok = await showConfirm('This item appears already fired. Cancel anyway?');
+            if(!ok) return;
           }
+
+          tr.classList.add('pending-delete');
+          tr.style.opacity = '0.4';
+          tr.style.display = 'none';
+          recalcTotals();
+          disablePaymentButton();
+          setFireEnabled(false);
+
+          showUndoToast('Item removed. Undo?', 7,
+            ()=>{
+              tr.classList.remove('pending-delete');
+              tr.style.opacity = '';
+              tr.style.display = '';
+              recalcTotals();
+              enablePaymentButtonIfAllowed();
+              if(!hasPendingUndoDelete()) setFireEnabled(true);
+            },
+            async ()=>{
+              try{
+                const token = (document.querySelector('input[name="__RequestVerificationToken"]').value)||'';
+                const res = await fetch('/Order/CancelItem',{
+                  method:'POST',
+                  headers:{ 'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8', 'RequestVerificationToken': token },
+                  body:`orderItemId=${encodeURIComponent(id)}`
+                });
+                const data = await res.json().catch(()=>({success:false,message:'Invalid response'}));
+                if(!res.ok || !data.success){ throw new Error(data.message||'Cancel failed'); }
+
+                // Remove row without triggering "unsaved" state in the inline script
+                root.dataset.skipDirty = 'true';
+                tr.remove();
+
+                await refreshTotalsFromServer();
+                enablePaymentButtonIfAllowed();
+                if(!hasPendingUndoDelete()) setFireEnabled(true);
+                if(window.toastr){ toastr.success('Item cancelled'); }
+              }catch(err){
+                // Revert row on failure
+                tr.classList.remove('pending-delete');
+                tr.style.opacity = '';
+                tr.style.display = '';
+                recalcTotals();
+                enablePaymentButtonIfAllowed();
+                if(!hasPendingUndoDelete()) setFireEnabled(true);
+                if(window.toastr){ toastr.error(err.message||'Cancel failed'); }
+              }
+            }
+          );
         } else {
-          tr.remove(); recalcTotals();
+          tr.classList.add('pending-delete');
+          tr.style.opacity = '0.4';
+          tr.style.display = 'none';
+          recalcTotals();
+          disablePaymentButton();
+          setFireEnabled(false);
+
+          showUndoToast('Item removed. Undo?', 7,
+            ()=>{
+              tr.classList.remove('pending-delete');
+              tr.style.opacity = '';
+              tr.style.display = '';
+              recalcTotals();
+              enablePaymentButtonIfAllowed();
+              if(!hasPendingUndoDelete()) setFireEnabled(true);
+            },
+            ()=>{
+              tr.remove();
+              recalcTotals();
+              enablePaymentButtonIfAllowed();
+              if(!hasPendingUndoDelete()) setFireEnabled(true);
+            }
+          );
         }
       });
     }
@@ -376,4 +552,14 @@
 
   // Attach events for existing rows
   tbody.querySelectorAll('tr').forEach(tr=> attachRowEvents(tr));
+
+  // Data integrity: warn on accidental navigation when edits exist
+  window.addEventListener('beforeunload', function(e){
+    // Consider the page “dirty” if Save is enabled (meaning edits exist)
+    const saveBtnEl = document.getElementById('saveOrderBtn');
+    const isDirty = saveBtnEl && saveBtnEl.disabled === false;
+    if(!isDirty) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
 })();

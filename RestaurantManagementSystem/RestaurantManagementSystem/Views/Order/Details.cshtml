@@ -78,6 +78,24 @@
       color: #2d3748;
       font-weight: 500;
     }
+
+    /* Denser order items table for high-throughput usage */
+    #orderItemsTable.table-sm > :not(caption) > * > * { padding: 0.32rem 0.5rem; }
+    #orderItemsTable .item-note, #orderItemsTable .item-qty { height: calc(1.5em + .5rem + 2px); padding-top: .2rem; padding-bottom: .2rem; }
+    #orderItemsTable .existing-item-row td { vertical-align: top; }
+
+    /* Mobile sticky totals strip */
+    #mobileStickyTotals {
+      position: sticky;
+      bottom: 0;
+      z-index: 1100;
+      background: #fff;
+      border-top: 1px solid rgba(0,0,0,0.08);
+      padding: .5rem .75rem;
+    }
+    @@media (min-width: 992px) {
+      #mobileStickyTotals { display: none; }
+    }
   </style>
 }
 @{
@@ -87,6 +105,12 @@
   var fireButtonLabel = isBarOrder ? "Fire To Bar" : "Fire To Kitchen";
   var fireButtonIcon = isBarOrder ? "fa-cocktail" : "fa-fire";
   var kotPrintLabel = isBarOrder ? "BOT Print" : "KOT Print";
+  var isPaymentPartiallyPaid = !isFullyPaid && (Model.PaidAmount > 0m || Model.RemainingAmount > 0m) && Model.PaidAmount > 0m;
+  var paymentBadgeText = isFullyPaid ? "Paid" : isPaymentPartiallyPaid ? "Partially Paid" : "Unpaid";
+  var paymentBadgeClass = isFullyPaid ? "bg-success" : isPaymentPartiallyPaid ? "bg-warning text-dark" : "bg-danger";
+  var hasTickets = Model.KitchenTickets != null && Model.KitchenTickets.Any();
+  var hasPendingToFire = Model.Items != null && Model.Items.Any(i => i.Status == 0);
+  var kotBadgeText = isBarOrder ? "BOT" : "KOT";
 }
 <div class="container-fluid py-3 position-relative" id="orderDetailsApp" data-order-id="@Model.Id" data-is-fully-paid="@isFullyPaid.ToString().ToLower()"  data-is-bar-order="@isBarOrder.ToString().ToLower()">
   @if (isFullyPaid)
@@ -147,31 +171,46 @@
               </button>
             </div>
         </form>
-        <div class="ms-auto d-flex gap-2">
-          <button type="button" id="fireItemsBtn" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#fireItemsModal">
-            <i class="fas @fireButtonIcon"></i> @fireButtonLabel <span class="badge bg-warning text-dark" style="font-size: 0.65rem;">Ctrl+F</span>
-          </button>
-          @{ var hasKOT = Model.KitchenTickets != null && Model.KitchenTickets.Any(); }
-          <a asp-action="KOTBill" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-info @(hasKOT ? "" : "btn-disabled")" title="@kotPrintLabel" target="_blank" rel="noopener noreferrer" aria-disabled="@(hasKOT? "false" : "true")"> <i class="fas fa-print"></i> @kotPrintLabel</a>
-          @if (ViewBag.IsBarOrder == true)
-          {
-            <a asp-controller="BOT" asp-action="BarOrderDashboard" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> Back</a>
-          }
-          else
-          {
-            <a asp-action="Dashboard" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> Back</a>
-          }
-            <a asp-controller="Payment" asp-action="Index" asp-route-id="@Model.Id" asp-route-fromBar="@(isBarOrder ? "true" : null)" class="@paymentClass" aria-disabled="@(isFullyPaid ? "true" : null)" tabindex="@(isFullyPaid ? "-1" : null)">
-              <i class="fas fa-credit-card"></i> Payment <span class="badge bg-light text-dark" style="font-size: 0.65rem;">Ctrl+P</span>
-            </a>
+        <div class="ms-auto d-flex flex-wrap align-items-end justify-content-end gap-2" id="orderPrimaryActions">
+          <div class="btn-group" role="group" aria-label="Kitchen actions">
+            <button type="button" id="fireItemsBtn" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#fireItemsModal">
+              <i class="fas @fireButtonIcon"></i> @fireButtonLabel <span class="badge bg-warning text-dark" style="font-size: 0.65rem;">Ctrl+F</span>
+            </button>
+            @{ var hasKOT = Model.KitchenTickets != null && Model.KitchenTickets.Any(); }
+            <a asp-action="KOTBill" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-info @(hasKOT ? "" : "btn-disabled")" title="@kotPrintLabel" target="_blank" rel="noopener noreferrer" aria-disabled="@(hasKOT? "false" : "true")"> <i class="fas fa-print"></i> @kotPrintLabel</a>
+          </div>
+
+          <div class="d-flex flex-column align-items-end">
+            <div class="btn-group" role="group" aria-label="Order actions">
+              <button id="saveOrderBtn" class="btn btn-sm btn-primary" disabled="@(isFullyPaid ? "disabled" : null)">
+                <i class="fas fa-save"></i> Save <span class="badge bg-light text-dark" style="font-size: 0.65rem;">Ctrl+S</span>
+              </button>
+              <a id="paymentBtn" asp-controller="Payment" asp-action="Index" asp-route-id="@Model.Id" asp-route-fromBar="@(isBarOrder ? "true" : null)" class="@paymentClass" aria-disabled="@(isFullyPaid ? "true" : null)" tabindex="@(isFullyPaid ? "-1" : null)">
+                <i class="fas fa-credit-card"></i> Payment <span class="badge bg-light text-dark" style="font-size: 0.65rem;">Ctrl+P</span>
+              </a>
+            </div>
+            <div class="d-flex align-items-center gap-2 mt-1">
+              <span id="orderSaveState" class="small text-muted">Saved @Model.UpdatedAt.ToString("t")</span>
+              <span id="paymentRequirementsMsg" class="small text-danger d-none"></span>
+            </div>
+          </div>
+
+          <div class="btn-group" role="group" aria-label="Navigation">
+            @if (ViewBag.IsBarOrder == true)
+            {
+              <a asp-controller="BOT" asp-action="BarOrderDashboard" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+            }
+            else
+            {
+              <a asp-action="Dashboard" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+            }
+          </div>
         </div>
       </div>
       <div class="card shadow-sm mb-3">
         <div class="card-header d-flex justify-content-between align-items-center py-2">
           <div class="small"><strong class="order-number-text">Order #:</strong> <span class="order-number-text">@Model.OrderNumber</span> <span class="badge bg-secondary ms-2">@Model.StatusDisplay</span></div>
-          <button id="saveOrderBtn" class="btn btn-sm btn-primary">
-            <i class="fas fa-save"></i> Save <span class="badge bg-light text-dark" style="font-size: 0.65rem;">Ctrl+S</span>
-          </button>
+          <span class="small text-muted">Edit items, then Save</span>
         </div>
         <div class="card-body p-0">
                     <div class="table-responsive">
@@ -190,18 +229,16 @@
           <tbody id="orderItemsBody">
             @foreach (var it in Model.Items.Where(i=> i.Status != 5))
             {
-              <tr data-order-item-id="@it.Id" data-menu-item-id="@it.MenuItemId" class="existing-item-row">
+              var isEditableLine = !isFullyPaid && it.Status == 0;
+              <tr data-order-item-id="@it.Id" data-menu-item-id="@it.MenuItemId" data-item-status="@it.Status" class="existing-item-row">
                 <td class="text-center"><input type="checkbox" class="fire-select" value="@it.Id" /></td>
                 <td>
                   <div class="fw-semibold">@it.MenuItemName</div>
-                  <div class="d-flex gap-1 mt-1">
-                    <input type="text" class="form-control form-control-sm item-note" value="@it.SpecialInstructions" placeholder="Note" disabled />
-                    <button type="button" class="btn btn-sm btn-outline-secondary edit-row @(isFullyPaid ? "d-none" : "")" title="Edit"><i class="fas fa-edit"></i></button>
-                    <button type="button" class="btn btn-sm btn-outline-success save-row d-none @(isFullyPaid ? "d-none" : "")" title="Apply"><i class="fas fa-check"></i></button>
-                    <button type="button" class="btn btn-sm btn-outline-warning cancel-row d-none @(isFullyPaid ? "d-none" : "")" title="Cancel"><i class="fas fa-undo"></i></button>
+                  <div class="mt-1">
+                    <input type="text" class="form-control form-control-sm item-note" value="@it.SpecialInstructions" placeholder="Note" @(isEditableLine ? "" : "disabled") />
                   </div>
                 </td>
-                <td class="text-center"><input type="number" class="form-control form-control-sm item-qty" value="@it.Quantity" min="1" disabled /></td>
+                <td class="text-center"><input type="number" class="form-control form-control-sm item-qty" value="@it.Quantity" min="1" @(isEditableLine ? "" : "disabled") /></td>
                 <td class="text-end">₹@it.UnitPrice.ToString("F2")</td>
                 <td class="text-end subtotal-cell">₹@it.Subtotal.ToString("F2")</td>
                 <td><span class="badge bg-@(it.Status==0?"primary":it.Status==1?"warning text-dark":it.Status==2?"info":it.Status==3?"success":"secondary")">@it.StatusDisplay</span></td>
@@ -216,11 +253,11 @@
           <tfoot class="table-light">
             <tr>
               <td colspan="4" class="text-end fw-semibold">Subtotal:</td>
-              <td colspan="3" class="text-end" id="orderSubtotalCell">₹@Model.Subtotal.ToString("F2")</td>
+              <td colspan="3" class="text-end" id="orderSubtotalCell" data-total="subtotal">₹@Model.Subtotal.ToString("F2")</td>
             </tr>
             <tr>
               <td colspan="4" class="text-end">GST (@Model.GSTPercentage.ToString("F2")%):</td>
-              <td colspan="3" class="text-end" id="orderTaxCell">₹@Model.TaxAmount.ToString("F2")</td>
+              <td colspan="3" class="text-end" id="orderTaxCell" data-total="tax">₹@Model.TaxAmount.ToString("F2")</td>
             </tr>
             <tr>
               <td colspan="4" class="text-end small text-muted">&nbsp;&nbsp;CGST (@( (Model.GSTPercentage/2).ToString("F2") )%):</td>
@@ -232,7 +269,7 @@
             </tr>
             <tr>
               <td colspan="4" class="text-end fw-semibold">Total:</td>
-              <td colspan="3" class="text-end fw-bold" id="orderTotalCell">₹@Model.TotalAmount.ToString("F2")</td>
+              <td colspan="3" class="text-end fw-bold" id="orderTotalCell" data-total="total">₹@Model.TotalAmount.ToString("F2")</td>
             </tr>
           </tfoot>
             </table>
@@ -245,6 +282,18 @@
         <div class="card mb-3 shadow-sm order-summary-card">
           <div class="card-header py-2"><i class="fas fa-info-circle me-1"></i> Order Summary</div>
           <div class="card-body small">
+            <div class="d-flex flex-wrap gap-2 mb-2">
+              <span class="badge @paymentBadgeClass">@paymentBadgeText</span>
+              @if (hasTickets)
+              {
+                <span class="badge bg-primary">@kotBadgeText sent</span>
+              }
+              @if (hasPendingToFire)
+              {
+                <span class="badge bg-warning text-dark">@kotBadgeText pending</span>
+              }
+              <span class="badge bg-light text-dark border">Updated @Model.UpdatedAt.ToString("t")</span>
+            </div>
             <dl class="row mb-0">
               <dt class="col-5">Customer</dt><dd class="col-7">@(!string.IsNullOrEmpty(Model.CustomerName)?Model.CustomerName: (string.IsNullOrEmpty(Model.GuestName)?"—":Model.GuestName))</dd>
               <dt class="col-5">Phone</dt><dd class="col-7">@(!string.IsNullOrEmpty(Model.CustomerPhone)?Model.CustomerPhone:"—")</dd>
@@ -257,6 +306,7 @@
               <dt class="col-5">Server</dt><dd class="col-7">@(!string.IsNullOrEmpty(Model.ServerName)?Model.ServerName:"—")</dd>
               <dt class="col-5">Type</dt><dd class="col-7">@Model.OrderTypeDisplay</dd>
               <dt class="col-5">Created</dt><dd class="col-7">@Model.CreatedAt.ToString("g")</dd>
+              <dt class="col-5">Last Updated</dt><dd class="col-7">@Model.UpdatedAt.ToString("g")</dd>
             </dl>
           </div>
         </div>
@@ -273,17 +323,24 @@
           <div class="card-body p-2">
             <table class="table table-sm mb-0">
               <tbody class="small">
-                <tr><td class="text-muted">Subtotal</td><td class="text-end" id="orderSubtotalCell">₹@Model.Subtotal.ToString("F2")</td></tr>
-                <tr><td class="text-muted">GST (@Model.GSTPercentage.ToString("F2")%)</td><td class="text-end" id="orderTaxCell">₹@Model.TaxAmount.ToString("F2")</td></tr>
+                <tr><td class="text-muted">Subtotal</td><td class="text-end" id="orderSubtotalCellSide" data-total="subtotal">₹@Model.Subtotal.ToString("F2")</td></tr>
+                <tr><td class="text-muted">GST (@Model.GSTPercentage.ToString("F2")%)</td><td class="text-end" id="orderTaxCellSide" data-total="tax">₹@Model.TaxAmount.ToString("F2")</td></tr>
                 <tr><td class="text-muted small ps-3">CGST (@( (Model.GSTPercentage/2).ToString("F2") )%)</td><td class="text-end small">₹@Model.CGSTAmount.ToString("F2")</td></tr>
                 <tr><td class="text-muted small ps-3">SGST (@( (Model.GSTPercentage/2).ToString("F2") )%)</td><td class="text-end small">₹@Model.SGSTAmount.ToString("F2")</td></tr>
                 <tr><td class="text-muted">Discount</td><td class="text-end">₹@Model.DiscountAmount.ToString("F2")</td></tr>
-                <tr class="table-light"><th>Total</th><th class="text-end" id="orderTotalCell">₹@Model.TotalAmount.ToString("F2")</th></tr>
+                <tr class="table-light"><th>Total</th><th class="text-end" id="orderTotalCellSide" data-total="total">₹@Model.TotalAmount.ToString("F2")</th></tr>
               </tbody>
             </table>
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="mobileStickyTotals" class="d-lg-none">
+    <div class="d-flex justify-content-between align-items-center">
+      <div class="small text-muted">Subtotal: <span class="fw-semibold" id="orderSubtotalCellMobile">₹@Model.Subtotal.ToString("F2")</span></div>
+      <div class="small">Total: <span class="fw-bold" id="orderTotalCellMobile">₹@Model.TotalAmount.ToString("F2")</span></div>
     </div>
   </div>
   @if (Model.Items.Any(i=>i.Status==0))
@@ -336,12 +393,16 @@
       function $(sel, ctx) { return (ctx || document).querySelector(sel); }
       function $all(sel, ctx) { return Array.from((ctx || document).querySelectorAll(sel)); }
 
-    const saveBtn = document.getElementById('saveOrderBtn');
+      const saveBtn = document.getElementById('saveOrderBtn');
       const itemsBody = document.getElementById('orderItemsBody');
-      const paymentBtn = document.querySelector('a[href*="/Payment/Index/"]');
-  const fireBtn = document.getElementById('fireItemsBtn');
-    const orderApp = document.getElementById('orderDetailsApp');
-    const isFullyPaid = orderApp ? (orderApp.dataset.isFullyPaid === 'true') : false;
+      const paymentBtn = document.getElementById('paymentBtn') || document.querySelector('a[href*="/Payment/Index/"]');
+      const fireBtn = document.getElementById('fireItemsBtn');
+      const orderApp = document.getElementById('orderDetailsApp');
+      const isFullyPaid = orderApp ? (orderApp.dataset.isFullyPaid === 'true') : false;
+      const saveStateEl = document.getElementById('orderSaveState');
+      const paymentReqEl = document.getElementById('paymentRequirementsMsg');
+      const lastSavedIso = '@Model.UpdatedAt.ToString("o")';
+      let isDirty = false;
 
       function setSaveEnabled(enabled) {
         if (!saveBtn) return;
@@ -363,6 +424,55 @@
           paymentBtn.setAttribute('aria-disabled', 'true');
           paymentBtn.style.pointerEvents = 'none';
         }
+      }
+
+      function updateSaveStateUI() {
+        if (!saveStateEl) return;
+        if (isDirty) {
+          saveStateEl.textContent = 'Unsaved changes';
+          saveStateEl.classList.remove('text-muted');
+          saveStateEl.classList.add('text-warning');
+        } else {
+          const d = lastSavedIso ? new Date(lastSavedIso) : null;
+          const timeText = (d && !isNaN(d.getTime())) ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+          saveStateEl.textContent = timeText ? `Saved ${timeText}` : 'Saved';
+          saveStateEl.classList.remove('text-warning');
+          saveStateEl.classList.add('text-muted');
+        }
+      }
+
+      function computePaymentRequirements() {
+        const missing = [];
+
+        // Customer is required for all order types (per spec)
+        const customerText = '@(string.IsNullOrEmpty(Model.CustomerName) ? (string.IsNullOrEmpty(Model.GuestName) ? "" : Model.GuestName) : Model.CustomerName)';
+        if (!customerText || customerText.trim().length === 0) missing.push('customer');
+
+        // Table + Server required for dine-in (OrderType == 0)
+        if (@Model.OrderType == 0) {
+          const tableText = '@(Model.TableName ?? "")';
+          const serverText = '@(Model.ServerName ?? "")';
+          if (!tableText || tableText.trim().length === 0) missing.push('table');
+          if (!serverText || serverText.trim().length === 0) missing.push('server');
+        }
+
+        return missing;
+      }
+
+      function applyPaymentRequirementsUI() {
+        const missing = computePaymentRequirements();
+        if (!paymentReqEl) return missing.length === 0;
+
+        if (missing.length === 0) {
+          paymentReqEl.classList.add('d-none');
+          paymentReqEl.textContent = '';
+          return true;
+        }
+
+        paymentReqEl.classList.remove('d-none');
+        paymentReqEl.textContent = `Payment disabled: missing ${missing.join(', ')}`;
+        setPaymentEnabled(false);
+        return false;
       }
 
       function setFireEnabled(enabled) {
@@ -389,10 +499,12 @@
       function initState() {
         // Default: Save disabled until a change is made
         setSaveEnabled(false);
-        // Payment enabled only when there are saved items
+        // Payment enabled only when there are saved items and requirements are met
         setPaymentEnabled(hasSavedItems());
+        applyPaymentRequirementsUI();
         // Fire to kitchen enabled only when there are saved items
         setFireEnabled(hasSavedItems());
+        updateSaveStateUI();
         // If the order is fully paid and completed, enforce disabled UI state
         if (isFullyPaid) {
           // Disable payment and fire permanently on this view
@@ -411,15 +523,26 @@
       // When new rows are added or removed, enable Save (new items) or update Payment state
       if (itemsBody) {
         const mo = new MutationObserver(mutations => {
+          // Some DOM changes (e.g., server-synced cancel) should not mark the page dirty.
+          const skipDirty = orderApp && orderApp.dataset && orderApp.dataset.skipDirty === 'true';
           for (const m of mutations) {
             if (m.addedNodes && m.addedNodes.length) {
               // new item(s) added -> enable Save
+              if (skipDirty) { continue; }
+              isDirty = true;
               setSaveEnabled(true);
+              updateSaveStateUI();
             }
             if (m.removedNodes && m.removedNodes.length) {
               // an item removed -> consider enabling Save
+              if (skipDirty) { continue; }
+              isDirty = true;
               setSaveEnabled(true);
+              updateSaveStateUI();
             }
+          }
+          if (skipDirty && orderApp && orderApp.dataset) {
+            orderApp.dataset.skipDirty = 'false';
           }
         });
         mo.observe(itemsBody, { childList: true });
@@ -428,7 +551,9 @@
       // Listen for user interactions that modify rows: edits, quantity/note changes, remove
       document.addEventListener('input', function(e) {
         if (e.target && e.target.closest('#orderItemsTable')) {
+          isDirty = true;
           setSaveEnabled(true);
+          updateSaveStateUI();
         }
       }, { passive: true });
 
@@ -439,14 +564,15 @@
         }
         if (e.target.closest && e.target.closest('.edit-row')) {
           // entering edit mode -> enable Save
+          isDirty = true;
           setSaveEnabled(true);
-        }
-        if (e.target.closest && e.target.closest('.remove-existing')) {
-          setSaveEnabled(true);
+          updateSaveStateUI();
         }
         if (e.target && e.target.id === 'saveOrderBtn') {
           // optimistic: disable Save while saving; actual outcome will be handled by fetch proxy below
           setSaveEnabled(false);
+          isDirty = false;
+          updateSaveStateUI();
         }
       }, true);
 
@@ -463,11 +589,14 @@
               if (response && response.ok) {
                 // Saved to DB -> payment now allowed
                 setPaymentEnabled(true);
+                applyPaymentRequirementsUI();
                 // Also enable Fire to Kitchen when items are saved
                 setFireEnabled(hasSavedItems());
               } else {
                 // error -> re-enable Save so user can retry
+                isDirty = true;
                 setSaveEnabled(true);
+                updateSaveStateUI();
               }
             }
             return response;

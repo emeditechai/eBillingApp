@@ -77,6 +77,27 @@
              <div class="card-body p-4" id="paymentSummary"
                  data-subtotal="@Model.Subtotal" data-gst="@Model.GSTPercentage" data-tip="@Model.TipAmount"
                  data-paid="@Model.PaidAmount" data-existing-discount="@Model.DiscountAmount" data-roundoff="@Model.TotalRoundoff">
+                    @{
+                        // Status strip values (keep consistent with Remaining display logic)
+                        decimal stripRemaining = Model.RemainingAmount;
+                        bool stripFullyPaid = false;
+                        if (stripRemaining <= 0 && stripRemaining >= -1m)
+                        {
+                            stripFullyPaid = true;
+                            stripRemaining = 0m;
+                        }
+                        var stripStatusClass = stripFullyPaid ? "bg-success" : (Model.PaidAmount > 0 ? "bg-warning text-dark" : "bg-danger");
+                        var stripStatusText = stripFullyPaid ? "PAID" : (Model.PaidAmount > 0 ? "PARTIAL" : "UNPAID");
+                    }
+
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                        <span class="badge @stripStatusClass rounded-pill px-3 py-2">@stripStatusText</span>
+                        <span class="badge bg-light text-dark rounded-pill px-3 py-2">Remaining: ₹@stripRemaining.ToString("F2")</span>
+                        @if (Model.LastActivityAt.HasValue)
+                        {
+                            <span class="badge bg-light text-dark rounded-pill px-3 py-2">Last update: @Model.LastActivityAt.Value.ToString("dd MMM, HH:mm")</span>
+                        }
+                    </div>
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -644,6 +665,38 @@
                         <p class="text-muted small mb-0">Google Pay • PhonePe • Paytm • BHIM</p>
                         <hr class="my-2">
                         <p class="text-muted small mb-0"><i class="fas fa-shield-alt me-1"></i>Pay to: <strong>@Model.UPIPayeeName</strong></p>
+
+                        @{
+                            var upiMethod = (Model.AvailablePaymentMethods ?? new List<PaymentMethodViewModel>())
+                                .FirstOrDefault(m => string.Equals(m.Name, "UPI", StringComparison.OrdinalIgnoreCase));
+                            var upiMethodId = upiMethod?.Id ?? 0;
+                            var upiOriginal = Math.Max(0m, Model.RemainingAmount);
+                            var upiRounded = Math.Round(upiOriginal, 0, MidpointRounding.AwayFromZero);
+                            var upiRoundoff = Math.Round(upiRounded - upiOriginal, 2, MidpointRounding.AwayFromZero);
+                        }
+                        @if (upiMethodId > 0)
+                        {
+                            <hr class="my-3">
+                            <form asp-action="ProcessPayment" method="post" id="upiMarkPaidForm" class="text-start">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="OrderId" value="@Model.OrderId" />
+                                <input type="hidden" name="PaymentMethodId" value="@upiMethodId" />
+                                <input type="hidden" name="TipAmount" value="0" />
+                                <input type="hidden" name="DiscountAmount" value="@Model.DiscountAmount" />
+                                <input type="hidden" name="OriginalAmount" value="@upiOriginal.ToString("F2")" />
+                                <input type="hidden" name="RoundoffAdjustmentAmt" value="@upiRoundoff.ToString("F2")" />
+                                <input type="hidden" name="Amount" value="@upiRounded.ToString("F2")" />
+
+                                <label for="upiRefQuick" class="form-label fw-semibold mb-1">UPI Reference (UTR)</label>
+                                <div class="input-group">
+                                    <input id="upiRefQuick" name="UPIReference" class="form-control" placeholder="Enter UTR / txn ref" autocomplete="off" />
+                                    <button type="submit" class="btn btn-outline-primary" id="upiMarkPaidBtn">
+                                        <i class="fas fa-check me-1"></i> Mark Paid
+                                    </button>
+                                </div>
+                                <div class="form-text">Requires UPI reference. Records a UPI payment for ₹@upiRounded.ToString("F0").</div>
+                            </form>
+                        }
                     </div>
                 </div>
             }
@@ -657,6 +710,25 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
     <script>
+        // Prevent double-submit on the UPI quick "Mark Paid" form
+        (function(){
+            const form = document.getElementById('upiMarkPaidForm');
+            const btn = document.getElementById('upiMarkPaidBtn');
+            const ref = document.getElementById('upiRefQuick');
+            if (!form || !btn) return;
+            form.addEventListener('submit', function(e){
+                const val = (ref && ref.value ? ref.value.trim() : '');
+                if (!val) {
+                    e.preventDefault();
+                    alert('UPI Reference is required.');
+                    if (ref) ref.focus();
+                    return false;
+                }
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Processing...';
+            });
+        })();
+
         // Printing is handled by server-rendered actions:
         // - /Payment/PrintBill/{orderId} (A4)
         // - /Payment/PrintPOS/{orderId} (POS receipt)

@@ -233,7 +233,7 @@
                         
                         <!-- Submit Button -->
                         <div class="d-grid gap-2 mt-4">
-                            <button type="submit" class="btn btn-primary btn-lg py-3 rounded-pill shadow">
+                            <button type="submit" class="btn btn-primary btn-lg py-3 rounded-pill shadow" id="processPaymentSubmitBtn">
                                 <i class="fas fa-check-circle me-2"></i> Process Payment
                             </button>
                         </div>
@@ -713,6 +713,7 @@
                 // Determine selected payment method text
                 var pmText = $('#paymentMethodSelect option:selected').text().toLowerCase();
                 var requiresCard = pmText.includes('card') || pmText.includes('credit') || pmText.includes('debit');
+                var requiresUpiRef = pmText.includes('upi');
 
                 // Remove any previous client errors / feedback
                 $('#cardTypeSelect, #LastFourDigits').removeClass('is-invalid');
@@ -750,6 +751,25 @@
                         }
                         return false;
                     }
+                }
+
+                if (requiresUpiRef) {
+                    var upiRef = ($('#UPIReference').val() || '').trim();
+                    if (!upiRef) {
+                        e.preventDefault();
+                        $('#UPIReference').addClass('is-invalid');
+                        alert('UPI Reference is required for UPI payments.');
+                        $('#upiReferenceWrapper').show();
+                        $('#UPIReference').focus();
+                        return false;
+                    }
+                }
+
+                // Double-submit protection
+                var btn = document.getElementById('processPaymentSubmitBtn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Processing...';
                 }
             });
 
@@ -836,6 +856,13 @@
                     e.preventDefault();
                     alert(`Split total (₹${totalEntered.toFixed(2)}) must equal target (₹${target.toFixed(2)}) within ₹${tol.toFixed(2)}.`);
                     return false;
+                }
+
+                // Double-submit protection (split)
+                const submitBtn = document.querySelector('#splitPaymentForm button[type="submit"]');
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Processing...';
                 }
                 // Distribute Original and Roundoff
                 const totalRoundoff = Math.round((target - preRound) * 100) / 100;

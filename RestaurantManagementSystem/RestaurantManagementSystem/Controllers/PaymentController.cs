@@ -385,6 +385,51 @@ END", connection))
             {
                 try
                 {
+                    // Server-side guard: prevent creating additional payments for completed/fully-paid orders
+                    try
+                    {
+                        using (var guardConn = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                        {
+                            guardConn.Open();
+                            using (var guardCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                SELECT o.Status,
+                                       o.TotalAmount,
+                                       ISNULL((SELECT SUM(Amount + TipAmount + ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = o.Id AND Status = 1), 0) AS ApprovedSum
+                                FROM Orders o
+                                WHERE o.Id = @OrderId", guardConn))
+                            {
+                                guardCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
+                                using (var r = guardCmd.ExecuteReader())
+                                {
+                                    if (r.Read())
+                                    {
+                                        var status = r.IsDBNull(0) ? 0 : r.GetInt32(0);
+                                        var total = r.IsDBNull(1) ? 0m : r.GetDecimal(1);
+                                        var approved = r.IsDBNull(2) ? 0m : r.GetDecimal(2);
+
+                                        if (status == 3)
+                                        {
+                                            TempData["InfoMessage"] = "Order is already completed.";
+                                            return RedirectToAction("Index", new { id = model.OrderId });
+                                        }
+                                        if (status == 4)
+                                        {
+                                            TempData["ErrorMessage"] = "Order is cancelled. Payments cannot be processed.";
+                                            return RedirectToAction("Index", new { id = model.OrderId });
+                                        }
+
+                                        if (approved >= total - 0.05m)
+                                        {
+                                            TempData["InfoMessage"] = "Order is already fully paid.";
+                                            return RedirectToAction("Index", new { id = model.OrderId });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch { /* non-fatal; continue with existing behavior */ }
+
                     // Validate payment method requires card info
                     bool requiresCardInfo = false;
                     string paymentMethodName = string.Empty;
@@ -448,6 +493,16 @@ END", connection))
                         if (string.IsNullOrEmpty(model.CardType))
                         {
                             ModelState.AddModelError("CardType", "Card type is required for this payment method.");
+                            return View(model);
+                        }
+                    }
+
+                    // Validate UPI reference if UPI is selected
+                    if (!string.IsNullOrEmpty(paymentMethodName) && paymentMethodName.Equals("UPI", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (string.IsNullOrWhiteSpace(model.UPIReference) && string.IsNullOrWhiteSpace(model.ReferenceNumber))
+                        {
+                            ModelState.AddModelError("UPIReference", "UPI reference (UTR / transaction reference) is required for UPI payments.");
                             return View(model);
                         }
                     }
@@ -3668,8 +3723,12 @@ END", connection))
                                 model.PaidAmount = paidFromPayments;
                             }
 
-                            // Ensure RemainingAmount and TotalRoundoff are consistent
-                            model.RemainingAmount = Math.Round(model.TotalAmount - model.PaidAmount, 2, MidpointRounding.AwayFromZero);
+                            // Ensure RemainingAmount and TotalRoundoff are consistent.
+                            // IMPORTANT: When roundoff is applied, the effective payable total is (TotalAmount + TotalRoundoff)
+                            // because cash collected is stored as (Amount + TipAmount + RoundoffAdjustmentAmt).
+                            // Without this, fully-paid orders can show a small positive remaining (e.g., ₹0.18) and appear PARTIAL.
+                            var effectivePayable = model.TotalAmount + model.TotalRoundoff;
+                            model.RemainingAmount = Math.Round(effectivePayable - model.PaidAmount, 2, MidpointRounding.AwayFromZero);
 
                             // If Orders.RoundoffAdjustmentAmt exists but TotalRoundoff is zero, use it
                             if (model.TotalRoundoff == 0m)
@@ -3834,6 +3893,44 @@ END", connection))
                             });
                         }
                     }
+                }
+
+                // Best-effort: compute a "last activity" timestamp for the payment page status strip.
+                // Prefer the newest of: Orders.UpdatedAt, latest Payment.CreatedAt, latest SplitBill.CreatedAt.
+                try
+                {
+                    DateTime? orderUpdatedAt = null;
+                    using (var orderUpdatedCmd = new Microsoft.Data.SqlClient.SqlCommand(@"SELECT UpdatedAt FROM Orders WHERE Id = @OrderId", connection))
+                    {
+                        orderUpdatedCmd.Parameters.AddWithValue("@OrderId", orderId);
+                        var obj = orderUpdatedCmd.ExecuteScalar();
+                        if (obj != null && obj != DBNull.Value)
+                        {
+                            orderUpdatedAt = Convert.ToDateTime(obj);
+                        }
+                    }
+
+                    DateTime? lastPaymentAt = null;
+                    if (model.Payments != null && model.Payments.Count > 0)
+                    {
+                        lastPaymentAt = model.Payments.Max(p => p.CreatedAt);
+                    }
+
+                    DateTime? lastSplitAt = null;
+                    if (model.SplitBills != null && model.SplitBills.Count > 0)
+                    {
+                        lastSplitAt = model.SplitBills.Max(s => s.CreatedAt);
+                    }
+
+                    var candidates = new List<DateTime>();
+                    if (orderUpdatedAt.HasValue) candidates.Add(orderUpdatedAt.Value);
+                    if (lastPaymentAt.HasValue) candidates.Add(lastPaymentAt.Value);
+                    if (lastSplitAt.HasValue) candidates.Add(lastSplitAt.Value);
+                    model.LastActivityAt = candidates.Count > 0 ? candidates.Max() : null;
+                }
+                catch
+                {
+                    model.LastActivityAt = null;
                 }
                 
                 // Load UPI settings and generate QR code if enabled
