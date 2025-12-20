@@ -5,19 +5,22 @@
         $"Reservations for {((DateTime)ViewBag.SelectedDate).ToString("MMM dd, yyyy")}" : 
         "Reservations";
     ViewData["Title"] = dateTitle;
+
+    var selectedDate = ViewBag.SelectedDate != null ? (DateTime)ViewBag.SelectedDate : DateTime.Today;
 }
 
 <div class="container">
     <div class="row mb-3">
         <div class="col-md-6">
-            <h2>@ViewData["Title"]</h2>
+            <h2 class="mb-0">@ViewData["Title"]</h2>
+            <div class="text-muted small">Showing: @selectedDate.ToString("dd MMM yyyy")</div>
         </div>
         <div class="col-md-6 text-md-end">
             <div class="btn-group">
                 <a asp-action="List" asp-route-date="@DateTime.Today.AddDays(-1).ToString("yyyy-MM-dd")" class="btn btn-outline-secondary">
                     <i class="bi bi-arrow-left"></i> Previous Day
                 </a>
-                <a asp-action="List" asp-route-date="@DateTime.Today.ToString("yyyy-MM-dd")" class="btn @(ViewBag.SelectedDate.Date == DateTime.Today ? "btn-primary" : "btn-outline-primary")">Today</a>
+                <a asp-action="List" asp-route-date="@DateTime.Today.ToString("yyyy-MM-dd")" class="btn @(selectedDate.Date == DateTime.Today ? "btn-primary" : "btn-outline-primary")">Today</a>
                 <a asp-action="List" asp-route-date="@DateTime.Today.AddDays(1).ToString("yyyy-MM-dd")" class="btn btn-outline-secondary">
                     Next Day <i class="bi bi-arrow-right"></i>
                 </a>
@@ -32,7 +35,7 @@
                 <div class="col-md-4">
                     <div class="input-group">
                         <span class="input-group-text">Date</span>
-                        <input type="date" name="date" class="form-control" value="@ViewBag.SelectedDate.ToString("yyyy-MM-dd")" />
+                        <input type="date" name="date" class="form-control" value="@selectedDate.ToString("yyyy-MM-dd")" />
                         <button type="submit" class="btn btn-secondary">Go</button>
                     </div>
                 </div>
@@ -52,6 +55,16 @@
 
     <div class="card">
         <div class="card-body">
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary js-status-filter" data-status="">All</button>
+                <button type="button" class="btn btn-sm btn-outline-primary js-status-filter" data-status="Confirmed">Confirmed</button>
+                <button type="button" class="btn btn-sm btn-outline-warning js-status-filter" data-status="Waitlisted">Waitlisted</button>
+                <button type="button" class="btn btn-sm btn-outline-success js-status-filter" data-status="Seated">Seated</button>
+                <button type="button" class="btn btn-sm btn-outline-info js-status-filter" data-status="Completed">Completed</button>
+                <button type="button" class="btn btn-sm btn-outline-danger js-status-filter" data-status="Cancelled">Cancelled</button>
+                <button type="button" class="btn btn-sm btn-outline-danger js-status-filter" data-status="No-Show">No-Show</button>
+            </div>
+
             <div class="table-responsive">
                 <table class="table table-striped" id="reservationsTable">
                     <thead>
@@ -70,39 +83,149 @@
                         @foreach (var reservation in Model)
                         {
                             <tr class="@GetStatusClass(reservation.Status)">
-                                <td>@reservation.ReservationTime.ToString("h:mm tt")</td>
-                                <td>@reservation.GuestName</td>
-                                <td>@reservation.PhoneNumber</td>
+                                <td>
+                                    <div>@reservation.ReservationTime.ToString("h:mm tt")</div>
+                                    @{
+                                        var indicator = GetTimeIndicator(reservation);
+                                    }
+                                    @if (!string.IsNullOrEmpty(indicator.Text))
+                                    {
+                                        <div class="small @indicator.Css">@indicator.Text</div>
+                                    }
+                                </td>
+                                <td>
+                                    <div>@reservation.GuestName</div>
+                                    @if (!string.IsNullOrWhiteSpace(reservation.Notes))
+                                    {
+                                        <div class="small">
+                                            <a href="#" class="text-muted text-decoration-none" data-bs-toggle="tooltip" title="@reservation.Notes">
+                                                <i class="bi bi-card-text"></i> Notes
+                                            </a>
+                                        </div>
+                                    }
+                                </td>
+                                <td>
+                                    <a href="tel:@reservation.PhoneNumber" class="text-decoration-none">@reservation.PhoneNumber</a>
+                                    <button type="button" class="btn btn-sm btn-link p-0 ms-2 js-copy-phone" data-phone="@reservation.PhoneNumber" data-bs-toggle="tooltip" title="Copy phone">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </td>
                                 <td>@reservation.PartySize</td>
-                                <td>@(reservation.TableId.HasValue ? $"Table {reservation.TableId}" : "-")</td>
-                                <td>@reservation.Status</td>
-                                <td>@(string.IsNullOrEmpty(reservation.SpecialRequests) ? "-" : reservation.SpecialRequests)</td>
+                                <td>
+                                    @{
+                                        var tableText = GetTableDisplay(reservation);
+                                    }
+                                    @tableText
+                                </td>
+                                <td data-order="@GetStatusSortWeight(reservation.Status)">
+                                    <span class="badge @GetStatusBadgeClass(reservation.Status)">@GetStatusDisplay(reservation.Status)</span>
+                                </td>
+                                <td>
+                                    @if (string.IsNullOrWhiteSpace(reservation.SpecialRequests))
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                    else
+                                    {
+                                        <a href="#" class="text-decoration-none" data-bs-toggle="tooltip" title="@reservation.SpecialRequests">
+                                            <i class="bi bi-info-circle"></i> View
+                                        </a>
+                                    }
+                                </td>
                                 <td class="text-center">
-                                    <!-- Test: Simple visible buttons -->
-                                    <a href="@Url.Action("Edit", new { id = reservation.Id })" class="btn btn-primary btn-sm">Edit</a>
-                                    
-                                    @if (reservation.Status == ReservationStatus.Confirmed)
-                                    {
-                                        <form asp-action="ChangeStatus" method="post" class="d-inline ms-1">
-                                            <input type="hidden" name="id" value="@reservation.Id" />
-                                            <input type="hidden" name="status" value="@((int)ReservationStatus.Seated)" />
-                                            <button type="submit" class="btn btn-success btn-sm">Seat</button>
-                                        </form>
-                                        <form asp-action="ChangeStatus" method="post" class="d-inline ms-1">
-                                            <input type="hidden" name="id" value="@reservation.Id" />
-                                            <input type="hidden" name="status" value="@((int)ReservationStatus.NoShow)" />
-                                            <button type="submit" class="btn btn-warning btn-sm">No-Show</button>
-                                        </form>
-                                    }
-                                    
-                                    @if (reservation.Status == ReservationStatus.Seated)
-                                    {
-                                        <form asp-action="ChangeStatus" method="post" class="d-inline ms-1">
-                                            <input type="hidden" name="id" value="@reservation.Id" />
-                                            <input type="hidden" name="status" value="@((int)ReservationStatus.Completed)" />
-                                            <button type="submit" class="btn btn-info btn-sm">Complete</button>
-                                        </form>
-                                    }
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                            Actions
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            <li><a class="dropdown-item" href="@Url.Action("View", new { id = reservation.Id })">View</a></li>
+                                            <li><a class="dropdown-item" href="@Url.Action("Edit", new { id = reservation.Id })">Edit</a></li>
+                                            <li><hr class="dropdown-divider" /></li>
+
+                                            @{
+                                                bool canConfirm = reservation.Status == ReservationStatus.Pending || reservation.Status == ReservationStatus.Waitlisted;
+                                                bool canSeat = reservation.Status == ReservationStatus.Confirmed;
+                                                bool canComplete = reservation.Status == ReservationStatus.Seated;
+                                                bool canCancel = reservation.Status != ReservationStatus.Cancelled && reservation.Status != ReservationStatus.Completed && reservation.Status != ReservationStatus.NoShow;
+                                                bool canNoShow = reservation.Status == ReservationStatus.Confirmed;
+                                            }
+
+                                            @if (canConfirm)
+                                            {
+                                                <li>
+                                                    <form asp-action="ChangeStatus" method="post" class="m-0">
+                                                        <input type="hidden" name="id" value="@reservation.Id" />
+                                                        <input type="hidden" name="status" value="@((int)ReservationStatus.Confirmed)" />
+                                                        <button type="submit" class="dropdown-item">Confirm</button>
+                                                    </form>
+                                                </li>
+                                            }
+                                            else
+                                            {
+                                                <li><span class="dropdown-item disabled">Confirm</span></li>
+                                            }
+
+                                            @if (canSeat)
+                                            {
+                                                <li>
+                                                    <form asp-action="ChangeStatus" method="post" class="m-0">
+                                                        <input type="hidden" name="id" value="@reservation.Id" />
+                                                        <input type="hidden" name="status" value="@((int)ReservationStatus.Seated)" />
+                                                        <button type="submit" class="dropdown-item">Seat</button>
+                                                    </form>
+                                                </li>
+                                            }
+                                            else
+                                            {
+                                                <li><span class="dropdown-item disabled">Seat</span></li>
+                                            }
+
+                                            @if (canComplete)
+                                            {
+                                                <li>
+                                                    <form asp-action="ChangeStatus" method="post" class="m-0">
+                                                        <input type="hidden" name="id" value="@reservation.Id" />
+                                                        <input type="hidden" name="status" value="@((int)ReservationStatus.Completed)" />
+                                                        <button type="submit" class="dropdown-item">Complete</button>
+                                                    </form>
+                                                </li>
+                                            }
+                                            else
+                                            {
+                                                <li><span class="dropdown-item disabled">Complete</span></li>
+                                            }
+
+                                            @if (canNoShow)
+                                            {
+                                                <li>
+                                                    <form asp-action="ChangeStatus" method="post" class="m-0" data-confirm="Mark this reservation as No-Show?">
+                                                        <input type="hidden" name="id" value="@reservation.Id" />
+                                                        <input type="hidden" name="status" value="@((int)ReservationStatus.NoShow)" />
+                                                        <button type="submit" class="dropdown-item text-warning">No-Show</button>
+                                                    </form>
+                                                </li>
+                                            }
+                                            else
+                                            {
+                                                <li><span class="dropdown-item disabled">No-Show</span></li>
+                                            }
+
+                                            @if (canCancel)
+                                            {
+                                                <li>
+                                                    <form asp-action="ChangeStatus" method="post" class="m-0" data-confirm="Cancel this reservation?">
+                                                        <input type="hidden" name="id" value="@reservation.Id" />
+                                                        <input type="hidden" name="status" value="@((int)ReservationStatus.Cancelled)" />
+                                                        <button type="submit" class="dropdown-item text-danger">Cancel</button>
+                                                    </form>
+                                                </li>
+                                            }
+                                            else
+                                            {
+                                                <li><span class="dropdown-item disabled">Cancel</span></li>
+                                            }
+                                        </ul>
+                                    </div>
                                 </td>
                             </tr>
                         }
@@ -136,9 +259,67 @@
             _ => ""
         };
     }
+
+    string GetStatusBadgeClass(ReservationStatus status)
+    {
+        return status switch
+        {
+            ReservationStatus.Confirmed => "bg-primary",
+            ReservationStatus.Waitlisted => "bg-warning text-dark",
+            ReservationStatus.Pending => "bg-secondary",
+            ReservationStatus.Seated => "bg-success",
+            ReservationStatus.Completed => "bg-info text-dark",
+            ReservationStatus.Cancelled => "bg-danger",
+            ReservationStatus.NoShow => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    string GetStatusDisplay(ReservationStatus status)
+    {
+        return status == ReservationStatus.NoShow ? "No-Show" : status.ToString();
+    }
+
+    int GetStatusSortWeight(ReservationStatus status)
+    {
+        return status switch
+        {
+            ReservationStatus.Confirmed => 1,
+            ReservationStatus.Waitlisted => 2,
+            ReservationStatus.Pending => 3,
+            ReservationStatus.Seated => 4,
+            ReservationStatus.Completed => 5,
+            ReservationStatus.Cancelled => 6,
+            ReservationStatus.NoShow => 7,
+            _ => 99
+        };
+    }
+
+    string GetTableDisplay(RestaurantManagementSystem.Models.Reservation reservation)
+    {
+        var number = !string.IsNullOrWhiteSpace(reservation.TableNumber) ? reservation.TableNumber : (reservation.TableId.HasValue ? reservation.TableId.Value.ToString() : null);
+        if (string.IsNullOrWhiteSpace(number)) return "-";
+
+        var section = reservation.TableSection;
+           return string.IsNullOrWhiteSpace(section) ? $"Table {number}" : $"Table {number} - {section}";
+    }
+
+    (string Text, string Css) GetTimeIndicator(RestaurantManagementSystem.Models.Reservation reservation)
+    {
+        // Only show operational indicator for today and for arrivals.
+        if (reservation.ReservationDate.Date != DateTime.Today) return (string.Empty, string.Empty);
+        if (reservation.Status != ReservationStatus.Confirmed && reservation.Status != ReservationStatus.Waitlisted) return (string.Empty, string.Empty);
+
+        var diff = reservation.ReservationDateTime - DateTime.Now;
+        var minutes = (int)Math.Round(diff.TotalMinutes);
+        if (Math.Abs(minutes) < 1) return ("now", "text-muted");
+        if (minutes > 0) return ($"in {minutes}m", "text-muted");
+        return ($"late by {Math.Abs(minutes)}m", "text-danger");
+    }
 }
 
 @section Styles {
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" />
     <style>
         /* Ensure Actions column is properly sized for dropdown */
         .table th:last-child,
@@ -201,32 +382,60 @@
 @section Scripts {
     <script>
         $(document).ready(function () {
+            // Auto-load on date change (Go still works as fallback)
+            $('input[name="date"]').on('change', function () {
+                this.form.submit();
+            });
+
             // Only initialize DataTables if the table has data rows (excluding the "No reservations" row)
             if ($('#reservationsTable tbody tr').length > 0 && 
                 $('#reservationsTable tbody tr td[colspan="8"]').length === 0) {
-                
-                $('#reservationsTable').DataTable({
+
+                var dt = $('#reservationsTable').DataTable({
                     "paging": false,
                     "ordering": true,
                     "info": false,
                     "searching": true,
+                    "order": [[0, "asc"], [5, "asc"]],
                     "columnDefs": [
                         // Disable sorting and searching on the Actions column (last column)
                         { "orderable": false, "searchable": false, "targets": 7, "width": "120px" }
                     ],
-                    "columns": [
-                        { "data": "0" }, // Time
-                        { "data": "1" }, // Guest
-                        { "data": "2" }, // Phone
-                        { "data": "3" }, // Party Size
-                        { "data": "4" }, // Table
-                        { "data": "5" }, // Status
-                        { "data": "6" }, // Special Requests
-                        { "data": null, "defaultContent": "", "className": "text-center" } // Actions column - don't try to extract data
-                    ],
                     "language": {
                         "emptyTable": "No reservations found for this date"
                     }
+                });
+
+                // Quick status filters (faster than typing)
+                $('.js-status-filter').on('click', function () {
+                    var status = $(this).data('status');
+                    dt.column(5).search(status ? '^' + status + '$' : '', true, false).draw();
+                });
+            }
+
+            // Safety confirms for destructive actions
+            $(document).on('submit', 'form[data-confirm]', function (e) {
+                var msg = $(this).attr('data-confirm');
+                if (msg && !confirm(msg)) {
+                    e.preventDefault();
+                }
+            });
+
+            // Copy phone helper
+            $(document).on('click', '.js-copy-phone', async function (e) {
+                e.preventDefault();
+                var phone = $(this).data('phone');
+                try {
+                    await navigator.clipboard.writeText(phone);
+                } catch {
+                    // Ignore if clipboard API not available.
+                }
+            });
+
+            // Tooltips
+            if (window.bootstrap && bootstrap.Tooltip) {
+                document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (el) {
+                    new bootstrap.Tooltip(el);
                 });
             }
         });

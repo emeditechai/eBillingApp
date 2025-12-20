@@ -283,4 +283,8 @@ namespace RestaurantManagementSystem.Models
         public int Status { get; set; }
         public string StatusDisplay { get; set; }
         public string Section { get; set; }
+
+        // Optional: next/active reservation details for display on dashboard.
+        public DateTime? NextReservationAt { get; set; }
+        public int? NextReservationId { get; set; }
     }
