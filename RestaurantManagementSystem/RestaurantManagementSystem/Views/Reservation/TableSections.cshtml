@@ -1,0 +1,83 @@
+@model List<RestaurantManagementSystem.Models.TableSection>
+
+@{
+    ViewData["Title"] = "Table Sections";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Table Sections</h2>
+    <a class="btn btn-primary" href="@Url.Action("TableSectionForm", "Reservation")">Add Section</a>
+</div>
+
+@if (TempData["ResultMessage"] != null)
+{
+    <div class="alert alert-success">@TempData["ResultMessage"]</div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger">@TempData["ErrorMessage"]</div>
+}
+@if (ViewBag.ErrorMessage != null)
+{
+    <div class="alert alert-danger">@ViewBag.ErrorMessage</div>
+}
+
+<div class="card">
+    <div class="card-body">
+        @if (Model == null || !Model.Any())
+        {
+            <div class="text-muted">No sections found. Click “Add Section” to create one.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-striped align-middle">
+                    <thead>
+                        <tr>
+                            <th style="width: 70px;">Order</th>
+                            <th>Name</th>
+                            <th style="width: 120px;">Status</th>
+                            <th style="width: 220px;" class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in Model)
+                        {
+                            <tr>
+                                <td>@s.SortOrder</td>
+                                <td>@s.Name</td>
+                                <td>
+                                    @if (s.IsActive)
+                                    {
+                                        <span class="badge bg-success">Active</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">Inactive</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    <a class="btn btn-sm btn-outline-primary" href="@Url.Action("TableSectionForm", "Reservation", new { id = s.Id })">Edit</a>
+
+                                    <form class="d-inline" method="post" action="@Url.Action("ToggleTableSection", "Reservation")" onsubmit="return confirm('Are you sure?');">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@s.Id" />
+                                        <input type="hidden" name="isActive" value="@(s.IsActive ? "false" : "true")" />
+                                        @if (s.IsActive)
+                                        {
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">Deactivate</button>
+                                        }
+                                        else
+                                        {
+                                            <button type="submit" class="btn btn-sm btn-outline-success">Activate</button>
+                                        }
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

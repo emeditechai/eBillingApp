@@ -1,0 +1,53 @@
+@model RestaurantManagementSystem.Models.TableSection
+
+@{
+    ViewData["Title"] = Model != null && Model.Id > 0 ? "Edit Section" : "Add Section";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">@ViewData["Title"]</h2>
+    <a class="btn btn-outline-secondary" href="@Url.Action("TableSections", "Reservation")">Back</a>
+</div>
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="alert alert-danger">
+        Please fix the errors and try again.
+    </div>
+}
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" action="@Url.Action("SaveTableSection", "Reservation")">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="Id" />
+
+            <div class="mb-3">
+                <label class="form-label" asp-for="Name">Name</label>
+                <input class="form-control" asp-for="Name" maxlength="50" />
+                <span class="text-danger" asp-validation-for="Name"></span>
+                <div class="form-text">Examples: Main, AC Hall, Rooftop, Patio, Bar</div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" asp-for="SortOrder">Sort Order</label>
+                <input class="form-control" asp-for="SortOrder" type="number" />
+                <span class="text-danger" asp-validation-for="SortOrder"></span>
+            </div>
+
+            <div class="form-check mb-3">
+                <input class="form-check-input" asp-for="IsActive" />
+                <label class="form-check-label" asp-for="IsActive">Active</label>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" type="submit">Save</button>
+                <a class="btn btn-outline-secondary" href="@Url.Action("TableSections", "Reservation")">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

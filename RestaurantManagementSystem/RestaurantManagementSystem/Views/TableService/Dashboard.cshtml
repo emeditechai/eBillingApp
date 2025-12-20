@@ -356,6 +356,17 @@
                                 var isOccupied = table.Status == 2;
                                 var isDirty = table.Status == 3;
                                 var canOrder = isAvailable || isReserved;
+
+                                string reservedForText = null;
+                                if (isReserved && table.NextReservationAt.HasValue)
+                                {
+                                    var at = table.NextReservationAt.Value;
+                                    reservedForText = at.Date == DateTime.Today
+                                        ? $"Today {at:hh:mm tt}"
+                                        : at.Date == DateTime.Today.AddDays(1)
+                                            ? $"Tomorrow {at:hh:mm tt}"
+                                            : $"{at:dd MMM yyyy hh:mm tt}";
+                                }
                                 
                                 var bgGradient = isAvailable ? "linear-gradient(145deg, #ffffff 0%, #f0fdf4 100%)" : 
                                                 (isReserved ? "linear-gradient(145deg, #ffffff 0%, #dbeafe 100%)" : 
@@ -401,6 +412,13 @@
                                                 <span class="badge text-white fw-bold px-2 py-1 w-100" style="font-size: @badgeFontSize; border-radius: 8px; background: @badgeGradient; box-shadow: 0 2px 8px rgba(0,0,0,0.15); border: 1.5px solid rgba(255,255,255,0.3); letter-spacing: 0.2px;">
                                                     <i class="fas @statusIcon me-1" style="font-size: @badgeFontSize;"></i>@statusText
                                                 </span>
+                                                @if (!string.IsNullOrEmpty(reservedForText))
+                                                {
+                                                    <div class="mt-1" style="font-size: @badgeFontSize; color: #374151; font-weight: 700;">
+                                                        <i class="fas fa-calendar-alt me-1" style="color: @iconColor; font-size: @badgeFontSize;"></i>
+                                                        @reservedForText
+                                                    </div>
+                                                }
                                             </div>
                                             
                                             <!-- Bottom Section: Action Button -->

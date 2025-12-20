@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using RestaurantManagementSystem.Models;
@@ -91,7 +92,8 @@ namespace RestaurantManagementSystem.Controllers
             Reservation model = new Reservation 
             { 
                 ReservationDate = DateTime.Today,
-                ReservationTime = DateTime.Now.AddHours(1)
+                ReservationTime = DateTime.Now.AddHours(1),
+                PartySize = 2
             };
             
             // Get available tables for the dropdown
@@ -114,6 +116,47 @@ namespace RestaurantManagementSystem.Controllers
             ViewBag.Tables = GetAvailableTables(model.ReservationDateTime, model.PartySize, model.TableId);
 
             return View("ReservationForm", model);
+        }
+
+        // GET: View Reservation (read-only)
+        public IActionResult View(int id)
+        {
+            var model = GetReservationById(id);
+            if (model == null)
+            {
+                TempData["ErrorMessage"] = "Reservation not found.";
+                return RedirectToAction("List");
+            }
+
+            ViewBag.ReadOnly = true;
+            ViewBag.Tables = GetAvailableTables(model.ReservationDateTime, model.PartySize, model.TableId);
+            return View("ReservationForm", model);
+        }
+
+        // GET: Available tables (smart-scored) as JSON for ReservationForm async refresh
+        [HttpGet]
+        public IActionResult GetAvailableTablesJson(DateTime reservationDate, TimeSpan reservationTime, int partySize, int? currentTableId = null)
+        {
+            try
+            {
+                var dateTime = reservationDate.Date.Add(reservationTime);
+                var tables = GetAvailableTables(dateTime, partySize, currentTableId);
+
+                // Return only the fields used by the client.
+                var payload = (tables ?? new List<Table>()).Select(t => new
+                {
+                    t.Id,
+                    t.TableNumber,
+                    t.Capacity,
+                    t.Section
+                });
+
+                return Json(payload);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
         }
 
         // POST: Save Reservation
@@ -195,6 +238,36 @@ namespace RestaurantManagementSystem.Controllers
             {
                 TempData["ErrorMessage"] = "Reservation not found.";
                 return RedirectToAction("List");
+            }
+
+            // Safety: avoid seating/confirming against an already-occupied table.
+            if (reservation.TableId.HasValue && (status == ReservationStatus.Seated || status == ReservationStatus.Confirmed))
+            {
+                try
+                {
+                    using (var conCheck = new Microsoft.Data.SqlClient.SqlConnection(_config.GetConnectionString("DefaultConnection")))
+                    {
+                        conCheck.Open();
+                        using (var cmdCheck = new Microsoft.Data.SqlClient.SqlCommand("SELECT Status FROM Tables WHERE Id = @Id", conCheck))
+                        {
+                            cmdCheck.Parameters.AddWithValue("@Id", reservation.TableId.Value);
+                            var statusObj = cmdCheck.ExecuteScalar();
+                            if (statusObj != null && statusObj != DBNull.Value)
+                            {
+                                var current = (TableStatus)Convert.ToInt32(statusObj);
+                                if (current == TableStatus.Occupied)
+                                {
+                                    TempData["ErrorMessage"] = "This table is already occupied. Please choose a different table before confirming/seating.";
+                                    return RedirectToAction("List", new { date = reservation.ReservationDate.ToString("yyyy-MM-dd") });
+                                }
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // If table status check fails, proceed with existing behavior.
+                }
             }
 
             using (var con = new Microsoft.Data.SqlClient.SqlConnection(_config.GetConnectionString("DefaultConnection")))
@@ -595,6 +668,8 @@ namespace RestaurantManagementSystem.Controllers
                 }
             }
 
+            ViewBag.SectionOptions = BuildTableSectionSelectList(model.Section);
+
             return View(model);
         }
 
@@ -604,6 +679,7 @@ namespace RestaurantManagementSystem.Controllers
         {
             if (!ModelState.IsValid)
             {
+                ViewBag.SectionOptions = BuildTableSectionSelectList(model.Section);
                 return View("TableForm", model);
             }
 
@@ -611,6 +687,9 @@ namespace RestaurantManagementSystem.Controllers
             using (var con = new Microsoft.Data.SqlClient.SqlConnection(_config.GetConnectionString("DefaultConnection")))
             {
                 con.Open();
+
+                // Keep the section master list in sync with saved tables.
+                TryEnsureTableSectionExists(con, model.Section);
                 
                 // Check if updating and Id exists
                 if (model.Id > 0)
@@ -652,6 +731,149 @@ namespace RestaurantManagementSystem.Controllers
             return RedirectToAction("Tables");
         }
 
+        private List<SelectListItem> BuildTableSectionSelectList(string? selectedSection)
+        {
+            var items = new List<SelectListItem>
+            {
+                new SelectListItem { Value = "", Text = "-- Select Section --" }
+            };
+
+            var sections = new List<string>();
+
+            try
+            {
+                using (var con = new Microsoft.Data.SqlClient.SqlConnection(_config.GetConnectionString("DefaultConnection")))
+                {
+                    con.Open();
+                    EnsureTableSectionsTable(con);
+                    SeedTableSectionsIfEmpty(con);
+
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        SELECT Name
+                        FROM TableSections
+                        WHERE IsActive = 1
+                        ORDER BY SortOrder, Name", con))
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            var name = reader.IsDBNull(0) ? null : reader.GetString(0);
+                            if (string.IsNullOrWhiteSpace(name)) continue;
+                            sections.Add(name);
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback: if the master table isn't available, use distinct sections from Tables.
+                try
+                {
+                    using (var con = new Microsoft.Data.SqlClient.SqlConnection(_config.GetConnectionString("DefaultConnection")))
+                    {
+                        con.Open();
+                        using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                            SELECT DISTINCT LTRIM(RTRIM(ISNULL(Section,'')))
+                            FROM Tables
+                            WHERE ISNULL(LTRIM(RTRIM(Section)),'') <> ''
+                            ORDER BY LTRIM(RTRIM(Section))", con))
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                var name = reader.IsDBNull(0) ? null : reader.GetString(0);
+                                if (string.IsNullOrWhiteSpace(name)) continue;
+                                sections.Add(name);
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // ignore
+                }
+            }
+
+            // Ensure selected value appears even if not in list (edit legacy data).
+            if (!string.IsNullOrWhiteSpace(selectedSection) && !sections.Contains(selectedSection, StringComparer.OrdinalIgnoreCase))
+            {
+                sections.Insert(0, selectedSection);
+            }
+
+            foreach (var section in sections.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                items.Add(new SelectListItem
+                {
+                    Value = section,
+                    Text = section,
+                    Selected = !string.IsNullOrWhiteSpace(selectedSection) && string.Equals(section, selectedSection, StringComparison.OrdinalIgnoreCase)
+                });
+            }
+
+            return items;
+        }
+
+        private void EnsureTableSectionsTable(Microsoft.Data.SqlClient.SqlConnection con)
+        {
+            using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'TableSections')
+                BEGIN
+                    CREATE TABLE TableSections (
+                        Id INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        Name NVARCHAR(50) NOT NULL UNIQUE,
+                        SortOrder INT NOT NULL CONSTRAINT DF_TableSections_SortOrder DEFAULT 0,
+                        IsActive BIT NOT NULL CONSTRAINT DF_TableSections_IsActive DEFAULT 1,
+                        CreatedAt DATETIME NOT NULL CONSTRAINT DF_TableSections_CreatedAt DEFAULT GETDATE()
+                    )
+                END", con))
+            {
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        private void SeedTableSectionsIfEmpty(Microsoft.Data.SqlClient.SqlConnection con)
+        {
+            // Seed once from existing Tables.Section values, plus a default.
+            using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'TableSections')
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM TableSections)
+                    BEGIN
+                        INSERT INTO TableSections (Name, SortOrder, IsActive)
+                        SELECT DISTINCT LEFT(LTRIM(RTRIM(Section)), 50), 0, 1
+                        FROM Tables
+                        WHERE ISNULL(LTRIM(RTRIM(Section)),'') <> '';
+
+                        IF NOT EXISTS (SELECT 1 FROM TableSections WHERE Name = 'Main')
+                            INSERT INTO TableSections (Name, SortOrder, IsActive) VALUES ('Main', 0, 1);
+                    END
+                END", con))
+            {
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        private void TryEnsureTableSectionExists(Microsoft.Data.SqlClient.SqlConnection con, string? section)
+        {
+            if (string.IsNullOrWhiteSpace(section)) return;
+
+            try
+            {
+                EnsureTableSectionsTable(con);
+                using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    IF NOT EXISTS (SELECT 1 FROM TableSections WHERE Name = @Name)
+                        INSERT INTO TableSections (Name, SortOrder, IsActive) VALUES (@Name, 0, 1);", con))
+                {
+                    cmd.Parameters.AddWithValue("@Name", section.Trim());
+                    cmd.ExecuteNonQuery();
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
         // POST: Update Table Status
         [HttpPostAttribute]
         public IActionResult UpdateTableStatus(int id, TableStatus status)
@@ -673,7 +895,226 @@ namespace RestaurantManagementSystem.Controllers
 
         #endregion
 
+        #region Table Sections Management
+
+        // GET: Table Sections List
+        public IActionResult TableSections()
+        {
+            try
+            {
+                var sections = GetTableSections();
+                return View(sections);
+            }
+            catch (Exception ex)
+            {
+                ViewBag.ErrorMessage = $"Error loading sections: {ex.Message}";
+                return View(new List<TableSection>());
+            }
+        }
+
+        // GET: Create/Edit Section
+        public IActionResult TableSectionForm(int? id)
+        {
+            try
+            {
+                EnsureTableSectionsTableExists();
+
+                if (!id.HasValue)
+                {
+                    return View(new TableSection { IsActive = true, SortOrder = 0 });
+                }
+
+                var model = GetTableSectionById(id.Value);
+                if (model == null)
+                {
+                    TempData["ErrorMessage"] = "Section not found.";
+                    return RedirectToAction(nameof(TableSections));
+                }
+
+                return View(model);
+            }
+            catch (Exception ex)
+            {
+                TempData["ErrorMessage"] = $"Error loading section: {ex.Message}";
+                return RedirectToAction(nameof(TableSections));
+            }
+        }
+
+        // POST: Save Section
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult SaveTableSection(TableSection model)
+        {
+            model.Name = (model.Name ?? string.Empty).Trim();
+
+            if (!ModelState.IsValid)
+            {
+                return View("TableSectionForm", model);
+            }
+
+            try
+            {
+                EnsureTableSectionsTableExists();
+                UpsertTableSection(model);
+                TempData["ResultMessage"] = "Section saved successfully.";
+                return RedirectToAction(nameof(TableSections));
+            }
+            catch (SqlException ex)
+            {
+                // Unique constraint violation, etc.
+                ModelState.AddModelError("", $"Unable to save section: {ex.Message}");
+                return View("TableSectionForm", model);
+            }
+            catch (Exception ex)
+            {
+                ModelState.AddModelError("", $"Unable to save section: {ex.Message}");
+                return View("TableSectionForm", model);
+            }
+        }
+
+        // POST: Toggle Section Active
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult ToggleTableSection(int id, bool isActive)
+        {
+            try
+            {
+                EnsureTableSectionsTableExists();
+                using (var con = new Microsoft.Data.SqlClient.SqlConnection(_config.GetConnectionString("DefaultConnection")))
+                {
+                    con.Open();
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        UPDATE TableSections
+                        SET IsActive = @IsActive
+                        WHERE Id = @Id", con))
+                    {
+                        cmd.Parameters.AddWithValue("@IsActive", isActive);
+                        cmd.Parameters.AddWithValue("@Id", id);
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+
+                TempData["ResultMessage"] = isActive ? "Section activated." : "Section deactivated.";
+            }
+            catch (Exception ex)
+            {
+                TempData["ErrorMessage"] = $"Unable to update section: {ex.Message}";
+            }
+
+            return RedirectToAction(nameof(TableSections));
+        }
+
+        #endregion
+
         #region Helper Methods
+
+        private void EnsureTableSectionsTableExists()
+        {
+            using (var con = new Microsoft.Data.SqlClient.SqlConnection(_config.GetConnectionString("DefaultConnection")))
+            {
+                con.Open();
+                EnsureTableSectionsTable(con);
+                SeedTableSectionsIfEmpty(con);
+            }
+        }
+
+        private List<TableSection> GetTableSections()
+        {
+            var list = new List<TableSection>();
+            using (var con = new Microsoft.Data.SqlClient.SqlConnection(_config.GetConnectionString("DefaultConnection")))
+            {
+                con.Open();
+                EnsureTableSectionsTable(con);
+                SeedTableSectionsIfEmpty(con);
+
+                using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    SELECT Id, Name, SortOrder, IsActive, CreatedAt
+                    FROM TableSections
+                    ORDER BY SortOrder, Name", con))
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        list.Add(new TableSection
+                        {
+                            Id = reader.GetInt32(0),
+                            Name = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+                            SortOrder = reader.IsDBNull(2) ? 0 : reader.GetInt32(2),
+                            IsActive = !reader.IsDBNull(3) && reader.GetBoolean(3),
+                            CreatedAt = reader.IsDBNull(4) ? DateTime.MinValue : reader.GetDateTime(4)
+                        });
+                    }
+                }
+            }
+            return list;
+        }
+
+        private TableSection? GetTableSectionById(int id)
+        {
+            using (var con = new Microsoft.Data.SqlClient.SqlConnection(_config.GetConnectionString("DefaultConnection")))
+            {
+                con.Open();
+                EnsureTableSectionsTable(con);
+
+                using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    SELECT Id, Name, SortOrder, IsActive, CreatedAt
+                    FROM TableSections
+                    WHERE Id = @Id", con))
+                {
+                    cmd.Parameters.AddWithValue("@Id", id);
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        if (!reader.Read()) return null;
+                        return new TableSection
+                        {
+                            Id = reader.GetInt32(0),
+                            Name = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+                            SortOrder = reader.IsDBNull(2) ? 0 : reader.GetInt32(2),
+                            IsActive = !reader.IsDBNull(3) && reader.GetBoolean(3),
+                            CreatedAt = reader.IsDBNull(4) ? DateTime.MinValue : reader.GetDateTime(4)
+                        };
+                    }
+                }
+            }
+        }
+
+        private void UpsertTableSection(TableSection model)
+        {
+            using (var con = new Microsoft.Data.SqlClient.SqlConnection(_config.GetConnectionString("DefaultConnection")))
+            {
+                con.Open();
+                EnsureTableSectionsTable(con);
+
+                if (model.Id > 0)
+                {
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        UPDATE TableSections
+                        SET Name = @Name,
+                            SortOrder = @SortOrder,
+                            IsActive = @IsActive
+                        WHERE Id = @Id", con))
+                    {
+                        cmd.Parameters.AddWithValue("@Id", model.Id);
+                        cmd.Parameters.AddWithValue("@Name", model.Name);
+                        cmd.Parameters.AddWithValue("@SortOrder", model.SortOrder);
+                        cmd.Parameters.AddWithValue("@IsActive", model.IsActive);
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+                else
+                {
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        INSERT INTO TableSections (Name, SortOrder, IsActive)
+                        VALUES (@Name, @SortOrder, @IsActive)", con))
+                    {
+                        cmd.Parameters.AddWithValue("@Name", model.Name);
+                        cmd.Parameters.AddWithValue("@SortOrder", model.SortOrder);
+                        cmd.Parameters.AddWithValue("@IsActive", model.IsActive);
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+        }
 
         private List<Reservation> GetReservationsByDate(DateTime date)
         {
@@ -713,12 +1154,33 @@ namespace RestaurantManagementSystem.Controllers
                     }
                     
                     // Revised query to get reservations with more resilient column access
-                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(
-                        @"SELECT r.*, t.TableNumber
-                        FROM Reservations r
-                        LEFT JOIN Tables t ON r.TableId = t.Id
-                        WHERE CONVERT(date, r.ReservationDate) = @Date
-                        ORDER BY r.ReservationTime", con))
+                    bool hasTableSectionColumn = false;
+                    try
+                    {
+                        using (var checkTableSectionCmd = new Microsoft.Data.SqlClient.SqlCommand(
+                            @"SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Tables' AND COLUMN_NAME = 'Section'", con))
+                        {
+                            hasTableSectionColumn = (int)checkTableSectionCmd.ExecuteScalar() > 0;
+                        }
+                    }
+                    catch
+                    {
+                        hasTableSectionColumn = false;
+                    }
+
+                    string sql = hasTableSectionColumn
+                        ? @"SELECT r.*, t.TableNumber, t.Section AS TableSection
+                           FROM Reservations r
+                           LEFT JOIN Tables t ON r.TableId = t.Id
+                           WHERE CONVERT(date, r.ReservationDate) = @Date
+                           ORDER BY r.ReservationTime"
+                        : @"SELECT r.*, t.TableNumber
+                           FROM Reservations r
+                           LEFT JOIN Tables t ON r.TableId = t.Id
+                           WHERE CONVERT(date, r.ReservationDate) = @Date
+                           ORDER BY r.ReservationTime";
+
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(sql, con))
                     {
                         cmd.Parameters.AddWithValue("@Date", date.Date);
                         using (var reader = cmd.ExecuteReader())
@@ -746,6 +1208,11 @@ namespace RestaurantManagementSystem.Controllers
                                     {
                                         string tableNumber = GetNullableStringSafe(reader, "TableNumber");
                                         reservation.TableNumber = tableNumber;
+                                    }
+
+                                    if (HasColumn(reader, "TableSection"))
+                                    {
+                                        reservation.TableSection = GetNullableStringSafe(reader, "TableSection");
                                     }
 
                                     // Optional columns - only add if they exist
@@ -781,7 +1248,22 @@ namespace RestaurantManagementSystem.Controllers
                     throw; // Rethrow to be caught in the List action
                 }
             }
-            return reservations;
+
+            // Standard operational sort: time first, then status priority.
+            return reservations
+                .OrderBy(r => r.ReservationTime.TimeOfDay)
+                .ThenBy(r => r.Status switch
+                {
+                    ReservationStatus.Confirmed => 1,
+                    ReservationStatus.Waitlisted => 2,
+                    ReservationStatus.Pending => 3,
+                    ReservationStatus.Seated => 4,
+                    ReservationStatus.Completed => 5,
+                    ReservationStatus.Cancelled => 6,
+                    ReservationStatus.NoShow => 7,
+                    _ => 99
+                })
+                .ToList();
         }
         
         // Safe helper methods for data access

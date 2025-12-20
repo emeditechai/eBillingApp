@@ -307,8 +307,8 @@ namespace RestaurantManagementSystem.Controllers
                 using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(@"
                     SELECT COUNT(*)
                     FROM Reservations
-                    WHERE CAST(ReservationTime AS DATE) = CAST(GETDATE() AS DATE)
-                    AND Status = 0", connection)) // 0 = Pending
+                    WHERE CAST(ReservationDate AS DATE) = CAST(GETDATE() AS DATE)
+                    AND Status IN (0, 1, 6)", connection)) // Pending, Confirmed, Waitlisted
                 {
                     model.ReservationCount = (int)command.ExecuteScalar();
                 }
@@ -378,13 +378,34 @@ namespace RestaurantManagementSystem.Controllers
                             WHEN t.Status = 0 THEN 'Available'
                             ELSE 'Unknown'
                         END AS StatusDisplay,
-                        ISNULL(t.Section, 'Main') AS Section
+                        ISNULL(t.Section, 'Main') AS Section,
+                        nr.ReservationId,
+                        nr.ReservationAt
                     FROM Tables t
                     LEFT JOIN (
                         SELECT DISTINCT ot.TableId
                         FROM OrderTables ot
                         INNER JOIN Orders o ON ot.OrderId = o.Id AND o.Status IN (0, 1, 2)
                     ) ot ON t.Id = ot.TableId
+                    OUTER APPLY (
+                        SELECT TOP 1
+                            r.Id AS ReservationId,
+                                                        DATEADD(SECOND,
+                                                                DATEDIFF(SECOND, 0, CAST(r.ReservationTime AS time)),
+                                                                CAST(r.ReservationDate AS datetime)
+                                                        ) AS ReservationAt
+                        FROM Reservations r
+                        WHERE r.TableId = t.Id
+                          AND r.Status IN (0, 1, 6) -- Pending/Confirmed/Waitlisted
+                                                    AND DATEADD(SECOND,
+                                                                DATEDIFF(SECOND, 0, CAST(r.ReservationTime AS time)),
+                                                                CAST(r.ReservationDate AS datetime)
+                                                            ) >= DATEADD(DAY, DATEDIFF(DAY, 0, GETDATE()), 0)
+                                                ORDER BY DATEADD(SECOND,
+                                                                DATEDIFF(SECOND, 0, CAST(r.ReservationTime AS time)),
+                                                                CAST(r.ReservationDate AS datetime)
+                                                            ) ASC
+                    ) nr
                     WHERE t.IsActive = 1
                     ORDER BY t.Section, t.TableName", connection))
                 {
@@ -399,7 +420,9 @@ namespace RestaurantManagementSystem.Controllers
                                 Capacity = reader.GetInt32(2),
                                 Status = reader.GetInt32(4), // CurrentStatus
                                 StatusDisplay = reader.GetString(5),
-                                Section = reader.GetString(6)
+                                Section = reader.GetString(6),
+                                NextReservationId = reader.IsDBNull(7) ? null : (int?)reader.GetInt32(7),
+                                NextReservationAt = reader.IsDBNull(8) ? null : (DateTime?)reader.GetDateTime(8)
                             });
                         }
                     }

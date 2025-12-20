@@ -1,6 +1,7 @@
 @model RestaurantManagementSystem.Models.Reservation
 @{
     ViewData["Title"] = Model.Id == 0 ? "Create Reservation" : "Edit Reservation";
+    bool isReadOnly = ViewBag.ReadOnly != null && (bool)ViewBag.ReadOnly;
 }
 
 <div class="container-fluid py-2">
@@ -151,7 +152,7 @@
                     <a asp-action="List" asp-route-date="@Model.ReservationDate.ToString("yyyy-MM-dd")" class="btn btn-sm btn-outline-secondary">
                         <i class="bi bi-arrow-left"></i> Back to List
                     </a>
-                    <button type="submit" class="btn btn-sm btn-primary px-4">
+                    <button type="submit" class="btn btn-sm btn-primary px-4" style="@(isReadOnly ? "display:none;" : "")">
                         <i class="bi bi-save"></i> Save Reservation
                     </button>
                 </div>
@@ -161,6 +162,7 @@
 </div>
 
 @section Scripts {
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" />
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
     <style>
         /* Smart recommendation styling */
@@ -213,6 +215,14 @@
     </style>
     <script>
         $(document).ready(function() {
+            var isReadOnly = @((isReadOnly).ToString().ToLowerInvariant());
+            if (isReadOnly) {
+                document.querySelectorAll('#reservationForm input, #reservationForm select, #reservationForm textarea').forEach(function (el) {
+                    if (el.type === 'hidden') return;
+                    el.disabled = true;
+                });
+            }
+
             // Add recommendation info box after table select
             var infoBox = $('<div class="recommendation-info" id="tableRecommendationInfo"></div>');
             $('#tableSelect').after(infoBox);
@@ -279,13 +289,19 @@
             
             // Update available tables when date, time or party size changes
             $('#ReservationDate, #ReservationTime, #PartySize').change(function() {
-                updateAvailableTables();
+                if (!isReadOnly) {
+                    updateAvailableTables();
+                }
             });
 
             function updateAvailableTables() {
                 var date = $('#ReservationDate').val();
                 var time = $('#ReservationTime').val();
                 var partySize = $('#PartySize').val();
+
+                if (isReadOnly) {
+                    return;
+                }
                 
                 if (date && time && partySize) {
                     // Show loading state
@@ -316,15 +332,19 @@
                                 var capacityNote = capacityDiff == 0 ? ' - Perfect fit!' : 
                                                   capacityDiff == 1 ? ' - Excellent' :
                                                   capacityDiff == 2 ? ' - Good match' : '';
-                                var sectionInfo = table.Section ? ' [' + table.Section + ']' : '';
+                                var tableId = (table.id !== undefined && table.id !== null) ? table.id : table.Id;
+                                var tableNumber = (table.tableNumber !== undefined && table.tableNumber !== null) ? table.tableNumber : table.TableNumber;
+                                var capacity = (table.capacity !== undefined && table.capacity !== null) ? table.capacity : table.Capacity;
+                                var section = (table.section !== undefined && table.section !== null) ? table.section : table.Section;
+                                var sectionInfo = section ? ' [' + section + ']' : '';
                                 
                                 $('#tableSelect').append(
                                     $('<option></option>')
-                                        .val(table.Id)
+                                        .val(tableId)
                                         .attr('data-rank', rank)
-                                        .attr('data-capacity', table.Capacity)
-                                        .attr('data-section', table.Section || '')
-                                        .text(badge + ' Table ' + table.TableNumber + ' (Seats ' + table.Capacity + ')' + sectionInfo + recommendText + capacityNote)
+                                        .attr('data-capacity', capacity)
+                                        .attr('data-section', section || '')
+                                        .text(badge + ' Table ' + tableNumber + ' (Seats ' + capacity + ')' + sectionInfo + recommendText + capacityNote)
                                 );
                                 rank++;
                             });
@@ -344,13 +364,6 @@
             // Trigger initial check if editing existing reservation
             if ($('#ReservationDate').val() && $('#ReservationTime').val() && $('#PartySize').val()) {
                 // Don't reload on edit, keep existing selection
-            }
-        });
-    </script>
-}
-                link.rel = 'stylesheet';
-                link.href = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css';
-                document.head.appendChild(link);
             }
         });
     </script>

@@ -178,11 +178,20 @@
 @section Scripts {
     <script>
         $(document).ready(function () {
-            $('#tablesTable').DataTable({
-                "paging": false,
-                "ordering": true,
-                "info": false
-            });
+            // Only initialize DataTables if the table has data rows (exclude the "No tables found" placeholder row)
+            if ($('#tablesTable tbody tr').length > 0 && $('#tablesTable tbody tr td[colspan]').length === 0) {
+                $('#tablesTable').DataTable({
+                    "paging": false,
+                    "ordering": true,
+                    "info": false,
+                    "language": {
+                        "emptyTable": "No tables found"
+                    },
+                    "columnDefs": [
+                        { "orderable": false, "searchable": false, "targets": 8 }
+                    ]
+                });
+            }
         });
     </script>
 }

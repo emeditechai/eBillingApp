@@ -39,8 +39,11 @@
 
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <label asp-for="Section" class="form-label">Area/Section</label>
-                            <input asp-for="Section" class="form-control" maxlength="50" />
+                            <div class="d-flex justify-content-between align-items-center">
+                                <label asp-for="Section" class="form-label mb-0">Area/Section</label>
+                                <a class="small" href="@Url.Action("TableSections", "Reservation")">Manage Sections</a>
+                            </div>
+                            <select asp-for="Section" class="form-select" asp-items="ViewBag.SectionOptions"></select>
                             <span asp-validation-for="Section" class="text-danger"></span>
                         </div>
 

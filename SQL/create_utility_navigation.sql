@@ -110,8 +110,59 @@ BEGIN TRY
         PRINT '  Email Services already in correct location or not found';
     PRINT '';
 
-    -- Step 6: Reorder remaining Settings menu items
-    PRINT 'Step 6: Reordering remaining Settings menu items...';
+    -- Step 6: Add Table Sections under Utility
+    PRINT 'Step 6: Adding Table Sections to Utility...';
+
+    IF NOT EXISTS (SELECT 1 FROM NavigationMenus WHERE Code = 'NAV_UTILITY_TABLE_SECTIONS')
+    BEGIN
+        INSERT INTO NavigationMenus (
+            Code,
+            DisplayName,
+            ParentCode,
+            ControllerName,
+            ActionName,
+            Area,
+            IconCss,
+            DisplayOrder,
+            IsActive,
+            ShortcutHint,
+            CustomUrl,
+            ThemeColor,
+            OpenInNewTab
+        )
+        VALUES (
+            'NAV_UTILITY_TABLE_SECTIONS',       -- Code
+            'Table Sections',                  -- DisplayName
+            'NAV_UTILITY',                     -- ParentCode
+            'Reservation',                     -- ControllerName
+            'TableSections',                   -- ActionName
+            NULL,                              -- Area
+            'fas fa-layer-group',              -- IconCss
+            5,                                 -- DisplayOrder
+            1,                                 -- IsActive
+            NULL,                              -- ShortcutHint
+            NULL,                              -- CustomUrl
+            NULL,                              -- ThemeColor
+            0                                  -- OpenInNewTab
+        );
+        PRINT '✓ Table Sections menu created under Utility';
+    END
+    ELSE
+    BEGIN
+        UPDATE NavigationMenus
+        SET ParentCode = 'NAV_UTILITY',
+            ControllerName = 'Reservation',
+            ActionName = 'TableSections',
+            DisplayName = 'Table Sections',
+            DisplayOrder = 5,
+            IsActive = 1
+        WHERE Code = 'NAV_UTILITY_TABLE_SECTIONS';
+        PRINT '  Table Sections menu already exists (ensured correct location)';
+    END
+    PRINT '';
+
+    -- Step 7: Reorder remaining Settings menu items
+    PRINT 'Step 7: Reordering remaining Settings menu items...';
     
     UPDATE NavigationMenus SET DisplayOrder = 1 WHERE Code = 'NAV_SETTINGS_RESTAURANT';
     UPDATE NavigationMenus SET DisplayOrder = 2 WHERE Code = 'NAV_SETTINGS_USERS';
@@ -126,13 +177,15 @@ BEGIN TRY
     PRINT '✓ Settings menu items reordered';
     PRINT '';
 
-    -- Step 7: Grant permissions to Administrator role for Utility menu
-    PRINT 'Step 7: Granting permissions to Administrator role...';
+    -- Step 8: Grant permissions to Administrator role for Utility menu
+    PRINT 'Step 8: Granting permissions to Administrator role...';
     
     DECLARE @UtilityMenuId INT;
     DECLARE @AdminRoleId INT;
+    DECLARE @UtilityTableSectionsMenuId INT;
     
     SELECT @UtilityMenuId = Id FROM NavigationMenus WHERE Code = 'NAV_UTILITY';
+    SELECT @UtilityTableSectionsMenuId = Id FROM NavigationMenus WHERE Code = 'NAV_UTILITY_TABLE_SECTIONS';
     SELECT @AdminRoleId = Id FROM Roles WHERE Name = 'Administrator';
     
     IF @UtilityMenuId IS NOT NULL AND @AdminRoleId IS NOT NULL
@@ -152,10 +205,24 @@ BEGIN TRY
     BEGIN
         PRINT '  Warning: Could not find Utility menu or Administrator role';
     END
+
+    IF @UtilityTableSectionsMenuId IS NOT NULL AND @AdminRoleId IS NOT NULL
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM RoleMenuPermissions WHERE RoleId = @AdminRoleId AND MenuId = @UtilityTableSectionsMenuId)
+        BEGIN
+            INSERT INTO RoleMenuPermissions (RoleId, MenuId, CanView, CanAdd, CanEdit, CanDelete, CanApprove, CanPrint, CanExport, CreatedAt, CreatedBy)
+            VALUES (@AdminRoleId, @UtilityTableSectionsMenuId, 1, 1, 1, 1, 1, 1, 1, GETDATE(), 1);
+            PRINT '✓ Administrator permissions granted for Table Sections';
+        END
+        ELSE
+        BEGIN
+            PRINT '  Administrator already has permissions for Table Sections';
+        END
+    END
     PRINT '';
 
-    -- Step 8: Grant permissions to Manager role for Utility menu
-    PRINT 'Step 8: Granting permissions to Manager role...';
+    -- Step 9: Grant permissions to Manager role for Utility menu
+    PRINT 'Step 9: Granting permissions to Manager role...';
     
     DECLARE @ManagerRoleId INT;
     SELECT @ManagerRoleId = Id FROM Roles WHERE Name = 'Manager';
@@ -177,10 +244,24 @@ BEGIN TRY
     BEGIN
         PRINT '  Warning: Could not find Utility menu or Manager role';
     END
+
+    IF @UtilityTableSectionsMenuId IS NOT NULL AND @ManagerRoleId IS NOT NULL
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM RoleMenuPermissions WHERE RoleId = @ManagerRoleId AND MenuId = @UtilityTableSectionsMenuId)
+        BEGIN
+            INSERT INTO RoleMenuPermissions (RoleId, MenuId, CanView, CanAdd, CanEdit, CanDelete, CanApprove, CanPrint, CanExport, CreatedAt, CreatedBy)
+            VALUES (@ManagerRoleId, @UtilityTableSectionsMenuId, 1, 1, 1, 1, 1, 1, 1, GETDATE(), 1);
+            PRINT '✓ Manager permissions granted for Table Sections';
+        END
+        ELSE
+        BEGIN
+            PRINT '  Manager already has permissions for Table Sections';
+        END
+    END
     PRINT '';
 
-    -- Step 9: Verify the changes
-    PRINT 'Step 9: Verifying changes...';
+    -- Step 10: Verify the changes
+    PRINT 'Step 10: Verifying changes...';
     PRINT '';
     PRINT 'Utility Menu Items:';
     SELECT 
