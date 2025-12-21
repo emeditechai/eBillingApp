@@ -104,6 +104,17 @@
                                 <p class="mb-1"><span class="text-muted">Table:</span></p>
                                 <p class="fs-5 fw-semibold">@Model.TableName</p>
                             </div>
+                            @if (Model.OrderType == 4)
+                            {
+                                <div class="mb-3">
+                                    <p class="mb-1"><span class="text-muted">Room No:</span></p>
+                                    <p class="fs-5 fw-semibold">@(string.IsNullOrWhiteSpace(Model.RoomNo) ? (Model.RoomId.HasValue ? Model.RoomId.Value.ToString() : "N/A") : Model.RoomNo)</p>
+                                </div>
+                                <div class="mb-3">
+                                    <p class="mb-1"><span class="text-muted">Booking No:</span></p>
+                                    <p class="fs-5 fw-semibold">@(string.IsNullOrWhiteSpace(Model.HBookingNo) ? "N/A" : Model.HBookingNo)</p>
+                                </div>
+                            }
                             <div class="mb-3">
                                 <p class="mb-1"><span class="text-muted">Status:</span></p>
                                 <p class="fs-5 fw-semibold">@Model.OrderStatusDisplay</p>

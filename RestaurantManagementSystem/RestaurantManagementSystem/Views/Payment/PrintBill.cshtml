@@ -35,7 +35,18 @@
             <p><strong>Type:</strong> @Model.OrderTypeDisplay</p>
         </div>
         <div class="col-6 text-end">
-            <p><strong>Table:</strong> @(Model.OrderType == 0 ? Model.TableName : "N/A")</p>
+            @if (Model.OrderType == 0)
+            {
+                <p><strong>Table:</strong> @Model.TableName</p>
+            }
+            else if (Model.OrderType == 4)
+            {
+                <p><strong>Room:</strong> @(string.IsNullOrWhiteSpace(Model.RoomNo) ? (Model.RoomId.HasValue ? Model.RoomId.Value.ToString() : "N/A") : Model.RoomNo)</p>
+            }
+            else
+            {
+                <p><strong>Table:</strong> N/A</p>
+            }
             <p><strong>Status:</strong> @Model.OrderStatusDisplay</p>
         </div>
     </div>

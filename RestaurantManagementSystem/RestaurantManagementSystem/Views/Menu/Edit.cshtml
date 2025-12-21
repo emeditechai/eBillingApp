@@ -82,6 +82,12 @@
                                             <input asp-for="DeliveryPrice" class="form-control" type="number" step="0.01" />
                                             <span asp-validation-for="DeliveryPrice" class="text-danger"></span>
                                         </div>
+
+                                        <div class="form-group">
+                                            <label asp-for="RoomServicePrice" class="control-label"></label>
+                                            <input asp-for="RoomServicePrice" class="form-control" type="number" step="0.01" />
+                                            <span asp-validation-for="RoomServicePrice" class="text-danger"></span>
+                                        </div>
                                         
                                         <!-- UOM Dropdown - Visible only for BAR items -->
                                         <div class="form-group" id="uom-group" style="display: none;">

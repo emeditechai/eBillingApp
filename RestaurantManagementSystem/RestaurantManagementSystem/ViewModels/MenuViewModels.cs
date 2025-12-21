@@ -38,6 +38,11 @@ namespace RestaurantManagementSystem.ViewModels
         [DataType(DataType.Currency)]
         public decimal? DeliveryPrice { get; set; }
 
+        [Display(Name = "Room Service Price")]
+        [Range(0.01, 10000, ErrorMessage = "Room Service Price must be greater than 0")]
+        [DataType(DataType.Currency)]
+        public decimal? RoomServicePrice { get; set; }
+
         [Display(Name = "Unit of Measurement")]
         public int? UOMId { get; set; }
 

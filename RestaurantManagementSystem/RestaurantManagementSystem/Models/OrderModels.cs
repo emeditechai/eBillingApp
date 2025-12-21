@@ -97,7 +97,7 @@ namespace RestaurantManagementSystem.Models
         
         public int? TableTurnoverId { get; set; }
         
-        public int OrderType { get; set; } // 0=Dine-In, 1=Takeout, 2=Delivery, 3=Online
+        public int OrderType { get; set; } // 0=Dine-In, 1=Takeout, 2=Delivery, 3=Online, 4=Room Service
         
         public string OrderTypeDisplay
         {
@@ -109,6 +109,7 @@ namespace RestaurantManagementSystem.Models
                     1 => "Takeout",
                     2 => "Delivery",
                     3 => "Online",
+                    4 => "Room Service",
                     _ => "Unknown"
                 };
             }

@@ -90,6 +90,7 @@ namespace RestaurantManagementSystem.Models
                     1 => "Takeout",
                     2 => "Delivery",
                     3 => "Online",
+                    4 => "Room Service",
                     _ => "-"
                 };
             }

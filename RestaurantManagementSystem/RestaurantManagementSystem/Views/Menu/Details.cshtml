@@ -125,6 +125,13 @@
                                                 <span class="text-danger fw-bold">@Model.DeliveryPrice.Value.ToString("C")</span>
                                             </div>
                                         }
+                                        @if (Model.RoomServicePrice.HasValue)
+                                        {
+                                            <div class="d-flex justify-content-between small mt-1">
+                                                <span class="text-secondary fw-bold">Room Service Price</span>
+                                                <span class="text-dark fw-bold">@Model.RoomServicePrice.Value.ToString("C")</span>
+                                            </div>
+                                        }
                                     </div>
 
                                     <hr class="my-2" />

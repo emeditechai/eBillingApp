@@ -88,6 +88,10 @@
                                             {
                                                 <br/><strong class="text-warning">Delivery:</strong> <strong class="text-danger"><text>₹</text>@item.DeliveryPrice.Value.ToString("N2")</strong>
                                             }
+                                            @if (item.RoomServicePrice.HasValue)
+                                            {
+                                                <br/><strong class="text-secondary">Room Service:</strong> <strong class="text-dark"><text>₹</text>@item.RoomServicePrice.Value.ToString("N2")</strong>
+                                            }
                                         </div>
                                     </td>
                                     <td>@item.PreparationTimeMinutes min</td>

@@ -48,7 +48,16 @@
         <div><strong>Name:</strong> ____________________________</div>
         <div style="display:flex; justify-content:space-between; margin-top:6px;">
             <div>Date: @DateTime.Now.ToString("dd/MM/yy")</div>
-            <div>@Model.OrderTypeDisplay: @(Model.OrderType == 0 ? Model.TableName : "N/A")</div>
+            <div>
+                @Model.OrderTypeDisplay:
+                @(
+                    Model.OrderType == 0
+                        ? Model.TableName
+                        : (Model.OrderType == 4
+                            ? (string.IsNullOrWhiteSpace(Model.RoomNo) ? (Model.RoomId.HasValue ? Model.RoomId.Value.ToString() : "N/A") : Model.RoomNo)
+                            : "N/A")
+                 )
+            </div>
         </div>
         <div style="display:flex; justify-content:space-between; margin-top:2px;">
             <div>Time: @DateTime.Now.ToString("HH:mm")</div>
