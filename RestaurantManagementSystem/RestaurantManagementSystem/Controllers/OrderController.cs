@@ -180,6 +180,21 @@ namespace RestaurantManagementSystem.Controllers
                 ModelState.AddModelError("CustomerAddress", "Address is required for Delivery orders.");
             }
 
+            // Server-side conditional validation for Room Service
+            if (model.OrderType == 4)
+            {
+                if (!model.HBranchId.HasValue)
+                {
+                    ModelState.AddModelError("HBranchId", "Hotel Branch is required for Room Service orders.");
+                }
+
+                // Require either RoomId or BookingNo
+                if (!model.RoomId.HasValue && string.IsNullOrWhiteSpace(model.HBookingNo))
+                {
+                    ModelState.AddModelError("RoomId", "Room No or Booking No is required for Room Service orders.");
+                }
+            }
+
             if (ModelState.IsValid)
             {
                 try
@@ -235,6 +250,80 @@ namespace RestaurantManagementSystem.Controllers
                                         reader.Close();
                                         if (orderId > 0)
                                         {
+                                            // Persist Room Service hotel fields (safe check for column existence)
+                                            if (model.OrderType == 4)
+                                            {
+                                                // If user provided booking no but did not select room, try resolve from SP
+                                                if ((!model.RoomId.HasValue || !model.HBookingId.HasValue || string.IsNullOrWhiteSpace(model.HBookingNo))
+                                                    && model.HBranchId.HasValue
+                                                    && !string.IsNullOrWhiteSpace(model.HBookingNo))
+                                                {
+                                                    try
+                                                    {
+                                                        using (var rsResolveCmd = new Microsoft.Data.SqlClient.SqlCommand("sp_GetCheckedInOccupiedRooms", connection, transaction))
+                                                        {
+                                                            rsResolveCmd.CommandType = CommandType.StoredProcedure;
+                                                            rsResolveCmd.Parameters.AddWithValue("@BranchID", model.HBranchId.Value);
+                                                            using (var rr = rsResolveCmd.ExecuteReader())
+                                                            {
+                                                                while (rr.Read())
+                                                                {
+                                                                    var bookingNo = rr["BookingNo"]?.ToString();
+                                                                    if (!string.IsNullOrWhiteSpace(bookingNo) && string.Equals(bookingNo.Trim(), model.HBookingNo.Trim(), StringComparison.OrdinalIgnoreCase))
+                                                                    {
+                                                                        model.HBookingId = rr["BookingID"] != DBNull.Value ? Convert.ToInt32(rr["BookingID"]) : (int?)null;
+                                                                        model.RoomId = rr["RoomID"] != DBNull.Value ? Convert.ToInt32(rr["RoomID"]) : (int?)null;
+                                                                        // Also enrich guest fields if empty
+                                                                        if (string.IsNullOrWhiteSpace(model.CustomerName)) model.CustomerName = rr["GuestName"]?.ToString();
+                                                                        if (string.IsNullOrWhiteSpace(model.CustomerPhone)) model.CustomerPhone = rr["GuestPhone"]?.ToString();
+                                                                        if (string.IsNullOrWhiteSpace(model.CustomerEmailId)) model.CustomerEmailId = rr["GuestEmailID"]?.ToString();
+                                                                        break;
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    catch
+                                                    {
+                                                        // non-fatal; final validation/persist below
+                                                    }
+                                                }
+
+                                                // Validate that we have required resolved fields
+                                                if (!model.HBranchId.HasValue || (!model.RoomId.HasValue && string.IsNullOrWhiteSpace(model.HBookingNo)))
+                                                {
+                                                    transaction.Rollback();
+                                                    ModelState.AddModelError("", "Room Service details are incomplete.");
+                                                    goto Repopulate;
+                                                }
+
+                                                try
+                                                {
+                                                    using (var updateRsCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                                        DECLARE @oid INT = @OrderId;
+                                                        IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'H_BranchID')
+                                                            UPDATE dbo.Orders SET H_BranchID = @HBranchId WHERE Id = @oid;
+                                                        IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'RoomID')
+                                                            UPDATE dbo.Orders SET RoomID = @RoomId WHERE Id = @oid;
+                                                        IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'HBookingID')
+                                                            UPDATE dbo.Orders SET HBookingID = @HBookingId WHERE Id = @oid;
+                                                        IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'HBookingNo')
+                                                            UPDATE dbo.Orders SET HBookingNo = @HBookingNo WHERE Id = @oid;
+                                                    ", connection, transaction))
+                                                    {
+                                                        updateRsCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                                        updateRsCmd.Parameters.AddWithValue("@HBranchId", (object?)model.HBranchId ?? DBNull.Value);
+                                                        updateRsCmd.Parameters.AddWithValue("@RoomId", (object?)model.RoomId ?? DBNull.Value);
+                                                        updateRsCmd.Parameters.AddWithValue("@HBookingId", (object?)model.HBookingId ?? DBNull.Value);
+                                                        updateRsCmd.Parameters.AddWithValue("@HBookingNo", string.IsNullOrWhiteSpace(model.HBookingNo) ? (object)DBNull.Value : model.HBookingNo);
+                                                        updateRsCmd.ExecuteNonQuery();
+                                                    }
+                                                }
+                                                catch
+                                                {
+                                                    // Non-fatal: do not block order creation if columns missing
+                                                }
+                                            }
                                             // Patch: Ensure Orders.CashierId is populated for Day Closing system amount calculations
                                             // Root cause of zero SystemAmount: orders were created with NULL CashierId so cash payments
                                             // couldn't be attributed to any cashier in UpdateCashierSystemAmountsAsync aggregation.
@@ -357,7 +446,7 @@ namespace RestaurantManagementSystem.Controllers
                                                 var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
                                                 var userName = User.FindFirst(ClaimTypes.Name)?.Value ?? "System";
                                                 var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-                                                var orderTypeText = model.OrderType switch { 0 => "Dine In", 1 => "Takeout", 2 => "Delivery", 3 => "Online", _ => "Unknown" };
+                                                var orderTypeText = model.OrderType switch { 0 => "Dine In", 1 => "Takeout", 2 => "Delivery", 3 => "Online", 4 => "Room Service", _ => "Unknown" };
                                                 var additionalInfo = $"Order Type: {orderTypeText}";
                                                 if (model.OrderType == 0 && primaryTableId.HasValue)
                                                 {
@@ -395,6 +484,7 @@ namespace RestaurantManagementSystem.Controllers
                 }
             }
             
+            Repopulate:
             // If we get here, something went wrong - repopulate the model
             using (Microsoft.Data.SqlClient.SqlConnection connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
             {
@@ -450,6 +540,78 @@ namespace RestaurantManagementSystem.Controllers
             }
             
             return View(model);
+        }
+
+        [HttpGet]
+        public IActionResult GetHotelBranches()
+        {
+            try
+            {
+                var list = new List<object>();
+                using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand("usp_GetBranchfromHotel", connection))
+                    {
+                        cmd.CommandType = CommandType.StoredProcedure;
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                var branchId = reader["BranchID"] != DBNull.Value ? Convert.ToInt32(reader["BranchID"]) : 0;
+                                var branch = reader["Branch"]?.ToString() ?? string.Empty;
+                                list.Add(new { branchId, branch });
+                            }
+                        }
+                    }
+                }
+                return Json(new { success = true, data = list });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpGet]
+        public IActionResult GetCheckedInOccupiedRooms(int branchId)
+        {
+            try
+            {
+                var rooms = new List<object>();
+                using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand("sp_GetCheckedInOccupiedRooms", connection))
+                    {
+                        cmd.CommandType = CommandType.StoredProcedure;
+                        cmd.Parameters.AddWithValue("@BranchID", branchId);
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                rooms.Add(new
+                                {
+                                    bookingId = reader["BookingID"] != DBNull.Value ? Convert.ToInt32(reader["BookingID"]) : 0,
+                                    bookingNo = reader["BookingNo"]?.ToString(),
+                                    branchId = reader["BranchID"] != DBNull.Value ? Convert.ToInt32(reader["BranchID"]) : 0,
+                                    roomId = reader["RoomID"] != DBNull.Value ? Convert.ToInt32(reader["RoomID"]) : 0,
+                                    roomNo = reader["RoomNo"]?.ToString(),
+                                    guestName = reader["GuestName"]?.ToString(),
+                                    guestPhone = reader["GuestPhone"]?.ToString(),
+                                    guestEmailId = reader["GuestEmailID"]?.ToString(),
+                                    plannedCheckoutDate = reader["PlannedCheckoutDate"] != DBNull.Value ? Convert.ToDateTime(reader["PlannedCheckoutDate"]).ToString("yyyy-MM-dd") : null
+                                });
+                            }
+                        }
+                    }
+                }
+                return Json(new { success = true, data = rooms });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
         }
         
         // Order Details
@@ -588,23 +750,47 @@ namespace RestaurantManagementSystem.Controllers
                 }
 
                 // Load available menu items filtered by group if column exists; else load all
-                var sql = @"DECLARE @hasCol bit = 0;
-                             IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.MenuItems') AND name = 'menuitemgroupID')
-                                SET @hasCol = 1;
-                             IF (@hasCol = 1)
-                             BEGIN
-                                SELECT Id, PLUCode, Name, Description, Price, TakeoutPrice, DeliveryPrice
-                                FROM dbo.MenuItems
-                                WHERE IsAvailable = 1 AND (menuitemgroupID = @GroupId)
-                                ORDER BY Name
-                             END
-                             ELSE
-                             BEGIN
-                                SELECT Id, PLUCode, Name, Description, Price, TakeoutPrice, DeliveryPrice
-                                FROM dbo.MenuItems
-                                WHERE IsAvailable = 1
-                                ORDER BY Name
-                             END";
+                     var sql = @"DECLARE @hasGroupCol bit = 0;
+                                      DECLARE @hasRoomServiceCol bit = 0;
+                                      IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.MenuItems') AND name = 'menuitemgroupID')
+                                          SET @hasGroupCol = 1;
+                                      IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.MenuItems') AND name = 'RoomServicePrice')
+                                          SET @hasRoomServiceCol = 1;
+
+                                      IF (@hasGroupCol = 1)
+                                      BEGIN
+                                          IF (@hasRoomServiceCol = 1)
+                                          BEGIN
+                                                SELECT Id, PLUCode, Name, Description, Price, TakeoutPrice, DeliveryPrice, RoomServicePrice
+                                                FROM dbo.MenuItems
+                                                WHERE IsAvailable = 1 AND (menuitemgroupID = @GroupId)
+                                                ORDER BY Name
+                                          END
+                                          ELSE
+                                          BEGIN
+                                                SELECT Id, PLUCode, Name, Description, Price, TakeoutPrice, DeliveryPrice, CAST(NULL AS decimal(18,2)) AS RoomServicePrice
+                                                FROM dbo.MenuItems
+                                                WHERE IsAvailable = 1 AND (menuitemgroupID = @GroupId)
+                                                ORDER BY Name
+                                          END
+                                      END
+                                      ELSE
+                                      BEGIN
+                                          IF (@hasRoomServiceCol = 1)
+                                          BEGIN
+                                                SELECT Id, PLUCode, Name, Description, Price, TakeoutPrice, DeliveryPrice, RoomServicePrice
+                                                FROM dbo.MenuItems
+                                                WHERE IsAvailable = 1
+                                                ORDER BY Name
+                                          END
+                                          ELSE
+                                          BEGIN
+                                                SELECT Id, PLUCode, Name, Description, Price, TakeoutPrice, DeliveryPrice, CAST(NULL AS decimal(18,2)) AS RoomServicePrice
+                                                FROM dbo.MenuItems
+                                                WHERE IsAvailable = 1
+                                                ORDER BY Name
+                                          END
+                                      END";
                 using (var icmd = new Microsoft.Data.SqlClient.SqlCommand(sql, connection))
                 {
                     icmd.Parameters.AddWithValue("@GroupId", model.SelectedMenuItemGroupId);
@@ -620,7 +806,8 @@ namespace RestaurantManagementSystem.Controllers
                                 Description = reader.IsDBNull(3) ? null : reader.GetString(3),
                                 Price = reader.GetDecimal(4),
                                 TakeoutPrice = reader.IsDBNull(5) ? (decimal?)null : reader.GetDecimal(5),
-                                DeliveryPrice = reader.IsDBNull(6) ? (decimal?)null : reader.GetDecimal(6)
+                                DeliveryPrice = reader.IsDBNull(6) ? (decimal?)null : reader.GetDecimal(6),
+                                RoomServicePrice = reader.IsDBNull(7) ? (decimal?)null : reader.GetDecimal(7)
                             });
                         }
                     }
@@ -699,31 +886,66 @@ namespace RestaurantManagementSystem.Controllers
                     }
                     
                     var sql = @"DECLARE @hasCol bit = 0;
+                                 DECLARE @hasRoomServiceCol bit = 0;
                                  IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.MenuItems') AND name = 'menuitemgroupID')
                                     SET @hasCol = 1;
+                                 IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.MenuItems') AND name = 'RoomServicePrice')
+                                    SET @hasRoomServiceCol = 1;
                                  IF (@hasCol = 1)
                                  BEGIN
-                                    SELECT Id, PLUCode, Name, 
-                                        CASE 
-                                            WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price)  -- Takeout
-                                            WHEN @OrderType IN (2, 3) THEN ISNULL(DeliveryPrice, Price)  -- Delivery or Online
-                                            ELSE Price  -- Dine-In (0) or default
-                                        END AS Price
-                                    FROM dbo.MenuItems
-                                    WHERE IsAvailable = 1 AND (menuitemgroupID = @GroupId)
-                                    ORDER BY Name
+                                    IF (@hasRoomServiceCol = 1)
+                                    BEGIN
+                                        SELECT Id, PLUCode, Name, 
+                                            CASE 
+                                                WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price)  -- Takeout
+                                                WHEN @OrderType = 4 THEN ISNULL(RoomServicePrice, ISNULL(DeliveryPrice, Price))  -- Room Service
+                                                WHEN @OrderType IN (2, 3) THEN ISNULL(DeliveryPrice, Price)  -- Delivery or Online
+                                                ELSE Price  -- Dine-In (0) or default
+                                            END AS Price
+                                        FROM dbo.MenuItems
+                                        WHERE IsAvailable = 1 AND (menuitemgroupID = @GroupId)
+                                        ORDER BY Name
+                                    END
+                                    ELSE
+                                    BEGIN
+                                        SELECT Id, PLUCode, Name, 
+                                            CASE 
+                                                WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price)  -- Takeout
+                                                WHEN @OrderType IN (2, 3, 4) THEN ISNULL(DeliveryPrice, Price)  -- Delivery or Online
+                                                ELSE Price  -- Dine-In (0) or default
+                                            END AS Price
+                                        FROM dbo.MenuItems
+                                        WHERE IsAvailable = 1 AND (menuitemgroupID = @GroupId)
+                                        ORDER BY Name
+                                    END
                                  END
                                  ELSE
                                  BEGIN
-                                    SELECT Id, PLUCode, Name, 
-                                        CASE 
-                                            WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price)  -- Takeout
-                                            WHEN @OrderType IN (2, 3) THEN ISNULL(DeliveryPrice, Price)  -- Delivery or Online
-                                            ELSE Price  -- Dine-In (0) or default
-                                        END AS Price
-                                    FROM dbo.MenuItems
-                                    WHERE IsAvailable = 1
-                                    ORDER BY Name
+                                    IF (@hasRoomServiceCol = 1)
+                                    BEGIN
+                                        SELECT Id, PLUCode, Name, 
+                                            CASE 
+                                                WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price)  -- Takeout
+                                                WHEN @OrderType = 4 THEN ISNULL(RoomServicePrice, ISNULL(DeliveryPrice, Price))  -- Room Service
+                                                WHEN @OrderType IN (2, 3) THEN ISNULL(DeliveryPrice, Price)  -- Delivery or Online
+                                                ELSE Price  -- Dine-In (0) or default
+                                            END AS Price
+                                        FROM dbo.MenuItems
+                                        WHERE IsAvailable = 1
+                                        ORDER BY Name
+                                    END
+                                    ELSE
+                                    BEGIN
+                                        SELECT Id, PLUCode, Name, 
+                                            CASE 
+                                                WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price)  -- Takeout
+                                                WHEN @OrderType IN (2, 3, 4) THEN ISNULL(DeliveryPrice, Price)  -- Delivery or Online
+                                                ELSE Price  -- Dine-In (0) or default
+                                            END AS Price
+                                        FROM dbo.MenuItems
+                                        WHERE IsAvailable = 1
+                                        ORDER BY Name
+                                    END
                                  END";
                     using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(sql, connection))
                     {
@@ -775,6 +997,7 @@ namespace RestaurantManagementSystem.Controllers
                         1 => "Takeout",
                         2 => "Delivery",
                         3 => "Online",
+                        4 => "Room Service",
                         _ => "Unknown"
                     },
                     status = model.Status switch
@@ -883,20 +1106,42 @@ namespace RestaurantManagementSystem.Controllers
                 
                 // Insert with order type-based pricing
                 using (var command = new Microsoft.Data.SqlClient.SqlCommand(@"
-                    INSERT INTO OrderItems (OrderId, MenuItemId, Quantity, UnitPrice, Subtotal, Status, CreatedAt) 
-                    SELECT @OrderId, Id, @Quantity, 
-                        CASE 
-                            WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price)  -- Takeout
-                            WHEN @OrderType IN (2, 3) THEN ISNULL(DeliveryPrice, Price)  -- Delivery or Online
-                            ELSE Price  -- Dine-In (0) or default
-                        END,
-                        CASE 
-                            WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price) * @Quantity  -- Takeout
-                            WHEN @OrderType IN (2, 3) THEN ISNULL(DeliveryPrice, Price) * @Quantity  -- Delivery or Online
-                            ELSE Price * @Quantity  -- Dine-In (0) or default
-                        END,
-                        0, GETDATE() 
-                    FROM MenuItems WHERE Id = @MenuItemId", connection))
+                    IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.MenuItems') AND name = 'RoomServicePrice')
+                    BEGIN
+                        INSERT INTO OrderItems (OrderId, MenuItemId, Quantity, UnitPrice, Subtotal, Status, CreatedAt) 
+                        SELECT @OrderId, Id, @Quantity, 
+                            CASE 
+                                WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price)  -- Takeout
+                                WHEN @OrderType = 4 THEN ISNULL(RoomServicePrice, ISNULL(DeliveryPrice, Price))  -- Room Service
+                                WHEN @OrderType IN (2, 3) THEN ISNULL(DeliveryPrice, Price)  -- Delivery or Online
+                                ELSE Price  -- Dine-In (0) or default
+                            END,
+                            CASE 
+                                WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price) * @Quantity  -- Takeout
+                                WHEN @OrderType = 4 THEN ISNULL(RoomServicePrice, ISNULL(DeliveryPrice, Price)) * @Quantity  -- Room Service
+                                WHEN @OrderType IN (2, 3) THEN ISNULL(DeliveryPrice, Price) * @Quantity  -- Delivery or Online
+                                ELSE Price * @Quantity  -- Dine-In (0) or default
+                            END,
+                            0, GETDATE() 
+                        FROM MenuItems WHERE Id = @MenuItemId
+                    END
+                    ELSE
+                    BEGIN
+                        INSERT INTO OrderItems (OrderId, MenuItemId, Quantity, UnitPrice, Subtotal, Status, CreatedAt) 
+                        SELECT @OrderId, Id, @Quantity, 
+                            CASE 
+                                WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price)  -- Takeout
+                                WHEN @OrderType IN (2, 3, 4) THEN ISNULL(DeliveryPrice, Price)  -- Delivery / Online / Room Service (fallback)
+                                ELSE Price  -- Dine-In (0) or default
+                            END,
+                            CASE 
+                                WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price) * @Quantity  -- Takeout
+                                WHEN @OrderType IN (2, 3, 4) THEN ISNULL(DeliveryPrice, Price) * @Quantity  -- Delivery / Online / Room Service (fallback)
+                                ELSE Price * @Quantity  -- Dine-In (0) or default
+                            END,
+                            0, GETDATE() 
+                        FROM MenuItems WHERE Id = @MenuItemId
+                    END", connection))
                 {
                     command.Parameters.AddWithValue("@OrderId", orderId);
                     command.Parameters.AddWithValue("@MenuItemId", menuItemId);
@@ -2565,6 +2810,7 @@ namespace RestaurantManagementSystem.Controllers
                                 1 => "Takeout",
                                 2 => "Delivery",
                                 3 => "Online",
+                                4 => "Room Service",
                                 _ => "Unknown"
                             };
                             
@@ -2669,6 +2915,7 @@ namespace RestaurantManagementSystem.Controllers
                                 1 => "Takeout",
                                 2 => "Delivery",
                                 3 => "Online",
+                                4 => "Room Service",
                                 _ => "Unknown"
                             };
                             
@@ -2748,6 +2995,7 @@ namespace RestaurantManagementSystem.Controllers
                                 1 => "Takeout",
                                 2 => "Delivery",
                                 3 => "Online",
+                                4 => "Room Service",
                                 _ => "Unknown"
                             };
                             
@@ -3002,6 +3250,12 @@ namespace RestaurantManagementSystem.Controllers
                 // Get order details
                 // First check if the UpdatedAt column exists in the Orders table
                 bool hasUpdatedAtColumn = ColumnExistsInTable("Orders", "UpdatedAt");
+
+                // Room Service / Hotel columns (may not exist in all DBs)
+                bool hasHBranchIdColumn = ColumnExistsInTable("Orders", "H_BranchID");
+                bool hasRoomIdColumn = ColumnExistsInTable("Orders", "RoomID");
+                bool hasHBookingIdColumn = ColumnExistsInTable("Orders", "HBookingID");
+                bool hasHBookingNoColumn = ColumnExistsInTable("Orders", "HBookingNo");
                 
                 // Build the SQL query based on column existence
                 string selectSql = hasUpdatedAtColumn 
@@ -3058,6 +3312,13 @@ namespace RestaurantManagementSystem.Controllers
                         ISNULL(o.CGSTAmount, 0) AS CGSTAmount,
                         ISNULL(o.SGSTAmount, 0) AS SGSTAmount,";
 
+                    // Append Room Service columns with safe fallbacks to keep schema compatibility
+                    selectSql += (hasHBranchIdColumn ? "\n                        o.H_BranchID AS H_BranchID," : "\n                        CAST(NULL AS INT) AS H_BranchID,");
+                    selectSql += (hasRoomIdColumn ? "\n                        o.RoomID AS RoomID," : "\n                        CAST(NULL AS INT) AS RoomID,");
+                    selectSql += (hasHBookingIdColumn ? "\n                        o.HBookingID AS HBookingID," : "\n                        CAST(NULL AS INT) AS HBookingID,");
+                    // HBookingNo may be stored as numeric in some DBs; cast to NVARCHAR to keep reader mapping safe
+                    selectSql += (hasHBookingNoColumn ? "\n                        CAST(o.HBookingNo AS NVARCHAR(50)) AS HBookingNo," : "\n                        CAST(NULL AS NVARCHAR(50)) AS HBookingNo,");
+
                 using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(selectSql + @"
                         CASE 
                             WHEN o.TableTurnoverId IS NOT NULL THEN t.TableName 
@@ -3086,6 +3347,8 @@ namespace RestaurantManagementSystem.Controllers
                                 0 => "Dine In",
                                 1 => "Take Out",
                                 2 => "Delivery",
+                                3 => "Online",
+                                4 => "Room Service",
                                 _ => "Unknown"
                             };
                             
@@ -3122,8 +3385,9 @@ namespace RestaurantManagementSystem.Controllers
                                 CreatedAt = reader.GetDateTime(16),
                                 UpdatedAt = reader.GetDateTime(17), // We've handled this in the SQL query
                                 CompletedAt = reader.IsDBNull(18) ? null : (DateTime?)reader.GetDateTime(18),
-                                TableName = reader.IsDBNull(25) ? null : reader.GetString(25),
-                                GuestName = reader.IsDBNull(26) ? null : reader.GetString(26),
+                                // TableName/GuestName ordinals can shift when optional columns are appended to SELECT
+                                TableName = null,
+                                GuestName = null,
                                 // Read persisted GST metadata from Orders table
                                 GSTPercentage = reader.IsDBNull(19) ? 0m : reader.GetDecimal(19),
                                 CGSTAmount = reader.IsDBNull(23) ? 0m : reader.GetDecimal(23),
@@ -3132,6 +3396,47 @@ namespace RestaurantManagementSystem.Controllers
                                 KitchenTickets = new List<KitchenTicketViewModel>(),
                                 AvailableCourses = new List<CourseType>()
                             };
+
+                            // Load TableName/GuestName safely by column name
+                            try
+                            {
+                                var ordTableName = reader.GetOrdinal("TableName");
+                                if (ordTableName >= 0 && !reader.IsDBNull(ordTableName)) order.TableName = reader.GetString(ordTableName);
+                            }
+                            catch { }
+                            try
+                            {
+                                var ordGuestName = reader.GetOrdinal("GuestName");
+                                if (ordGuestName >= 0 && !reader.IsDBNull(ordGuestName)) order.GuestName = reader.GetString(ordGuestName);
+                            }
+                            catch { }
+
+                            // Room Service fields (present via safe selectSql aliases)
+                            try
+                            {
+                                var ordHBranch = reader.GetOrdinal("H_BranchID");
+                                if (ordHBranch >= 0 && !reader.IsDBNull(ordHBranch)) order.HBranchId = reader.GetInt32(ordHBranch);
+                            }
+                            catch { }
+                            try
+                            {
+                                var ordRoomId = reader.GetOrdinal("RoomID");
+                                if (ordRoomId >= 0 && !reader.IsDBNull(ordRoomId)) order.RoomId = reader.GetInt32(ordRoomId);
+                            }
+                            catch { }
+                            try
+                            {
+                                var ordHBookingId = reader.GetOrdinal("HBookingID");
+                                if (ordHBookingId >= 0 && !reader.IsDBNull(ordHBookingId)) order.HBookingId = reader.GetInt32(ordHBookingId);
+                            }
+                            catch { }
+                            try
+                            {
+                                var ordHBookingNo = reader.GetOrdinal("HBookingNo");
+                                if (ordHBookingNo >= 0 && !reader.IsDBNull(ordHBookingNo))
+                                    order.HBookingNo = Convert.ToString(reader.GetValue(ordHBookingNo));
+                            }
+                            catch { }
 
                             // Safely load delivery address if present
                             try
@@ -3152,6 +3457,45 @@ namespace RestaurantManagementSystem.Controllers
                             return null; // Order not found
                         }
                     }
+                }
+
+                // Resolve Room Service RoomNo (and BookingNo only if missing) from hotel SP when possible.
+                // Primary source for BookingNo is Orders.HBookingNo.
+                if (order != null && order.OrderType == 4 && order.HBranchId.HasValue)
+                {
+                    try
+                    {
+                        using (var cmd = new Microsoft.Data.SqlClient.SqlCommand("sp_GetCheckedInOccupiedRooms", connection))
+                        {
+                            cmd.CommandType = CommandType.StoredProcedure;
+                            cmd.Parameters.AddWithValue("@BranchID", order.HBranchId.Value);
+                            using (var rr = cmd.ExecuteReader())
+                            {
+                                while (rr.Read())
+                                {
+                                    int? roomId = rr["RoomID"] != DBNull.Value ? Convert.ToInt32(rr["RoomID"]) : (int?)null;
+                                    var bookingNo = rr["BookingNo"]?.ToString();
+                                    bool match = false;
+
+                                    if (order.RoomId.HasValue && roomId.HasValue && order.RoomId.Value == roomId.Value) match = true;
+                                    if (!match && !string.IsNullOrWhiteSpace(order.HBookingNo) && !string.IsNullOrWhiteSpace(bookingNo)
+                                        && string.Equals(order.HBookingNo.Trim(), bookingNo.Trim(), StringComparison.OrdinalIgnoreCase)) match = true;
+
+                                    if (!match) continue;
+
+                                    order.RoomNo = rr["RoomNo"]?.ToString();
+                                    if (string.IsNullOrWhiteSpace(order.HBookingNo)) order.HBookingNo = bookingNo;
+
+                                    // Enrich guest fields only if missing
+                                    if (string.IsNullOrWhiteSpace(order.CustomerName)) order.CustomerName = rr["GuestName"]?.ToString();
+                                    if (string.IsNullOrWhiteSpace(order.CustomerPhone)) order.CustomerPhone = rr["GuestPhone"]?.ToString();
+                                    if (string.IsNullOrWhiteSpace(order.CustomerEmailId)) order.CustomerEmailId = rr["GuestEmailID"]?.ToString();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    catch { /* non-fatal; display can fallback */ }
                 }
                 
                 // Get order items
@@ -3750,12 +4094,25 @@ namespace RestaurantManagementSystem.Controllers
                                 // Get the unit price based on order type
                                 decimal unitPrice = 0;
                                 using (var command = new Microsoft.Data.SqlClient.SqlCommand(@"
-                                    SELECT CASE 
-                                        WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price)  -- Takeout
-                                        WHEN @OrderType IN (2, 3) THEN ISNULL(DeliveryPrice, Price)  -- Delivery or Online
-                                        ELSE Price  -- Dine-In (0) or default
+                                    IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.MenuItems') AND name = 'RoomServicePrice')
+                                    BEGIN
+                                        SELECT CASE 
+                                            WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price)  -- Takeout
+                                            WHEN @OrderType = 4 THEN ISNULL(RoomServicePrice, ISNULL(DeliveryPrice, Price))  -- Room Service
+                                            WHEN @OrderType IN (2, 3) THEN ISNULL(DeliveryPrice, Price)  -- Delivery or Online
+                                            ELSE Price  -- Dine-In (0) or default
+                                        END
+                                        FROM MenuItems WHERE Id = @MenuItemId
                                     END
-                                    FROM MenuItems WHERE Id = @MenuItemId", connection, transaction))
+                                    ELSE
+                                    BEGIN
+                                        SELECT CASE 
+                                            WHEN @OrderType = 1 THEN ISNULL(TakeoutPrice, Price)  -- Takeout
+                                            WHEN @OrderType IN (2, 3, 4) THEN ISNULL(DeliveryPrice, Price)  -- Delivery / Online / Room Service (fallback)
+                                            ELSE Price  -- Dine-In (0) or default
+                                        END
+                                        FROM MenuItems WHERE Id = @MenuItemId
+                                    END", connection, transaction))
                                 {
                                     command.Parameters.AddWithValue("@MenuItemId", item.MenuItemId.Value);
                                     command.Parameters.AddWithValue("@OrderType", orderType);

@@ -24,7 +24,7 @@ namespace RestaurantManagementSystem.Models
     {
         public int Id { get; set; }
         public string OrderNumber { get; set; }
-        public int OrderType { get; set; } // 0=Dine-In, 1=Takeout, 2=Delivery, 3=Online
+        public int OrderType { get; set; } // 0=Dine-In, 1=Takeout, 2=Delivery, 3=Online, 4=Room Service
         public string OrderTypeDisplay { get; set; }
         public int Status { get; set; } // 0=Open, 1=In Progress, 2=Ready, 3=Completed, 4=Cancelled
         public string StatusDisplay { get; set; }
@@ -53,7 +53,7 @@ namespace RestaurantManagementSystem.Models
         
         [Required]
         [Display(Name = "Order Type")]
-        public int OrderType { get; set; } = 0; // Default to Dine-In
+        public int OrderType { get; set; } = 0; // Default to Dine-In (4 = Room Service)
         
         [Display(Name = "Customer Name")]
         [StringLength(100)]
@@ -76,6 +76,20 @@ namespace RestaurantManagementSystem.Models
         [Display(Name = "Special Instructions")]
         [StringLength(500)]
         public string SpecialInstructions { get; set; }
+
+        // Room Service (Hotel) only
+        [Display(Name = "Hotel Branch")]
+        public int? HBranchId { get; set; }
+
+        [Display(Name = "Room")]
+        public int? RoomId { get; set; }
+
+        [Display(Name = "Hotel Booking ID")]
+        public int? HBookingId { get; set; }
+
+        [Display(Name = "Booking No")]
+        [StringLength(50)]
+        public string HBookingNo { get; set; }
     }
     
     public class OrderViewModel
@@ -94,6 +108,13 @@ namespace RestaurantManagementSystem.Models
         public string CustomerPhone { get; set; }
         public string CustomerEmailId { get; set; }
         public string CustomerAddress { get; set; }
+
+        // Room Service (Hotel) fields (optional)
+        public int? HBranchId { get; set; }
+        public int? RoomId { get; set; }
+        public string RoomNo { get; set; }
+        public int? HBookingId { get; set; }
+        public string HBookingNo { get; set; }
         private decimal? _subtotal;
         public decimal Subtotal {
             get {

@@ -43,6 +43,7 @@
                                     <option value="0">Dine-In</option>
                                     <option value="1">Takeout</option>
                                     <option value="2">Delivery</option>
+                                    <option value="4">Room Service</option>
                                 </select>
                                 <span asp-validation-for="OrderType" class="text-danger"></span>
                                 <div id="tableSection" class="mt-3">
@@ -121,6 +122,35 @@
                                     <textarea asp-for="CustomerAddress" class="form-control" rows="3" placeholder="Flat/House No, Street, Area, City, PIN"></textarea>
                                     <span asp-validation-for="CustomerAddress" class="text-danger"></span>
                                 </div>
+
+                                <div id="roomServiceSection" class="mt-3 d-none">
+                                    <div class="mb-2 text-secondary fw-bold" style="font-size:1.1rem;">Room Service Details</div>
+
+                                    <div class="mb-3">
+                                        <label asp-for="HBranchId" class="form-label">Hotel Branch</label>
+                                        <select asp-for="HBranchId" class="form-select" id="hotelBranch">
+                                            <option value="">-- Select Branch --</option>
+                                        </select>
+                                        <span asp-validation-for="HBranchId" class="text-danger"></span>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label asp-for="RoomId" class="form-label">Room No</label>
+                                        <select asp-for="RoomId" class="form-select" id="roomNo" disabled>
+                                            <option value="">-- Select Room --</option>
+                                        </select>
+                                        <span asp-validation-for="RoomId" class="text-danger"></span>
+                                    </div>
+
+                                    <div class="mb-1">
+                                        <label asp-for="HBookingNo" class="form-label">Booking No</label>
+                                        <input asp-for="HBookingNo" class="form-control" id="bookingNo" placeholder="Enter booking no" />
+                                        <span asp-validation-for="HBookingNo" class="text-danger"></span>
+                                        <div class="form-text">Select Room or enter Booking No to auto-fill guest details.</div>
+                                    </div>
+
+                                    <input asp-for="HBookingId" type="hidden" id="bookingId" />
+                                </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-2 text-secondary fw-bold" style="font-size:1.1rem;">Special Instructions</div>
@@ -165,12 +195,15 @@
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
     <script>
         $(function () {
+            var roomServiceRooms = [];
+
             function toggleTableSection() {
                 var orderType = $('#orderType').val();
                 if (orderType === '0') {
                     $('#tableSection').removeClass('d-none');
                     $('#customerSection, #phoneSection').removeClass('d-none');
                     $('#addressSection').addClass('d-none');
+                    $('#roomServiceSection').addClass('d-none');
                     $('#mergeTablesWrapper').removeClass('d-none');
                 } else {
                     $('#tableSection').addClass('d-none');
@@ -181,7 +214,90 @@
                     } else {
                         $('#addressSection').addClass('d-none');
                     }
+                    // Show room service fields only for Room Service (foods order create)
+                    if (orderType === '4') {
+                        $('#roomServiceSection').removeClass('d-none');
+                    } else {
+                        $('#roomServiceSection').addClass('d-none');
+                    }
                     $('#mergeTablesWrapper').addClass('d-none');
+                }
+            }
+
+            function resetRoomServiceState() {
+                roomServiceRooms = [];
+                $('#hotelBranch').val('');
+                $('#roomNo').prop('disabled', true).html('<option value="">-- Select Room --</option>');
+                $('#bookingNo').prop('readonly', false).val('');
+                $('#bookingId').val('');
+                $('#CustomerName').val('');
+                $('#CustomerPhone').val('');
+            }
+
+            function ensureBranchesLoaded() {
+                if ($('#hotelBranch option').length > 1) return;
+                $.getJSON('/Order/GetHotelBranches')
+                    .done(function (res) {
+                        if (!res || res.success !== true) return;
+                        var opts = '<option value="">-- Select Branch --</option>';
+                        (res.data || []).forEach(function (b) {
+                            opts += '<option value="' + b.branchId + '">' + b.branch + '</option>';
+                        });
+                        $('#hotelBranch').html(opts);
+                    });
+            }
+
+            function loadRooms(branchId) {
+                $('#roomNo').prop('disabled', true).html('<option value="">Loading...</option>');
+                $('#bookingNo').prop('readonly', false);
+                $('#bookingId').val('');
+                roomServiceRooms = [];
+
+                $.getJSON('/Order/GetCheckedInOccupiedRooms', { branchId: branchId })
+                    .done(function (res) {
+                        if (!res || res.success !== true) {
+                            $('#roomNo').prop('disabled', true).html('<option value="">-- Select Room --</option>');
+                            return;
+                        }
+                        roomServiceRooms = res.data || [];
+                        var opts = '<option value="">-- Select Room --</option>';
+                        roomServiceRooms.forEach(function (r) {
+                            var label = (r.roomNo || '') + (r.guestName ? (' - ' + r.guestName) : '');
+                            opts += '<option value="' + r.roomId + '" data-bookingno="' + (r.bookingNo || '') + '">' + label + '</option>';
+                        });
+                        $('#roomNo').html(opts).prop('disabled', false);
+                    })
+                    .fail(function () {
+                        $('#roomNo').prop('disabled', true).html('<option value="">-- Select Room --</option>');
+                    });
+            }
+
+            function applyRoomBookingData(roomRow) {
+                if (!roomRow) return;
+
+                $('#roomNo').val(String(roomRow.roomId || ''));
+                // Use readonly (not disabled) so the value is still posted in form submit
+                $('#bookingNo').val(roomRow.bookingNo || '').prop('readonly', true);
+                $('#bookingId').val(roomRow.bookingId || '');
+
+                // Map guest to existing fields
+                $('#CustomerName').val(roomRow.guestName || '');
+                $('#CustomerPhone').val(roomRow.guestPhone || '');
+                if (roomRow.guestEmailId && $('#CustomerEmailId').val().trim().length === 0) {
+                    $('#CustomerEmailId').val(roomRow.guestEmailId);
+                }
+            }
+
+            function tryResolveByBookingNo(bookingNo) {
+                var bn = (bookingNo || '').trim();
+                if (!bn) return;
+                var match = roomServiceRooms.find(function (r) { return (r.bookingNo || '').toLowerCase() === bn.toLowerCase(); });
+                if (match) {
+                    applyRoomBookingData(match);
+                } else {
+                    // Allow manual booking entry if not found
+                    $('#bookingId').val('');
+                    $('#bookingNo').prop('readonly', false);
                 }
             }
 
@@ -214,6 +330,44 @@
             $('#orderType').on('change', function(){ toggleTableSection(); updateMergeTableOptions(); });
             $('#TableTurnoverId').on('change', updateMergeTableOptions);
 
+            // Room service handlers
+            $('#orderType').on('change', function () {
+                if ($('#orderType').val() === '4') {
+                    ensureBranchesLoaded();
+                } else {
+                    resetRoomServiceState();
+                }
+            });
+
+            $('#hotelBranch').on('change', function () {
+                var branchId = $(this).val();
+                $('#bookingNo').val('').prop('readonly', false);
+                $('#bookingId').val('');
+                $('#roomNo').val('');
+                if (!branchId) {
+                    $('#roomNo').prop('disabled', true).html('<option value="">-- Select Room --</option>');
+                    roomServiceRooms = [];
+                    return;
+                }
+                loadRooms(branchId);
+            });
+
+            $('#roomNo').on('change', function () {
+                var roomId = $(this).val();
+                if (!roomId) {
+                    $('#bookingNo').val('').prop('readonly', false);
+                    $('#bookingId').val('');
+                    return;
+                }
+                var match = roomServiceRooms.find(function (r) { return String(r.roomId) === String(roomId); });
+                applyRoomBookingData(match);
+            });
+
+            $('#bookingNo').on('blur', function () {
+                if ($('#orderType').val() !== '4') return;
+                tryResolveByBookingNo($('#bookingNo').val());
+            });
+
             // Form submit validation
             $('form').on('submit', function(e){
                 if ($('#orderType').val() === '0') { // dine-in
@@ -243,6 +397,33 @@
                             $('#CustomerAddress').focus();
                             return false;
                         }
+                } else if ($('#orderType').val() === '4') { // room service
+                        var branchId = $('#hotelBranch').val();
+                        var roomId = $('#roomNo').val();
+                        var bookingNo = $.trim($('#bookingNo').val() || '');
+                        if (!branchId) {
+                            e.preventDefault();
+                            $('.alert-danger.rs-validation').remove();
+                            var a1 = '<div class="alert alert-danger alert-dismissible fade show rs-validation" role="alert">' +
+                                '<i class="fas fa-exclamation-triangle me-2"></i><strong>Hotel Branch Required!</strong> Please select hotel branch.' +
+                                '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+                            $('form .row').first().before(a1);
+                            $('html, body').animate({ scrollTop: $(document).find('.alert-danger.rs-validation').offset().top - 100 }, 400);
+                            $('#hotelBranch').focus();
+                            return false;
+                        }
+                        if (!roomId && bookingNo.length === 0) {
+                            e.preventDefault();
+                            $('.alert-danger.rs-validation').remove();
+                            var a2 = '<div class="alert alert-danger alert-dismissible fade show rs-validation" role="alert">' +
+                                '<i class="fas fa-exclamation-triangle me-2"></i><strong>Room/Booking Required!</strong> Select room or enter booking no.' +
+                                '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+                            $('form .row').first().before(a2);
+                            $('html, body').animate({ scrollTop: $(document).find('.alert-danger.rs-validation').offset().top - 100 }, 400);
+                            $('#roomNo').focus();
+                            return false;
+                        }
+                        // If bookingNo entered but no roomId matched, allow submission (backend will validate)
                 }
                 return true;
             });
@@ -250,6 +431,9 @@
             // Initial load
             toggleTableSection();
             updateMergeTableOptions();
+            if ($('#orderType').val() === '4') {
+                ensureBranchesLoaded();
+            }
         });
     </script>
 }

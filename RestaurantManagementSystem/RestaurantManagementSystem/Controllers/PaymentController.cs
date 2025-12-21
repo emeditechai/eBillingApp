@@ -3497,6 +3497,7 @@ END", connection))
                                 1 => "Takeout",
                                 2 => "Delivery",
                                 3 => "Online",
+                                4 => "Room Service",
                                 _ => "N/A"
                             };
                         }
@@ -3698,6 +3699,124 @@ END", connection))
                             using (var ordRoundCmd = new Microsoft.Data.SqlClient.SqlCommand(@"SELECT ISNULL(RoundoffAdjustmentAmt, 0) FROM Orders WHERE Id = @OrderId", connection))
                             {
                                 ordRoundCmd.Parameters.AddWithValue("@OrderId", orderId);
+
+                // Room Service metadata (safe, optional columns)
+                // Use a separate connection to avoid conflicts with any active DataReader on the main connection.
+                if (model.OrderType == 4)
+                {
+                    try
+                    {
+                        using (var rsConn = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                        {
+                            rsConn.Open();
+
+                            bool ColumnExists(string col)
+                            {
+                                using (var ccmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                    SELECT CASE WHEN EXISTS (
+                                        SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Orders') AND name = @Col
+                                    ) OR EXISTS (
+                                        SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = @Col
+                                    ) THEN 1 ELSE 0 END", rsConn))
+                                {
+                                    ccmd.Parameters.AddWithValue("@Col", col);
+                                    var obj = ccmd.ExecuteScalar();
+                                    return obj != null && obj != DBNull.Value && Convert.ToInt32(obj) == 1;
+                                }
+                            }
+
+                            string PickFirstExisting(params string[] candidates)
+                            {
+                                foreach (var c in candidates)
+                                {
+                                    if (ColumnExists(c)) return c;
+                                }
+                                return null;
+                            }
+
+                            var hBranchCol = PickFirstExisting("H_BranchID", "HBranchID", "HBranchId");
+                            var roomIdCol = PickFirstExisting("RoomID", "RoomId");
+                            var hBookingIdCol = PickFirstExisting("HBookingID", "HBookingId");
+                            var hBookingNoCol = PickFirstExisting("HBookingNo", "HBookingNO");
+
+                            if (hBranchCol != null || roomIdCol != null || hBookingIdCol != null || hBookingNoCol != null)
+                            {
+                                var rsSql = @"SELECT "
+                                    + (hBranchCol != null ? $"CAST([{hBranchCol}] AS int)" : "CAST(NULL AS int)") + " AS HBranchId, "
+                                    + (roomIdCol != null ? $"CAST([{roomIdCol}] AS int)" : "CAST(NULL AS int)") + " AS RoomId, "
+                                    + (hBookingIdCol != null ? $"CAST([{hBookingIdCol}] AS int)" : "CAST(NULL AS int)") + " AS HBookingId, "
+                                    + (hBookingNoCol != null ? $"CAST([{hBookingNoCol}] AS nvarchar(50))" : "CAST(NULL AS nvarchar(50))") + " AS HBookingNo "
+                                    + "FROM Orders WHERE Id = @OrderId";
+
+                                using (var rsCmd = new Microsoft.Data.SqlClient.SqlCommand(rsSql, rsConn))
+                                {
+                                    rsCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                    using (var rsReader = rsCmd.ExecuteReader())
+                                    {
+                                        if (rsReader.Read())
+                                        {
+                                            model.HBranchId = rsReader.IsDBNull(0) ? null : (int?)Convert.ToInt32(rsReader.GetValue(0));
+                                            model.RoomId = rsReader.IsDBNull(1) ? null : (int?)Convert.ToInt32(rsReader.GetValue(1));
+                                            model.HBookingId = rsReader.IsDBNull(2) ? null : (int?)Convert.ToInt32(rsReader.GetValue(2));
+                                            model.HBookingNo = rsReader.IsDBNull(3) ? null : Convert.ToString(rsReader.GetValue(3));
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Best-effort resolve RoomNo from hotel SP (may fail if checkout happened)
+                            try
+                            {
+                                if (model.HBranchId.HasValue && model.HBranchId.Value > 0)
+                                {
+                                    using (var sp = new Microsoft.Data.SqlClient.SqlCommand("sp_GetCheckedInOccupiedRooms", rsConn))
+                                    {
+                                        sp.CommandType = CommandType.StoredProcedure;
+                                        sp.Parameters.AddWithValue("@BranchID", model.HBranchId.Value);
+                                        using (var rr = sp.ExecuteReader())
+                                        {
+                                            int ordBookingId = -1, ordBookingNo = -1, ordRoomId = -1, ordRoomNo = -1;
+                                            try { ordBookingId = rr.GetOrdinal("BookingID"); } catch { }
+                                            try { ordBookingNo = rr.GetOrdinal("BookingNo"); } catch { }
+                                            try { ordRoomId = rr.GetOrdinal("RoomID"); } catch { }
+                                            try { ordRoomNo = rr.GetOrdinal("RoomNo"); } catch { }
+
+                                            while (rr.Read())
+                                            {
+                                                var spBookingNo = (ordBookingNo >= 0 && !rr.IsDBNull(ordBookingNo)) ? Convert.ToString(rr.GetValue(ordBookingNo)) : null;
+                                                var spBookingId = (ordBookingId >= 0 && !rr.IsDBNull(ordBookingId)) ? (int?)Convert.ToInt32(rr.GetValue(ordBookingId)) : null;
+                                                var spRoomId = (ordRoomId >= 0 && !rr.IsDBNull(ordRoomId)) ? (int?)Convert.ToInt32(rr.GetValue(ordRoomId)) : null;
+                                                var spRoomNo = (ordRoomNo >= 0 && !rr.IsDBNull(ordRoomNo)) ? Convert.ToString(rr.GetValue(ordRoomNo)) : null;
+
+                                                bool matches = false;
+                                                if (!string.IsNullOrWhiteSpace(model.HBookingNo) && !string.IsNullOrWhiteSpace(spBookingNo) && string.Equals(model.HBookingNo, spBookingNo, StringComparison.OrdinalIgnoreCase))
+                                                    matches = true;
+                                                else if (model.HBookingId.HasValue && spBookingId.HasValue && model.HBookingId.Value == spBookingId.Value)
+                                                    matches = true;
+                                                else if (model.RoomId.HasValue && spRoomId.HasValue && model.RoomId.Value == spRoomId.Value)
+                                                    matches = true;
+
+                                                if (matches)
+                                                {
+                                                    if (!string.IsNullOrWhiteSpace(spRoomNo)) model.RoomNo = spRoomNo;
+                                                    if (string.IsNullOrWhiteSpace(model.HBookingNo) && !string.IsNullOrWhiteSpace(spBookingNo)) model.HBookingNo = spBookingNo;
+                                                    if (!model.RoomId.HasValue && spRoomId.HasValue) model.RoomId = spRoomId;
+                                                    if (!model.HBookingId.HasValue && spBookingId.HasValue) model.HBookingId = spBookingId;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            catch { /* ignore SP failures */ }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogError(ex, "Failed to load Room Service metadata from Orders for OrderId={OrderId}", orderId);
+                    }
+                }
                                 var ordRoundObj = ordRoundCmd.ExecuteScalar();
                                 if (ordRoundObj != null && ordRoundObj != DBNull.Value)
                                 {

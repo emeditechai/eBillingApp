@@ -22,8 +22,15 @@ namespace RestaurantManagementSystem.Models
         public decimal RemainingAmount { get; set; }
         public int OrderStatus { get; set; }
         public string OrderStatusDisplay { get; set; }
-        public int OrderType { get; set; } // 0=Dine-In, 1=Takeout, 2=Delivery, 3=Online
+        public int OrderType { get; set; } // 0=Dine-In, 1=Takeout, 2=Delivery, 3=Online, 4=Room Service
         public string OrderTypeDisplay { get; set; }
+
+        // Room Service (optional)
+        public int? HBranchId { get; set; }
+        public int? RoomId { get; set; }
+        public int? HBookingId { get; set; }
+        public string HBookingNo { get; set; }
+        public string RoomNo { get; set; }
         public string CustomerEmailId { get; set; }
         public string CustomerName { get; set; }
         

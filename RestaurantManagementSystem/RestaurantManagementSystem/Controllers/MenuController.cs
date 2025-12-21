@@ -485,6 +485,7 @@ namespace RestaurantManagementSystem.Controllers
                 Price = menuItem.Price,
                 TakeoutPrice = menuItem.TakeoutPrice,
                 DeliveryPrice = menuItem.DeliveryPrice,
+                RoomServicePrice = menuItem.RoomServicePrice,
                 UOMId = menuItem.UOMId,
                 UOMName = menuItem.UOMName,
                 CategoryId = menuItem.CategoryId,
@@ -903,6 +904,7 @@ namespace RestaurantManagementSystem.Controllers
                 bool hasSubCategoriesTable = false;
                 bool hasMenuItemGroupColumn = false;
                 bool hasMenuItemGroupTable = false;
+                bool hasRoomServicePriceColumn = false;
                 
                 using (var checkCommand = new Microsoft.Data.SqlClient.SqlCommand(@"
                     SELECT 
@@ -913,7 +915,9 @@ namespace RestaurantManagementSystem.Controllers
                         (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
                          WHERE TABLE_NAME = 'MenuItems' AND COLUMN_NAME = 'menuitemgroupID') as HasGroupCol,
                         (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES 
-                         WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'menuitemgroup') as HasGroupTable", connection))
+                         WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'menuitemgroup') as HasGroupTable,
+                        (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+                         WHERE TABLE_NAME = 'MenuItems' AND COLUMN_NAME = 'RoomServicePrice') as HasRoomServicePriceCol", connection))
                 {
                     using (var reader = checkCommand.ExecuteReader())
                     {
@@ -923,6 +927,7 @@ namespace RestaurantManagementSystem.Controllers
                             hasSubCategoriesTable = reader.GetInt32("HasTable") > 0;
                             hasMenuItemGroupColumn = reader.GetInt32("HasGroupCol") > 0;
                             hasMenuItemGroupTable = reader.GetInt32("HasGroupTable") > 0;
+                            hasRoomServicePriceColumn = reader.GetInt32("HasRoomServicePriceCol") > 0;
                         }
                     }
                 }
@@ -930,6 +935,9 @@ namespace RestaurantManagementSystem.Controllers
                 // Build dynamic query based on available schema
                 string subCategoriesTable = GetSubCategoriesTableReference();
                 string query;
+                var selectRoomServicePriceCol = hasRoomServicePriceColumn
+                    ? "m.[RoomServicePrice] AS RoomServicePrice"
+                    : "CAST(NULL AS decimal(18,2)) AS RoomServicePrice";
                 if (hasSubCategoryColumn && hasSubCategoriesTable)
                 {
                     var joinGroup = hasMenuItemGroupColumn && hasMenuItemGroupTable ? "LEFT JOIN [dbo].[menuitemgroup] mg ON m.[menuitemgroupID] = mg.[ID]" : string.Empty;
@@ -943,6 +951,7 @@ namespace RestaurantManagementSystem.Controllers
                             m.[Price], 
                             m.[TakeoutPrice],
                             m.[DeliveryPrice],
+                            {selectRoomServicePriceCol},
                             m.[CategoryId], 
                             c.[Name] AS CategoryName,
                             m.[SubCategoryId],
@@ -977,6 +986,7 @@ namespace RestaurantManagementSystem.Controllers
                             m.[Price], 
                             m.[TakeoutPrice],
                             m.[DeliveryPrice],
+                            {selectRoomServicePriceCol},
                             m.[CategoryId], 
                             c.[Name] AS CategoryName,
                             NULL AS SubCategoryId,
@@ -1017,6 +1027,7 @@ namespace RestaurantManagementSystem.Controllers
                                         Price = SafeGetDecimal(reader, "Price"),
                                         TakeoutPrice = SafeGetNullableDecimal(reader, "TakeoutPrice"),
                                         DeliveryPrice = SafeGetNullableDecimal(reader, "DeliveryPrice"),
+                                        RoomServicePrice = SafeGetNullableDecimal(reader, "RoomServicePrice"),
                                         CategoryId = SafeGetInt(reader, "CategoryId"),
                                         Category = new Category { Name = SafeGetString(reader, "CategoryName") ?? "Uncategorized" },
                                         SubCategoryId = SafeGetNullableInt(reader, "SubCategoryId"),
@@ -1080,6 +1091,7 @@ namespace RestaurantManagementSystem.Controllers
                 bool hasMenuItemGroupTable = false;
                 bool hasUOMColumn = false;
                 bool hasUOMTable = false;
+                bool hasRoomServicePriceColumn = false;
                 
                 using (var checkCommand = new Microsoft.Data.SqlClient.SqlCommand(@"
                     SELECT 
@@ -1094,7 +1106,9 @@ namespace RestaurantManagementSystem.Controllers
                         (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
                          WHERE TABLE_NAME = 'MenuItems' AND COLUMN_NAME = 'UOM_Id') as HasUOMCol,
                         (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES 
-                         WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'tbl_mst_uom') as HasUOMTable", connection))
+                         WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'tbl_mst_uom') as HasUOMTable,
+                        (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+                         WHERE TABLE_NAME = 'MenuItems' AND COLUMN_NAME = 'RoomServicePrice') as HasRoomServicePriceCol", connection))
                 {
                     using (var reader = checkCommand.ExecuteReader())
                     {
@@ -1106,6 +1120,7 @@ namespace RestaurantManagementSystem.Controllers
                             hasMenuItemGroupTable = reader.GetInt32("HasGroupTable") > 0;
                             hasUOMColumn = reader.GetInt32("HasUOMCol") > 0;
                             hasUOMTable = reader.GetInt32("HasUOMTable") > 0;
+                            hasRoomServicePriceColumn = reader.GetInt32("HasRoomServicePriceCol") > 0;
                         }
                     }
                 }
@@ -1113,6 +1128,9 @@ namespace RestaurantManagementSystem.Controllers
                 // Build dynamic query based on available schema
                 string subCategoriesTable = GetSubCategoriesTableReference();
                 string query;
+                var selectRoomServicePriceCol = hasRoomServicePriceColumn
+                    ? "m.[RoomServicePrice] AS RoomServicePrice"
+                    : "CAST(NULL AS decimal(18,2)) AS RoomServicePrice";
                 if (hasSubCategoryColumn && hasSubCategoriesTable)
                 {
                     var joinGroup = hasMenuItemGroupColumn && hasMenuItemGroupTable ? "LEFT JOIN [dbo].[menuitemgroup] mg ON m.[menuitemgroupID] = mg.[ID]" : string.Empty;
@@ -1128,6 +1146,7 @@ namespace RestaurantManagementSystem.Controllers
                             m.[Price], 
                             m.[TakeoutPrice],
                             m.[DeliveryPrice],
+                            {selectRoomServicePriceCol},
                             m.[CategoryId], 
                             c.[Name] AS CategoryName,
                             m.[SubCategoryId],
@@ -1167,6 +1186,7 @@ namespace RestaurantManagementSystem.Controllers
                             m.[Price], 
                             m.[TakeoutPrice],
                             m.[DeliveryPrice],
+                            {selectRoomServicePriceCol},
                             m.[CategoryId], 
                             c.[Name] AS CategoryName,
                             NULL AS SubCategoryId,
@@ -1208,6 +1228,7 @@ namespace RestaurantManagementSystem.Controllers
                                 Price = SafeGetDecimal(reader, "Price"),
                                 TakeoutPrice = SafeGetNullableDecimal(reader, "TakeoutPrice"),
                                 DeliveryPrice = SafeGetNullableDecimal(reader, "DeliveryPrice"),
+                                RoomServicePrice = SafeGetNullableDecimal(reader, "RoomServicePrice"),
                                 UOMId = HasColumn(reader, "UOMId") ? SafeGetNullableInt(reader, "UOMId") : null,
                                 UOMName = HasColumn(reader, "UOMName") ? SafeGetString(reader, "UOMName") : null,
                                 CategoryId = SafeGetInt(reader, "CategoryId"),
@@ -1320,6 +1341,7 @@ namespace RestaurantManagementSystem.Controllers
                 bool hasSubCategoryColumn = false;
                 bool hasMenuItemGroupColumn = false;
                 bool hasUOMColumn = false;
+                bool hasRoomServicePriceColumn = false;
                 using (var checkCommand = new Microsoft.Data.SqlClient.SqlCommand(@"
                     SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
                     WHERE TABLE_NAME = 'MenuItems' AND COLUMN_NAME = 'SubCategoryId'", connection))
@@ -1338,6 +1360,13 @@ namespace RestaurantManagementSystem.Controllers
                 {
                     hasUOMColumn = (int)checkUOMCommand.ExecuteScalar() > 0;
                 }
+
+                using (var checkRoomServicePriceCommand = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+                    WHERE TABLE_NAME = 'MenuItems' AND COLUMN_NAME = 'RoomServicePrice'", connection))
+                {
+                    hasRoomServicePriceColumn = (int)checkRoomServicePriceCommand.ExecuteScalar() > 0;
+                }
                 
                 // Build INSERT query for dbo schema
                 string insertQuery;
@@ -1347,12 +1376,14 @@ namespace RestaurantManagementSystem.Controllers
                     string groupParam = hasMenuItemGroupColumn ? ", @MenuItemGroupId" : string.Empty;
                     string uomColumn = hasUOMColumn ? ", UOM_Id" : string.Empty;
                     string uomParam = hasUOMColumn ? ", @UOMId" : string.Empty;
+                    string roomServicePriceColumn = hasRoomServicePriceColumn ? ", RoomServicePrice" : string.Empty;
+                    string roomServicePriceParam = hasRoomServicePriceColumn ? ", @RoomServicePrice" : string.Empty;
                     
                     insertQuery = $@"
-                        INSERT INTO [dbo].[MenuItems] (PLUCode, Name, Description, Price, TakeoutPrice, DeliveryPrice, CategoryId, SubCategoryId, ImagePath,
+                        INSERT INTO [dbo].[MenuItems] (PLUCode, Name, Description, Price, TakeoutPrice, DeliveryPrice{roomServicePriceColumn}, CategoryId, SubCategoryId, ImagePath,
                                   IsAvailable, PrepTime, CalorieCount, 
                                   IsFeatured, IsSpecial, DiscountPercentage, KitchenStationId, GSTPercentage, IsGstApplicable, NotAvailable{groupColumn}{uomColumn})
-                        VALUES (@PLUCode, @Name, @Description, @Price, @TakeoutPrice, @DeliveryPrice, @CategoryId, @SubCategoryId, @ImagePath,
+                        VALUES (@PLUCode, @Name, @Description, @Price, @TakeoutPrice, @DeliveryPrice{roomServicePriceParam}, @CategoryId, @SubCategoryId, @ImagePath,
                             @IsAvailable, @PreparationTimeMinutes, @CalorieCount, 
                             @IsFeatured, @IsSpecial, @DiscountPercentage, @KitchenStationId, @GSTPercentage, @IsGstApplicable, @NotAvailable{groupParam}{uomParam});
                         SELECT SCOPE_IDENTITY();";
@@ -1363,12 +1394,14 @@ namespace RestaurantManagementSystem.Controllers
                     string groupParam = hasMenuItemGroupColumn ? ", @MenuItemGroupId" : string.Empty;
                     string uomColumn = hasUOMColumn ? ", UOM_Id" : string.Empty;
                     string uomParam = hasUOMColumn ? ", @UOMId" : string.Empty;
+                    string roomServicePriceColumn = hasRoomServicePriceColumn ? ", RoomServicePrice" : string.Empty;
+                    string roomServicePriceParam = hasRoomServicePriceColumn ? ", @RoomServicePrice" : string.Empty;
                     
                     insertQuery = $@"
-                        INSERT INTO [dbo].[MenuItems] (PLUCode, Name, Description, Price, TakeoutPrice, DeliveryPrice, CategoryId, ImagePath,
+                        INSERT INTO [dbo].[MenuItems] (PLUCode, Name, Description, Price, TakeoutPrice, DeliveryPrice{roomServicePriceColumn}, CategoryId, ImagePath,
                                   IsAvailable, PrepTime, CalorieCount, 
                                   IsFeatured, IsSpecial, DiscountPercentage, KitchenStationId, GSTPercentage, IsGstApplicable, NotAvailable{groupColumn}{uomColumn})
-                        VALUES (@PLUCode, @Name, @Description, @Price, @TakeoutPrice, @DeliveryPrice, @CategoryId, @ImagePath,
+                        VALUES (@PLUCode, @Name, @Description, @Price, @TakeoutPrice, @DeliveryPrice{roomServicePriceParam}, @CategoryId, @ImagePath,
                             @IsAvailable, @PreparationTimeMinutes, @CalorieCount, 
                             @IsFeatured, @IsSpecial, @DiscountPercentage, @KitchenStationId, @GSTPercentage, @IsGstApplicable, @NotAvailable{groupParam}{uomParam});
                         SELECT SCOPE_IDENTITY();";
@@ -1390,6 +1423,14 @@ namespace RestaurantManagementSystem.Controllers
                         command.Parameters.AddWithValue("@DeliveryPrice", model.DeliveryPrice);
                     else
                         command.Parameters.AddWithValue("@DeliveryPrice", DBNull.Value);
+
+                    if (hasRoomServicePriceColumn)
+                    {
+                        if (model.RoomServicePrice.HasValue)
+                            command.Parameters.AddWithValue("@RoomServicePrice", model.RoomServicePrice);
+                        else
+                            command.Parameters.AddWithValue("@RoomServicePrice", DBNull.Value);
+                    }
                     
                     command.Parameters.AddWithValue("@CategoryId", model.CategoryId);
                     
@@ -1650,6 +1691,7 @@ namespace RestaurantManagementSystem.Controllers
                 // Build UPDATE query for dbo schema
                 bool hasMenuItemGroupColumn = false;
                 bool hasUOMColumn = false;
+                bool hasRoomServicePriceColumn = false;
                 using (var checkGroup = new Microsoft.Data.SqlClient.SqlCommand(@"SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'MenuItems' AND COLUMN_NAME = 'menuitemgroupID'", connection))
                 {
                     hasMenuItemGroupColumn = (int)checkGroup.ExecuteScalar() > 0;
@@ -1657,6 +1699,10 @@ namespace RestaurantManagementSystem.Controllers
                 using (var checkUOM = new Microsoft.Data.SqlClient.SqlCommand(@"SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'MenuItems' AND COLUMN_NAME = 'UOM_Id'", connection))
                 {
                     hasUOMColumn = (int)checkUOM.ExecuteScalar() > 0;
+                }
+                using (var checkRoomServicePrice = new Microsoft.Data.SqlClient.SqlCommand(@"SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'MenuItems' AND COLUMN_NAME = 'RoomServicePrice'", connection))
+                {
+                    hasRoomServicePriceColumn = (int)checkRoomServicePrice.ExecuteScalar() > 0;
                 }
 
                 string groupUpdate = hasMenuItemGroupColumn ? ", menuitemgroupID = @MenuItemGroupId" : string.Empty;
@@ -1670,6 +1716,7 @@ namespace RestaurantManagementSystem.Controllers
                         Price = @Price,
                         TakeoutPrice = @TakeoutPrice,
                         DeliveryPrice = @DeliveryPrice,
+                        {(hasRoomServicePriceColumn ? "RoomServicePrice = @RoomServicePrice," : string.Empty)}
                         CategoryId = @CategoryId,
                         SubCategoryId = @SubCategoryId,
                         ImagePath = @ImagePath,
@@ -1702,6 +1749,14 @@ namespace RestaurantManagementSystem.Controllers
                         command.Parameters.AddWithValue("@DeliveryPrice", model.DeliveryPrice);
                     else
                         command.Parameters.AddWithValue("@DeliveryPrice", DBNull.Value);
+
+                    if (hasRoomServicePriceColumn)
+                    {
+                        if (model.RoomServicePrice.HasValue)
+                            command.Parameters.AddWithValue("@RoomServicePrice", model.RoomServicePrice);
+                        else
+                            command.Parameters.AddWithValue("@RoomServicePrice", DBNull.Value);
+                    }
                     
                     command.Parameters.AddWithValue("@CategoryId", model.CategoryId);
                     

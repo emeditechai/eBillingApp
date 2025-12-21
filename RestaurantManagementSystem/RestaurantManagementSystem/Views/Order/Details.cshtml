@@ -154,8 +154,9 @@
             <datalist id="menuItems">
                 @foreach (var mi in Model.AvailableMenuItems)
                 {
-                    var displayPrice = Model.OrderType == 1 ? (mi.TakeoutPrice ?? mi.Price) : 
-                                      (Model.OrderType == 2 || Model.OrderType == 3) ? (mi.DeliveryPrice ?? mi.Price) : 
+                    var displayPrice = Model.OrderType == 1 ? (mi.TakeoutPrice ?? mi.Price) :
+                                      (Model.OrderType == 4) ? (mi.RoomServicePrice ?? mi.DeliveryPrice ?? mi.Price) :
+                                      (Model.OrderType == 2 || Model.OrderType == 3) ? (mi.DeliveryPrice ?? mi.Price) :
                                       mi.Price;
                   <option value="@mi.Name" data-id="@mi.Id" data-price="@displayPrice.ToString("F2")" data-plu="@mi.PLUCode">@mi.PLUCode - @mi.Name (₹@displayPrice.ToString("F2"))</option>
                 }
@@ -305,6 +306,11 @@
               <dt class="col-5">Table</dt><dd class="col-7">@(!string.IsNullOrEmpty(Model.TableName)?Model.TableName:"—")</dd>
               <dt class="col-5">Server</dt><dd class="col-7">@(!string.IsNullOrEmpty(Model.ServerName)?Model.ServerName:"—")</dd>
               <dt class="col-5">Type</dt><dd class="col-7">@Model.OrderTypeDisplay</dd>
+              @if (Model.OrderType == 4)
+              {
+                <dt class="col-5">Room No</dt><dd class="col-7">@(!string.IsNullOrWhiteSpace(Model.RoomNo) ? Model.RoomNo : (Model.RoomId.HasValue ? Model.RoomId.Value.ToString() : "—"))</dd>
+                <dt class="col-5">Booking No</dt><dd class="col-7">@(!string.IsNullOrWhiteSpace(Model.HBookingNo) ? Model.HBookingNo : "—")</dd>
+              }
               <dt class="col-5">Created</dt><dd class="col-7">@Model.CreatedAt.ToString("g")</dd>
               <dt class="col-5">Last Updated</dt><dd class="col-7">@Model.UpdatedAt.ToString("g")</dd>
             </dl>
