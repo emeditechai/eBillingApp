@@ -139,6 +139,21 @@
 			"command": "dotnet build",
 			"isBackground": false,
 			"group": "build"
+		},
+		{
+			"label": "Run RestaurantManagementSystem",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"run",
+				"--project",
+				"RestaurantManagementSystem/RestaurantManagementSystem/RestaurantManagementSystem.csproj",
+				"--launch-profile",
+				"http"
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
 		}
 	]
 }
