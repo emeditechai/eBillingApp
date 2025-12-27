@@ -197,6 +197,13 @@ namespace RestaurantManagementSystem.Services
                                     s.BarGSTPerc = reader.IsDBNull(ord) ? 5.00m : reader.GetDecimal(ord);
                                 }
 
+                                // SelectedOrderType column (CSV of IDs)
+                                if (ColumnExists(reader, "SelectedOrderType"))
+                                {
+                                    ord = reader.GetOrdinal("SelectedOrderType");
+                                    s.SelectedOrderType = reader.IsDBNull(ord) ? string.Empty : reader.GetString(ord);
+                                }
+
                                 ord = reader.GetOrdinal("IsDefaultGSTRequired");
                                 s.IsDefaultGSTRequired = !reader.IsDBNull(ord) && reader.GetBoolean(ord);
 
@@ -289,6 +296,7 @@ CREATE TABLE [dbo].[RestaurantSettings](
     [DefaultGSTPercentage] DECIMAL(5,2) NOT NULL DEFAULT 5.00,
     [TakeAwayGSTPercentage] DECIMAL(5,2) NOT NULL DEFAULT 5.00,
     [BarGSTPerc] DECIMAL(5,2) NOT NULL DEFAULT 5.00,
+    [SelectedOrderType] NVARCHAR(200) NULL,
     [IsDefaultGSTRequired] BIT NOT NULL DEFAULT 1,
     [IsTakeAwayGSTRequired] BIT NOT NULL DEFAULT 1,
     [Is_TakeawayIncludedGST_Req] BIT NOT NULL DEFAULT 0,
@@ -307,9 +315,9 @@ CREATE TABLE [dbo].[RestaurantSettings](
                 // Insert a default row
                 var insertSql = @"
 INSERT INTO dbo.RestaurantSettings (
-    RestaurantName, StreetAddress, City, State, Pincode, Country, GSTCode, PhoneNumber, Email, Website, LogoPath, CurrencySymbol, DefaultGSTPercentage, TakeAwayGSTPercentage, BarGSTPerc, IsDefaultGSTRequired, IsTakeAwayGSTRequired, Is_TakeawayIncludedGST_Req, IsDiscountApprovalRequired, IsCardPaymentApprovalRequired, BillFormat, CreatedAt, UpdatedAt
+    RestaurantName, StreetAddress, City, State, Pincode, Country, GSTCode, PhoneNumber, Email, Website, LogoPath, CurrencySymbol, DefaultGSTPercentage, TakeAwayGSTPercentage, BarGSTPerc, SelectedOrderType, IsDefaultGSTRequired, IsTakeAwayGSTRequired, Is_TakeawayIncludedGST_Req, IsDiscountApprovalRequired, IsCardPaymentApprovalRequired, BillFormat, CreatedAt, UpdatedAt
 ) VALUES (
-    @RestaurantName, @StreetAddress, @City, @State, @Pincode, @Country, @GSTCode, @PhoneNumber, @Email, @Website, @LogoPath, @CurrencySymbol, @DefaultGSTPercentage, @TakeAwayGSTPercentage, @BarGSTPerc, @IsDefaultGSTRequired, @IsTakeAwayGSTRequired, @IsTakeawayIncludedGSTReq, @IsDiscountApprovalRequired, @IsCardPaymentApprovalRequired, @BillFormat, GETDATE(), GETDATE()
+    @RestaurantName, @StreetAddress, @City, @State, @Pincode, @Country, @GSTCode, @PhoneNumber, @Email, @Website, @LogoPath, @CurrencySymbol, @DefaultGSTPercentage, @TakeAwayGSTPercentage, @BarGSTPerc, @SelectedOrderType, @IsDefaultGSTRequired, @IsTakeAwayGSTRequired, @IsTakeawayIncludedGSTReq, @IsDiscountApprovalRequired, @IsCardPaymentApprovalRequired, @BillFormat, GETDATE(), GETDATE()
 );";
 
                 using (var cmd = new SqlCommand(insertSql, connection))
@@ -329,6 +337,7 @@ INSERT INTO dbo.RestaurantSettings (
                     cmd.Parameters.AddWithValue("@DefaultGSTPercentage", 5.00m);
                     cmd.Parameters.AddWithValue("@TakeAwayGSTPercentage", 5.00m);
                     cmd.Parameters.AddWithValue("@BarGSTPerc", 5.00m);
+                    cmd.Parameters.AddWithValue("@SelectedOrderType", string.Empty);
                     cmd.Parameters.AddWithValue("@IsDefaultGSTRequired", true);
                     cmd.Parameters.AddWithValue("@IsTakeAwayGSTRequired", true);
                     cmd.Parameters.AddWithValue("@IsTakeawayIncludedGSTReq", false);
@@ -391,6 +400,7 @@ INSERT INTO dbo.RestaurantSettings (
                     currentSettings.IsReqAutoSentbillEmail = settings.IsReqAutoSentbillEmail;
                     currentSettings.BillFormat = settings.BillFormat;
                     currentSettings.FssaiNo = settings.FssaiNo;
+                    currentSettings.SelectedOrderType = settings.SelectedOrderType;
                     currentSettings.UpdatedAt = DateTime.Now;
 
                     await _dbContext.SaveChangesAsync();
@@ -432,6 +442,7 @@ BEGIN
         DefaultGSTPercentage = @DefaultGSTPercentage,
         TakeAwayGSTPercentage = @TakeAwayGSTPercentage,
         BarGSTPerc = @BarGSTPerc,
+        SelectedOrderType = @SelectedOrderType,
         IsDefaultGSTRequired = @IsDefaultGSTRequired,
         IsTakeAwayGSTRequired = @IsTakeAwayGSTRequired,
         Is_TakeawayIncludedGST_Req = @IsTakeawayIncludedGSTReq,
@@ -446,9 +457,9 @@ END
 ELSE
 BEGIN
     INSERT INTO dbo.RestaurantSettings (
-        RestaurantName, StreetAddress, City, State, Pincode, Country, GSTCode, PhoneNumber, Email, Website, LogoPath, CurrencySymbol, DefaultGSTPercentage, TakeAwayGSTPercentage, BarGSTPerc, IsDefaultGSTRequired, IsTakeAwayGSTRequired, Is_TakeawayIncludedGST_Req, IsDiscountApprovalRequired, IsCardPaymentApprovalRequired, IsKOTBillPrintRequired, isReqAutoSentbillEmail, BillFormat, FssaiNo, CreatedAt, UpdatedAt
+        RestaurantName, StreetAddress, City, State, Pincode, Country, GSTCode, PhoneNumber, Email, Website, LogoPath, CurrencySymbol, DefaultGSTPercentage, TakeAwayGSTPercentage, BarGSTPerc, SelectedOrderType, IsDefaultGSTRequired, IsTakeAwayGSTRequired, Is_TakeawayIncludedGST_Req, IsDiscountApprovalRequired, IsCardPaymentApprovalRequired, IsKOTBillPrintRequired, isReqAutoSentbillEmail, BillFormat, FssaiNo, CreatedAt, UpdatedAt
     ) VALUES (
-        @RestaurantName, @StreetAddress, @City, @State, @Pincode, @Country, @GSTCode, @PhoneNumber, @Email, @Website, @LogoPath, @CurrencySymbol, @DefaultGSTPercentage, @TakeAwayGSTPercentage, @BarGSTPerc, @IsDefaultGSTRequired, @IsTakeAwayGSTRequired, @IsTakeawayIncludedGSTReq, @IsDiscountApprovalRequired, @IsCardPaymentApprovalRequired, @IsKOTBillPrintRequired, @IsReqAutoSentbillEmail, @BillFormat, @FssaiNo, GETDATE(), GETDATE()
+        @RestaurantName, @StreetAddress, @City, @State, @Pincode, @Country, @GSTCode, @PhoneNumber, @Email, @Website, @LogoPath, @CurrencySymbol, @DefaultGSTPercentage, @TakeAwayGSTPercentage, @BarGSTPerc, @SelectedOrderType, @IsDefaultGSTRequired, @IsTakeAwayGSTRequired, @IsTakeawayIncludedGSTReq, @IsDiscountApprovalRequired, @IsCardPaymentApprovalRequired, @IsKOTBillPrintRequired, @IsReqAutoSentbillEmail, @BillFormat, @FssaiNo, GETDATE(), GETDATE()
     );
 END";
 
@@ -469,9 +480,8 @@ END";
                             cmd.Parameters.AddWithValue("@DefaultGSTPercentage", settings.DefaultGSTPercentage);
                             cmd.Parameters.AddWithValue("@TakeAwayGSTPercentage", settings.TakeAwayGSTPercentage);
                             cmd.Parameters.AddWithValue("@BarGSTPerc", settings.BarGSTPerc);
-                                cmd.Parameters.AddWithValue("@FssaiNo", (object)settings.FssaiNo ?? DBNull.Value);
+                            cmd.Parameters.AddWithValue("@SelectedOrderType", (object)settings.SelectedOrderType ?? DBNull.Value);
                             cmd.Parameters.AddWithValue("@IsDefaultGSTRequired", settings.IsDefaultGSTRequired);
-                                cmd.Parameters.AddWithValue("@FssaiNo", (object)settings.FssaiNo ?? DBNull.Value);
                             cmd.Parameters.AddWithValue("@IsTakeAwayGSTRequired", settings.IsTakeAwayGSTRequired);
                             cmd.Parameters.AddWithValue("@IsTakeawayIncludedGSTReq", settings.IsTakeawayIncludedGSTReq);
                             cmd.Parameters.AddWithValue("@IsDiscountApprovalRequired", settings.IsDiscountApprovalRequired);
@@ -641,6 +651,21 @@ END";
                     await addBarGST.ExecuteNonQueryAsync();
                 }
 
+                // Ensure SelectedOrderType column exists
+                var checkSelectedOrderType = new SqlCommand(@"
+                    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+                    WHERE TABLE_NAME = 'RestaurantSettings' 
+                    AND COLUMN_NAME = 'SelectedOrderType'
+                    AND TABLE_SCHEMA = 'dbo'", connection);
+                var selectedOrderTypeExists = (int)await checkSelectedOrderType.ExecuteScalarAsync() > 0;
+                if (!selectedOrderTypeExists)
+                {
+                    var addSelectedOrderType = new SqlCommand(@"
+                        ALTER TABLE [dbo].[RestaurantSettings]
+                        ADD [SelectedOrderType] NVARCHAR(200) NULL", connection);
+                    await addSelectedOrderType.ExecuteNonQueryAsync();
+                }
+
                 // Normalize existing rows: replace NULLs with sensible defaults to avoid EF materialization errors
                 try
                 {
@@ -657,6 +682,7 @@ SET IsDefaultGSTRequired = ISNULL(IsDefaultGSTRequired, 1),
     CurrencySymbol = ISNULL(CurrencySymbol, N'₹'),
     BillFormat = ISNULL(BillFormat, N'A4')
     , FssaiNo = ISNULL(FssaiNo, N'')
+    , SelectedOrderType = ISNULL(SelectedOrderType, N'')
 WHERE Id IS NOT NULL";
 
                     using (var normalizeCmd = new SqlCommand(normalizeSql, connection))

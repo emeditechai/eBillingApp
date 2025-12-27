@@ -2,7 +2,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Caching.Memory;
 using RestaurantManagementSystem.Data;
+using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Models;
 using RestaurantManagementSystem.Services;
 using RestaurantManagementSystem.ViewModels;
@@ -21,12 +23,14 @@ namespace RestaurantManagementSystem.Controllers
         private readonly IConfiguration _configuration;
         private readonly IWebHostEnvironment _webHostEnvironment;
         private readonly SettingsService _settingsService;
+        private readonly IMemoryCache _cache;
 
-        public SettingsController(RestaurantDbContext dbContext, IConfiguration configuration, IWebHostEnvironment webHostEnvironment)
+        public SettingsController(RestaurantDbContext dbContext, IConfiguration configuration, IWebHostEnvironment webHostEnvironment, IMemoryCache cache)
         {
             _dbContext = dbContext;
             _configuration = configuration;
             _webHostEnvironment = webHostEnvironment;
+            _cache = cache;
             _settingsService = new SettingsService(dbContext, _configuration.GetConnectionString("DefaultConnection"));
             
             // Ensure the RestaurantSettings table exists when the controller is first initialized
@@ -133,6 +137,9 @@ namespace RestaurantManagementSystem.Controllers
                 
                 // Update settings
                 await _settingsService.UpdateSettingsAsync(settings);
+
+                // Bust cache so Order/Create sees changes immediately for all users
+                _cache.Set(OrderTypeHelper.AllowedOrderTypesCacheVersionKey, Guid.NewGuid().ToString("N"));
                 
                 TempData["SuccessMessage"] = "Restaurant settings updated successfully.";
                 return RedirectToAction(nameof(Index));
@@ -174,6 +181,7 @@ namespace RestaurantManagementSystem.Controllers
                 IsReqAutoSentbillEmail = model.IsReqAutoSentbillEmail,
                 BillFormat = model.BillFormat,
                 	FssaiNo = model.FssaiNo,
+                SelectedOrderTypeIds = OrderTypeHelper.ParseCsvIds(model.SelectedOrderType),
                 CreatedAt = model.CreatedAt.ToString("dd MMM yyyy, hh:mm tt"),
                 UpdatedAt = model.UpdatedAt.ToString("dd MMM yyyy, hh:mm tt")
             };
@@ -208,6 +216,7 @@ namespace RestaurantManagementSystem.Controllers
                 IsReqAutoSentbillEmail = viewModel.IsReqAutoSentbillEmail,
                 BillFormat = viewModel.BillFormat,
                 FssaiNo = viewModel.FssaiNo,
+                SelectedOrderType = OrderTypeHelper.ToCsv(viewModel.SelectedOrderTypeIds),
                 UpdatedAt = DateTime.Now
             };
         }

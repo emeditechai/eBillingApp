@@ -120,5 +120,9 @@ namespace RestaurantManagementSystem.ViewModels
 
         [Display(Name = "Last Updated")]
         public string UpdatedAt { get; set; }
+
+        // Multi-select OrderType IDs (stored in DB as CSV in RestaurantSettings.SelectedOrderType)
+        [Display(Name = "Choose Order Type")]
+        public List<int> SelectedOrderTypeIds { get; set; } = new List<int>();
     }
 }
