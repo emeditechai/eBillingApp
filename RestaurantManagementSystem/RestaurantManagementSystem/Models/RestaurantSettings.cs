@@ -113,5 +113,9 @@ namespace RestaurantManagementSystem.Models
         
         [Display(Name = "Last Updated")]
         public DateTime UpdatedAt { get; set; } = DateTime.Now;
+
+        // Comma-separated OrderType IDs selected from settings (e.g. "0,1,2,4")
+        [Display(Name = "Choose Order Type")]
+        public string? SelectedOrderType { get; set; }
     }
 }

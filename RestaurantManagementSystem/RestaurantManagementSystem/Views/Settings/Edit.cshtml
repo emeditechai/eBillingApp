@@ -1,4 +1,5 @@
 @model RestaurantManagementSystem.ViewModels.RestaurantSettingsViewModel
+@using RestaurantManagementSystem.Helpers
 @{
     ViewData["Title"] = "Edit Restaurant Settings";
 }
@@ -284,6 +285,19 @@
                                             </select>
                                             <span asp-validation-for="BillFormat" class="field-validation-error"></span>
                                             <div class="help-text">Choose the format for printing bills and receipts</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-group mb-3">
+                                            <label asp-for="SelectedOrderTypeIds" class="control-label">Choose Order Type</label>
+                                            <select asp-for="SelectedOrderTypeIds" class="form-select" multiple size="4">
+                                                @foreach (var ot in OrderTypeHelper.GetOrderTypes())
+                                                {
+                                                    <option value="@ot.Id" selected="@(Model.SelectedOrderTypeIds != null && Model.SelectedOrderTypeIds.Contains(ot.Id) ? "selected" : null)">@ot.Name</option>
+                                                }
+                                            </select>
+                                            <span asp-validation-for="SelectedOrderTypeIds" class="field-validation-error"></span>
+                                            <div class="help-text">Controls which order types appear on the Create Order page</div>
                                         </div>
                                     </div>
                                     <div class="col-md-4">

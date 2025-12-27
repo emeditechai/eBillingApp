@@ -1,4 +1,5 @@
 @model CreateOrderViewModel
+@using RestaurantManagementSystem.Helpers
 @{
     ViewData["Title"] = "Create New Order";
 }
@@ -33,17 +34,25 @@
                             </ul>
                         </div>
                     }
-                    <form asp-action="Create" method="post" autocomplete="off">
+                    <form asp-action="Create" method="post" autocomplete="off" id="createOrderForm">
                         <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
                         <div class="row g-4">
                             <div class="col-md-6">
                                 <div class="mb-2 text-secondary fw-bold" style="font-size:1.1rem;">Order Info</div>
                                 <label asp-for="OrderType" class="form-label">Order Type</label>
                                 <select asp-for="OrderType" class="form-select" id="orderType">
-                                    <option value="0">Dine-In</option>
-                                    <option value="1">Takeout</option>
-                                    <option value="2">Delivery</option>
-                                    <option value="4">Room Service</option>
+                                    @{
+                                        var allowed = ViewBag.AllowedOrderTypeIds as List<int>;
+                                        if (allowed == null || allowed.Count == 0)
+                                        {
+                                            allowed = OrderTypeHelper.GetOrderTypes().Select(x => x.Id).ToList();
+                                        }
+
+                                        foreach (var ot in OrderTypeHelper.GetOrderTypes().Where(x => allowed.Contains(x.Id)))
+                                        {
+                                            <option value="@ot.Id">@ot.Name</option>
+                                        }
+                                    }
                                 </select>
                                 <span asp-validation-for="OrderType" class="text-danger"></span>
                                 <div id="tableSection" class="mt-3">
@@ -197,6 +206,22 @@
         $(function () {
             var roomServiceRooms = [];
 
+            function hasServerValidationErrors() {
+                // Razor validation summary emits this class when ModelState invalid
+                return $('.validation-summary-errors').length > 0;
+            }
+
+            function focusIfVisible(selector) {
+                var $el = $(selector);
+                if ($el.length === 0) return false;
+                if ($el.is(':disabled')) return false;
+                if ($el.is(':visible')) {
+                    $el.trigger('focus');
+                    return true;
+                }
+                return false;
+            }
+
             function toggleTableSection() {
                 var orderType = $('#orderType').val();
                 if (orderType === '0') {
@@ -222,6 +247,47 @@
                     }
                     $('#mergeTablesWrapper').addClass('d-none');
                 }
+            }
+
+            function autoFocusNextField() {
+                // Don't override when returning with server-side validation errors
+                if (hasServerValidationErrors()) return;
+
+                var orderType = $('#orderType').val();
+
+                if (orderType === '0') {
+                    // Dine-In: prefer table selection if required
+                    var hasHidden = $('input[name="SelectedTableId"]').val();
+                    var dropdownVal = $('#TableTurnoverId').val();
+                    if (!hasHidden && (!dropdownVal || dropdownVal === '')) {
+                        if (focusIfVisible('#TableTurnoverId')) return;
+                    }
+                    // Otherwise, focus customer name for quick entry
+                    if (focusIfVisible('#CustomerName')) return;
+                    focusIfVisible('#CustomerPhone');
+                    return;
+                }
+
+                if (orderType === '2') {
+                    // Delivery: address is required
+                    if (focusIfVisible('#CustomerAddress')) return;
+                    if (focusIfVisible('#CustomerPhone')) return;
+                    focusIfVisible('#CustomerName');
+                    return;
+                }
+
+                if (orderType === '4') {
+                    // Room Service: branch is required
+                    ensureBranchesLoaded();
+                    if (focusIfVisible('#hotelBranch')) return;
+                    if (focusIfVisible('#roomNo')) return;
+                    focusIfVisible('#bookingNo');
+                    return;
+                }
+
+                // Takeout/others: phone is usually fastest identifier
+                if (focusIfVisible('#CustomerPhone')) return;
+                focusIfVisible('#CustomerName');
             }
 
             function resetRoomServiceState() {
@@ -327,7 +393,7 @@
             }
 
             // Handlers
-            $('#orderType').on('change', function(){ toggleTableSection(); updateMergeTableOptions(); });
+            $('#orderType').on('change', function(){ toggleTableSection(); updateMergeTableOptions(); autoFocusNextField(); });
             $('#TableTurnoverId').on('change', updateMergeTableOptions);
 
             // Room service handlers
@@ -434,6 +500,9 @@
             if ($('#orderType').val() === '4') {
                 ensureBranchesLoaded();
             }
+
+            // Autofocus after initial UI is in correct state
+            autoFocusNextField();
         });
     </script>
 }

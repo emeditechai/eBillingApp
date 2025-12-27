@@ -1,4 +1,5 @@
 @model RestaurantManagementSystem.ViewModels.RestaurantSettingsViewModel
+@using RestaurantManagementSystem.Helpers
 @{
     ViewData["Title"] = "Restaurant Settings";
 }
@@ -112,6 +113,22 @@
                                     <li><span>Default GST</span><span class="pill @(Model.IsDefaultGSTRequired ? "pill-yes" : "pill-no")">@(Model.IsDefaultGSTRequired ? "Yes" : "No")</span></li>
                                     <li><span>Take Away GST</span><span class="pill @(Model.IsTakeAwayGSTRequired ? "pill-yes" : "pill-no")">@(Model.IsTakeAwayGSTRequired ? "Yes" : "No")</span></li>
                                     <li><span>Takeaway Included GST</span><span class="pill @(Model.IsTakeawayIncludedGSTReq ? "pill-yes" : "pill-no")">@(Model.IsTakeawayIncludedGSTReq ? "Yes" : "No")</span></li>
+                                    <li>
+                                        <span>Choose Order Type</span>
+                                        <span>
+                                            @if (Model.SelectedOrderTypeIds != null && Model.SelectedOrderTypeIds.Any())
+                                            {
+                                                foreach (var id in Model.SelectedOrderTypeIds)
+                                                {
+                                                    <span class="pill pill-info me-1">@OrderTypeHelper.GetOrderTypeName(id)</span>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="pill pill-info">All</span>
+                                            }
+                                        </span>
+                                    </li>
                                     <li><span>Bill Format</span><span class="pill pill-info">@Model.BillFormat</span></li>
                                     <li><span>Discount Approval</span><span class="pill @(Model.IsDiscountApprovalRequired ? "pill-yes" : "pill-no")">@(Model.IsDiscountApprovalRequired ? "Yes" : "No")</span></li>
                                     <li><span>Card Payment Approval</span><span class="pill @(Model.IsCardPaymentApprovalRequired ? "pill-yes" : "pill-no")">@(Model.IsCardPaymentApprovalRequired ? "Yes" : "No")</span></li>

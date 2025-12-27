@@ -1200,6 +1200,7 @@
                 const path = window.location.pathname.toLowerCase();
                 if (path === '/' || path === '/home' || path.includes('/home/index')) return 'home';
                 if (path.includes('/order/create')) return 'order-create';
+                if (path.includes('/order/dashboard')) return 'order-dashboard';
                 if (path.includes('/order/details')) return 'order-details';
                 if (path.includes('/bot/barordercreate')) return 'bar-order-create';
                 if (path.includes('/bot/details')) return 'bar-order-details';
@@ -1221,19 +1222,19 @@
                 const key = e.key.toLowerCase();
                 const page = getCurrentPage();
                 
-                // Shift+F - Food Order (from home)
-                if (shift && !ctrl && key === 'f' && page === 'home') {
+                // Shift+F - Food Order (from home / order dashboard)
+                if (shift && !ctrl && key === 'f' && (page === 'home' || page === 'order-dashboard')) {
                     e.preventDefault();
                     showHotkey('Food Order (Shift+F)');
-                    navigateTo('/Order/Create');
+                    window.open('/Order/Create', '_blank', 'noopener');
                     return;
                 }
                 
-                // Shift+B - BAR Order (from home)
-                if (shift && !ctrl && key === 'b' && page === 'home') {
+                // Shift+B - BAR Order (from home / order dashboard)
+                if (shift && !ctrl && key === 'b' && (page === 'home' || page === 'order-dashboard')) {
                     e.preventDefault();
                     showHotkey('BAR Order (Shift+B)');
-                    navigateTo('/BOT/BarOrderCreate');
+                    window.open('/BOT/BarOrderCreate', '_blank', 'noopener');
                     return;
                 }
                 
@@ -1255,15 +1256,22 @@
                 
                 // Ctrl+O - Create Order (on order create pages)
                 if (ctrl && !shift && key === 'o') {
+                    // Always prevent browser default (Ctrl+O opens file dialog)
+                    e.preventDefault();
+
                     if (page === 'order-create' || page === 'bar-order-create') {
-                        e.preventDefault();
                         e.stopPropagation();
                         e.stopImmediatePropagation();
                         showHotkey(page === 'bar-order-create' ? 'Submitting BAR Order (Ctrl+O)' : 'Submitting Order (Ctrl+O)');
-                        const form = document.querySelector('form');
+
+                        // IMPORTANT: Don't submit the first form on the page (often the header logout form).
+                        const form = (page === 'bar-order-create')
+                            ? document.getElementById('createBarOrderForm')
+                            : document.getElementById('createOrderForm');
+
                         if (form) form.submit();
                     }
-                    return true; // Always prevent browser default
+                    return;
                 }
                 
                 // Ctrl+S - Save Order (on order details pages)

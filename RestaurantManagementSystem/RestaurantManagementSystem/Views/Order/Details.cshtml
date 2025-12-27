@@ -450,9 +450,7 @@
       function computePaymentRequirements() {
         const missing = [];
 
-        // Customer is required for all order types (per spec)
-        const customerText = '@(string.IsNullOrEmpty(Model.CustomerName) ? (string.IsNullOrEmpty(Model.GuestName) ? "" : Model.GuestName) : Model.CustomerName)';
-        if (!customerText || customerText.trim().length === 0) missing.push('customer');
+        // Customer is optional (do not block payment when missing)
 
         // Table + Server required for dine-in (OrderType == 0)
         if (@Model.OrderType == 0) {

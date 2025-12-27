@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
+using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Filters;
 using RestaurantManagementSystem.Models.Authorization;
 using System.Linq;
@@ -13,12 +15,76 @@ namespace RestaurantManagementSystem.Controllers
         private readonly IConfiguration _configuration;
         private readonly string _connectionString;
         private readonly RestaurantManagementSystem.Services.UrlEncryptionService _encryptionService;
+        private readonly IMemoryCache _cache;
+        // Align cache lifetime with typical login session length
+        private static readonly TimeSpan AllowedOrderTypesCacheDuration = TimeSpan.FromHours(12);
         
-        public OrderController(IConfiguration configuration, RestaurantManagementSystem.Services.UrlEncryptionService encryptionService)
+        public OrderController(IConfiguration configuration, RestaurantManagementSystem.Services.UrlEncryptionService encryptionService, IMemoryCache cache)
         {
             _configuration = configuration;
             _connectionString = _configuration.GetConnectionString("DefaultConnection");
             _encryptionService = encryptionService;
+            _cache = cache;
+        }
+
+        private List<int> GetAllowedOrderTypeIdsFromSettings()
+        {
+            var userId = User?.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anon";
+            var version = _cache.TryGetValue(OrderTypeHelper.AllowedOrderTypesCacheVersionKey, out string v) && !string.IsNullOrWhiteSpace(v)
+                ? v
+                : "0";
+
+            var cacheKey = $"{OrderTypeHelper.AllowedOrderTypesCacheKey}:{version}:{userId}";
+
+            if (_cache.TryGetValue(cacheKey, out List<int> cached) && cached != null && cached.Count > 0)
+            {
+                return cached;
+            }
+
+            List<int> loaded;
+            try
+            {
+                using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"SELECT TOP 1 SelectedOrderType FROM dbo.RestaurantSettings ORDER BY Id DESC", connection))
+                    {
+                        var csv = cmd.ExecuteScalar()?.ToString();
+                        loaded = OrderTypeHelper.ParseCsvIds(csv);
+                    }
+                }
+            }
+            catch
+            {
+                loaded = new List<int>();
+            }
+
+            if (loaded.Count == 0)
+            {
+                loaded = OrderTypeHelper.GetOrderTypes().Select(x => x.Id).ToList();
+            }
+
+            _cache.Set(cacheKey, loaded, new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = AllowedOrderTypesCacheDuration,
+                SlidingExpiration = AllowedOrderTypesCacheDuration
+            });
+
+            return loaded;
+        }
+
+        private void ApplyAllowedOrderTypesToView(CreateOrderViewModel model, bool forceIncludeDineIn = false)
+        {
+            var allowed = GetAllowedOrderTypeIdsFromSettings();
+            if (forceIncludeDineIn && !allowed.Contains(0)) allowed.Add(0);
+
+            allowed = allowed.Distinct().OrderBy(x => x).ToList();
+            ViewBag.AllowedOrderTypeIds = allowed;
+
+            if (!allowed.Contains(model.OrderType))
+            {
+                model.OrderType = allowed.FirstOrDefault();
+            }
         }
 
         [HttpGet]
@@ -105,6 +171,9 @@ namespace RestaurantManagementSystem.Controllers
                 model.SelectedTableId = tableId.Value;
                 model.OrderType = 0; // 0 = Dine-In
             }
+
+            // Apply order type filtering based on Restaurant Settings
+            ApplyAllowedOrderTypesToView(model, forceIncludeDineIn: tableId.HasValue);
             
             // Get available tables
             using (Microsoft.Data.SqlClient.SqlConnection connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
@@ -483,6 +552,9 @@ namespace RestaurantManagementSystem.Controllers
                     ModelState.AddModelError("", $"An error occurred: {ex.Message}");
                 }
             }
+
+            // ModelState invalid: re-apply allowed order types for the dropdown
+            ApplyAllowedOrderTypesToView(model, forceIncludeDineIn: model.SelectedTableId.HasValue);
             
             Repopulate:
             // If we get here, something went wrong - repopulate the model
