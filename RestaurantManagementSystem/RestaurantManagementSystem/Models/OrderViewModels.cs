@@ -30,6 +30,11 @@ namespace RestaurantManagementSystem.Models
         public string StatusDisplay { get; set; }
         public string TableName { get; set; }
         public string GuestName { get; set; }
+        // Room Service only (optional)
+        public int? HBranchId { get; set; }
+        public string HBookingNo { get; set; }
+        public int? RoomId { get; set; }
+        public string RoomNo { get; set; }
         public string ServerName { get; set; }
         public int ItemCount { get; set; }
         public decimal TotalAmount { get; set; }

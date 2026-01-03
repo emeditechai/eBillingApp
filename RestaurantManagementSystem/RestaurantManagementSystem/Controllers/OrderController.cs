@@ -2846,6 +2846,9 @@ namespace RestaurantManagementSystem.Controllers
                             WHEN o.OrderType = 0 THEN tt.GuestName 
                             ELSE o.CustomerName 
                         END AS GuestName,
+                        o.RoomID AS RoomId,
+                        o.H_BranchID AS HBranchId,
+                        CAST(o.HBookingNo AS nvarchar(50)) AS HBookingNo,
                         CONCAT(u.FirstName, ' ', ISNULL(u.LastName, '')) AS ServerName,
                         (SELECT COUNT(1) FROM OrderItems WHERE OrderId = o.Id) AS ItemCount,
                         o.TotalAmount,
@@ -2907,17 +2910,65 @@ namespace RestaurantManagementSystem.Controllers
                                 StatusDisplay = statusDisplay,
                                 TableName = reader.IsDBNull(4) ? null : reader.GetString(4),
                                 GuestName = reader.IsDBNull(5) ? null : reader.GetString(5),
-                                ServerName = reader.IsDBNull(6) ? null : reader.GetString(6),
-                                ItemCount = reader.GetInt32(7),
-                                TotalAmount = reader.GetDecimal(8),
-                                CreatedAt = reader.GetDateTime(9),
-                                Duration = TimeSpan.FromMinutes(reader.GetInt32(10))
+                                RoomId = reader.IsDBNull(6) ? null : (int?)Convert.ToInt32(reader.GetValue(6)),
+                                HBranchId = reader.IsDBNull(7) ? null : (int?)Convert.ToInt32(reader.GetValue(7)),
+                                HBookingNo = reader.IsDBNull(8) ? null : Convert.ToString(reader.GetValue(8)),
+                                // RoomNo is resolved below (via hotel SP) when possible
+                                RoomNo = null,
+                                ServerName = reader.IsDBNull(9) ? null : reader.GetString(9),
+                                ItemCount = reader.GetInt32(10),
+                                TotalAmount = reader.GetDecimal(11),
+                                CreatedAt = reader.GetDateTime(12),
+                                Duration = TimeSpan.FromMinutes(reader.GetInt32(13))
                             };
                             
                             // Override with merged table names if available
                             summary.TableName = GetMergedTableDisplayName(summary.Id, summary.TableName);
                             model.ActiveOrders.Add(summary);
                         }
+                    }
+                }
+
+                // Resolve Room Service actual RoomNo using vw_GetHotelAllRoomNo (RoomID -> RoomNo)
+                // so dashboard shows real room numbers (e.g., 205) instead of internal RoomID values.
+                try
+                {
+                    var roomIdToRoomNo = new Dictionary<int, string>();
+
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        SELECT RoomID, RoomNo
+                        FROM vw_GetHotelAllRoomNo", connection))
+                    using (var rr = cmd.ExecuteReader())
+                    {
+                        while (rr.Read())
+                        {
+                            var roomId = rr["RoomID"] != DBNull.Value ? Convert.ToInt32(rr["RoomID"]) : 0;
+                            var roomNo = rr["RoomNo"]?.ToString();
+                            if (roomId > 0 && !string.IsNullOrWhiteSpace(roomNo) && !roomIdToRoomNo.ContainsKey(roomId))
+                            {
+                                roomIdToRoomNo[roomId] = roomNo;
+                            }
+                        }
+                    }
+
+                    foreach (var order in model.ActiveOrders.Where(o => o.OrderType == 4 && o.RoomId.HasValue))
+                    {
+                        if (roomIdToRoomNo.TryGetValue(order.RoomId.Value, out var mappedNo) && !string.IsNullOrWhiteSpace(mappedNo))
+                        {
+                            order.RoomNo = mappedNo;
+                        }
+                        else
+                        {
+                            order.RoomNo = order.RoomId.Value.ToString();
+                        }
+                    }
+                }
+                catch
+                {
+                    // Non-fatal; fall back to RoomId.
+                    foreach (var order in model.ActiveOrders.Where(o => o.OrderType == 4 && o.RoomId.HasValue && string.IsNullOrWhiteSpace(o.RoomNo)))
+                    {
+                        order.RoomNo = order.RoomId.Value.ToString();
                     }
                 }
                 

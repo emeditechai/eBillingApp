@@ -101,6 +101,7 @@
                 <div class="card-body">
                     @if (Model.ActiveOrders.Any())
                     {
+                        <div id="activeOrdersTypeFilter" class="mb-2"></div>
                         <div class="table-responsive table-container">
                             <table class="table table-striped table-hover" id="activeOrders">
                                 <thead class="sticky" style="background: linear-gradient(135deg, #1e40af 0%, #06b6d4 100%); color: white;">
@@ -127,6 +128,14 @@
                                                 @if (order.OrderType == 0) // Dine-In
                                                 {
                                                     @(order.TableName ?? "No Table")
+                                                }
+                                                else if (order.OrderType == 4) // Room Service
+                                                {
+                                                    var roomNo = !string.IsNullOrWhiteSpace(order.RoomNo)
+                                                        ? order.RoomNo
+                                                        : (order.RoomId.HasValue ? order.RoomId.Value.ToString() : "N/A");
+                                                    var guestName = order.GuestName ?? "No Name";
+                                                    @($"{roomNo} - {guestName}")
                                                 }
                                                 else
                                                 {
@@ -341,7 +350,63 @@
 @section Scripts {
     <script>
         $(document).ready(function () {
-            $('#activeOrders').DataTable({
+            function escapeHtml(value) {
+                return (value ?? '').toString().replace(/[&<>"']/g, function (c) {
+                    return ({
+                        '&': '&amp;',
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '"': '&quot;',
+                        "'": '&#39;'
+                    })[c];
+                });
+            }
+
+            function buildTypeFilter(table, containerSelector, columnIndex, idPrefix) {
+                var $container = $(containerSelector);
+                if (!$container.length) return;
+
+                var raw = table.column(columnIndex).data().toArray();
+                var types = raw
+                    .map(function (x) { return (x ?? '').toString().trim(); })
+                    .filter(function (x) { return x.length; });
+
+                var unique = Array.from(new Set(types)).sort(function (a, b) { return a.localeCompare(b); });
+                if (!unique.length) {
+                    $container.hide();
+                    return;
+                }
+
+                var html = '<div class="d-flex align-items-center flex-wrap" style="gap:.75rem;">'
+                    + '<span class="small fw-semibold">Type:</span>'
+                    + unique.map(function (t, i) {
+                        var id = idPrefix + i;
+                        return '<div class="form-check form-check-inline m-0">'
+                            + '<input class="form-check-input active-type-filter" type="checkbox" id="' + escapeHtml(id) + '" value="' + escapeHtml(t) + '" checked>'
+                            + '<label class="form-check-label small" for="' + escapeHtml(id) + '">' + escapeHtml(t) + '</label>'
+                            + '</div>';
+                    }).join('')
+                    + '</div>';
+
+                $container.html(html);
+
+                function apply() {
+                    var selected = $container.find('.active-type-filter:checked').map(function () { return $(this).val(); }).get();
+                    if (!selected.length) {
+                        table.column(columnIndex).search('', true, false).draw();
+                        return;
+                    }
+
+                    var escaped = selected.map(function (v) { return $.fn.dataTable.util.escapeRegex(v); });
+                    var pattern = '^(' + escaped.join('|') + ')$';
+                    table.column(columnIndex).search(pattern, true, false).draw();
+                }
+
+                $container.on('change', '.active-type-filter', apply);
+                apply();
+            }
+
+            var activeTable = $('#activeOrders').DataTable({
                 order: [[5, 'desc']],
                 paging: false,
                 info: false,
@@ -349,6 +414,7 @@
                 scrollY: '28vh',
                 scrollCollapse: true
             });
+            buildTypeFilter(activeTable, '#activeOrdersTypeFilter', 1, 'od_activeType_');
             $('#cancelledOrders').DataTable({
                 order: [[5, 'desc']],
                 paging: false,
