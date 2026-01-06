@@ -4,6 +4,7 @@ using Microsoft.Extensions.Caching.Memory;
 using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Filters;
 using RestaurantManagementSystem.Models.Authorization;
+using RestaurantManagementSystem.Models;
 using System.Linq;
 using System.Security.Claims;
 
@@ -18,6 +19,8 @@ namespace RestaurantManagementSystem.Controllers
         private readonly IMemoryCache _cache;
         // Align cache lifetime with typical login session length
         private static readonly TimeSpan AllowedOrderTypesCacheDuration = TimeSpan.FromHours(12);
+        // Keep POS catalog cache short to reflect availability changes quickly
+        private static readonly TimeSpan PosMenuCacheDuration = TimeSpan.FromMinutes(5);
         
         public OrderController(IConfiguration configuration, RestaurantManagementSystem.Services.UrlEncryptionService encryptionService, IMemoryCache cache)
         {
@@ -84,6 +87,60 @@ namespace RestaurantManagementSystem.Controllers
             if (!allowed.Contains(model.OrderType))
             {
                 model.OrderType = allowed.FirstOrDefault();
+            }
+        }
+
+        [HttpGet]
+        public IActionResult GetPOSOrderJson(int orderId)
+        {
+            if (orderId <= 0)
+            {
+                return Json(new { success = false, message = "Invalid order." });
+            }
+
+            try
+            {
+                var order = GetOrderDetails(orderId);
+                if (order == null)
+                {
+                    return Json(new { success = false, message = "Order not found." });
+                }
+
+                // Enforce scope (only allow POS to operate on Takeout/Delivery orders)
+                if (order.OrderType != 1 && order.OrderType != 2)
+                {
+                    return Json(new { success = false, message = "POS Order supports only Takeout or Delivery orders." });
+                }
+
+                return Json(new
+                {
+                    success = true,
+                    orderId = order.Id,
+                    orderNumber = order.OrderNumber,
+                    orderType = order.OrderType,
+                    status = order.Status,
+                    isFullyPaid = order.IsFullyPaid,
+                    subtotal = order.Subtotal,
+                    taxAmount = order.TaxAmount,
+                    discountAmount = order.DiscountAmount,
+                    totalAmount = order.TotalAmount,
+                    paidAmount = order.PaidAmount,
+                    remainingAmount = order.RemainingAmount,
+                    items = order.Items?.Where(i => i.Status != 5).Select(i => new
+                    {
+                        orderItemId = i.Id,
+                        menuItemId = i.MenuItemId,
+                        name = string.IsNullOrWhiteSpace(i.Name) ? i.MenuItemName : i.Name,
+                        quantity = i.Quantity,
+                        unitPrice = i.UnitPrice,
+                        subtotal = i.Subtotal,
+                        specialInstructions = i.SpecialInstructions
+                    }).ToList()
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
             }
         }
 
@@ -1608,6 +1665,9 @@ namespace RestaurantManagementSystem.Controllers
                                                 kitchenCommand.ExecuteNonQuery();
                                             }
 
+                                            // Persist menu-item-wise GST into OrderItems (uses existing order-level GST% logic)
+                                            UpdateOrderItemGstDetails(model.OrderId, connection, transaction);
+
                                             // Recalculate and persist GST fields after item addition
                                             UpdateOrderFinancials(model.OrderId, connection, transaction);
 
@@ -2495,6 +2555,557 @@ namespace RestaurantManagementSystem.Controllers
             
             return View(model);
         }
+
+        // POS Order (single-screen) - Takeout/Delivery only (not in navigation yet)
+        [HttpGet]
+        [RequirePermission("NAV_ORDERS_CREATE", PermissionAction.Add)]
+        public IActionResult POSOrder(int? orderId = null)
+        {
+            ViewData["Title"] = "POS Order";
+
+            var page = new RestaurantManagementSystem.Models.PosOrderPageViewModel();
+
+            // Always load menu catalog for POS UI (even before an order is created)
+            page.Order = new OrderViewModel
+            {
+                OrderType = page.Create.OrderType
+            };
+            LoadPosMenuItems(page.Order);
+
+            // Load payment methods even before an order exists so the UI can show options
+            LoadPosPaymentSetup(page, page.Order);
+
+            if (orderId.HasValue && orderId.Value > 0)
+            {
+                var order = GetOrderDetails(orderId.Value);
+                if (order == null) return NotFound();
+
+                if (order.OrderType != 1 && order.OrderType != 2)
+                {
+                    return BadRequest("POS Order supports only Takeout (1) and Delivery (2).");
+                }
+
+                LoadPosMenuItems(order);
+                LoadPosPaymentSetup(page, order);
+                page.OrderId = order.Id;
+                page.OrderNumber = order.OrderNumber;
+                page.Order = order;
+                page.Create.OrderType = order.OrderType;
+                page.Create.CustomerName = order.CustomerName;
+                page.Create.CustomerPhone = order.CustomerPhone;
+                page.Create.CustomerEmailId = order.CustomerEmailId;
+                page.Create.CustomerAddress = order.CustomerAddress;
+                page.Create.SpecialInstructions = order.SpecialInstructions;
+            }
+
+            return View("POSOrder", page);
+        }
+
+        private void LoadPosPaymentSetup(RestaurantManagementSystem.Models.PosOrderPageViewModel page, OrderViewModel order)
+        {
+            if (page == null || order == null) return;
+
+            page.Payment.OrderId = order.Id;
+            page.Payment.OrderNumber = order.OrderNumber;
+            page.Payment.TotalAmount = order.TotalAmount;
+            page.Payment.RemainingAmount = order.RemainingAmount;
+            page.Payment.Subtotal = order.Subtotal;
+            page.Payment.GSTPercentage = order.GSTPercentage;
+            page.Payment.Amount = order.RemainingAmount > 0 ? order.RemainingAmount : 0.01m;
+
+            // Load payment methods similar to PaymentController (schema-safe)
+            try
+            {
+                using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    connection.Open();
+
+                    // Ensure core methods exist
+                    using (var ensureCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        IF NOT EXISTS (SELECT 1 FROM PaymentMethods WHERE Name='UPI')
+                        BEGIN
+                            INSERT INTO PaymentMethods (Name, DisplayName, IsActive, RequiresCardInfo, RequiresCardPresent, RequiresApproval)
+                            VALUES ('UPI','UPI',1,0,0,0);
+                        END
+
+                        IF NOT EXISTS (SELECT 1 FROM PaymentMethods WHERE Name='Complementary')
+                        BEGIN
+                            INSERT INTO PaymentMethods (Name, DisplayName, IsActive, RequiresCardInfo, RequiresCardPresent, RequiresApproval)
+                            VALUES ('Complementary','Complementary (100% Discount)',1,0,0,1);
+                        END", connection))
+                    {
+                        ensureCmd.ExecuteNonQuery();
+                    }
+
+                    page.Payment.AvailablePaymentMethods.Clear();
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        SELECT Id, Name, DisplayName
+                        FROM PaymentMethods
+                        WHERE IsActive = 1
+                        ORDER BY DisplayName", connection))
+                    {
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                var id = reader.GetInt32(0);
+                                var name = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+                                var display = reader.IsDBNull(2) ? name : reader.GetString(2);
+
+                                page.Payment.AvailablePaymentMethods.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem
+                                {
+                                    Value = id.ToString(),
+                                    Text = display,
+                                    Selected = false
+                                });
+
+                                // Default selection: CASH if present, else first
+                                if (page.Payment.PaymentMethodId == 0 && name.Equals("CASH", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    page.Payment.PaymentMethodId = id;
+                                }
+                            }
+                        }
+                    }
+
+                    if (page.Payment.PaymentMethodId == 0 && page.Payment.AvailablePaymentMethods.Count > 0)
+                    {
+                        page.Payment.PaymentMethodId = int.TryParse(page.Payment.AvailablePaymentMethods[0].Value, out var firstId)
+                            ? firstId
+                            : 0;
+                    }
+                }
+            }
+            catch
+            {
+                // Non-fatal; POS can still be used for order entry
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [RequirePermission("NAV_ORDERS_CREATE", PermissionAction.Add)]
+        public async Task<IActionResult> CreatePOSOrder(RestaurantManagementSystem.Models.PosOrderCreateViewModel model)
+        {
+            ViewData["Title"] = "POS Order";
+
+            if (model == null)
+            {
+                return BadRequest("Invalid request.");
+            }
+
+            if (model.OrderType != 1 && model.OrderType != 2)
+            {
+                ModelState.AddModelError(nameof(model.OrderType), "POS Order supports only Takeout (1) or Delivery (2).");
+            }
+
+            if (model.OrderType == 2 && string.IsNullOrWhiteSpace(model.CustomerAddress))
+            {
+                ModelState.AddModelError(nameof(model.CustomerAddress), "Address is required for Delivery orders.");
+            }
+
+            if (!ModelState.IsValid)
+            {
+                return View("POSOrder", new RestaurantManagementSystem.Models.PosOrderPageViewModel { Create = model });
+            }
+
+            try
+            {
+                using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (var transaction = connection.BeginTransaction())
+                    {
+                        try
+                        {
+                            int orderId;
+                            string orderNumber;
+
+                            using (var command = new Microsoft.Data.SqlClient.SqlCommand("usp_CreateOrder", connection, transaction))
+                            {
+                                command.CommandType = CommandType.StoredProcedure;
+                                command.Parameters.AddWithValue("@TableTurnoverId", DBNull.Value);
+                                command.Parameters.AddWithValue("@OrderType", model.OrderType);
+                                command.Parameters.AddWithValue("@UserId", GetCurrentUserId());
+                                command.Parameters.AddWithValue("@OrderByUserId", GetCurrentUserId());
+                                command.Parameters.AddWithValue("@OrderByUserName", GetCurrentUserName());
+                                command.Parameters.AddWithValue("@CustomerName", string.IsNullOrWhiteSpace(model.CustomerName) ? (object)DBNull.Value : model.CustomerName);
+                                command.Parameters.AddWithValue("@CustomerPhone", string.IsNullOrWhiteSpace(model.CustomerPhone) ? (object)DBNull.Value : model.CustomerPhone);
+                                command.Parameters.AddWithValue("@CustomerEmailId", string.IsNullOrWhiteSpace(model.CustomerEmailId) ? (object)DBNull.Value : model.CustomerEmailId);
+                                command.Parameters.AddWithValue("@SpecialInstructions", string.IsNullOrWhiteSpace(model.SpecialInstructions) ? (object)DBNull.Value : model.SpecialInstructions);
+
+                                using (var reader = command.ExecuteReader())
+                                {
+                                    orderId = 0;
+                                    orderNumber = string.Empty;
+                                    if (reader.Read())
+                                    {
+                                        orderId = reader.GetInt32(0);
+                                        orderNumber = reader.GetString(1);
+                                    }
+                                }
+                            }
+
+                            if (orderId <= 0)
+                            {
+                                transaction.Rollback();
+                                TempData["ErrorMessage"] = "Failed to create order.";
+                                return View("POSOrder", new RestaurantManagementSystem.Models.PosOrderPageViewModel { Create = model });
+                            }
+
+                            // Ensure Orders.CashierId is populated (schema-safe)
+                            try
+                            {
+                                using (var setCashierCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                    IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'CashierId')
+                                    BEGIN
+                                        UPDATE dbo.Orders
+                                        SET CashierId = @CashierId
+                                        WHERE Id = @OrderId AND CashierId IS NULL;
+                                    END", connection, transaction))
+                                {
+                                    setCashierCmd.Parameters.AddWithValue("@CashierId", GetCurrentUserId());
+                                    setCashierCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                    setCashierCmd.ExecuteNonQuery();
+                                }
+                            }
+                            catch { /* non-fatal */ }
+
+                            // For POS Takeout/Delivery, default to Foods context (schema-safe)
+                            try
+                            {
+                                using (var setKitchenTypeCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                    IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'OrderKitchenType')
+                                    BEGIN
+                                        UPDATE dbo.Orders SET OrderKitchenType = 'Foods' WHERE Id = @OrderId;
+                                    END", connection, transaction))
+                                {
+                                    setKitchenTypeCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                    setKitchenTypeCmd.ExecuteNonQuery();
+                                }
+                            }
+                            catch { /* non-fatal */ }
+
+                            // Persist delivery address if present and column exists
+                            try
+                            {
+                                if (model.OrderType == 2 && !string.IsNullOrWhiteSpace(model.CustomerAddress))
+                                {
+                                    using (var setAddressCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                        IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'CustomerAddress')
+                                        BEGIN
+                                            UPDATE dbo.Orders SET CustomerAddress = @Addr WHERE Id = @OrderId;
+                                        END", connection, transaction))
+                                    {
+                                        setAddressCmd.Parameters.AddWithValue("@Addr", model.CustomerAddress.Trim());
+                                        setAddressCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                        setAddressCmd.ExecuteNonQuery();
+                                    }
+                                }
+                            }
+                            catch { /* non-fatal */ }
+
+                            // Ensure kitchen tickets are in sync (existing flow)
+                            using (var kitchenCommand = new Microsoft.Data.SqlClient.SqlCommand("UpdateKitchenTicketsForOrder", connection, transaction))
+                            {
+                                kitchenCommand.CommandType = CommandType.StoredProcedure;
+                                kitchenCommand.Parameters.AddWithValue("@OrderId", orderId);
+                                kitchenCommand.ExecuteNonQuery();
+                            }
+
+                            transaction.Commit();
+
+                            TempData["SuccessMessage"] = $"Order {orderNumber} created.";
+                            return RedirectToAction(nameof(POSOrder), new { orderId });
+                        }
+                        catch (Exception)
+                        {
+                            transaction.Rollback();
+                            throw;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                TempData["ErrorMessage"] = "Error creating order: " + ex.Message;
+                return View("POSOrder", new RestaurantManagementSystem.Models.PosOrderPageViewModel { Create = model });
+            }
+        }
+
+        // AJAX create to avoid full page reload (returns JSON)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [RequirePermission("NAV_ORDERS_CREATE", PermissionAction.Add)]
+        public async Task<IActionResult> CreatePOSOrderAjax(RestaurantManagementSystem.Models.PosOrderCreateViewModel model)
+        {
+            if (model == null)
+            {
+                return Json(new { success = false, message = "Invalid request." });
+            }
+
+            if (model.OrderType != 1 && model.OrderType != 2)
+            {
+                ModelState.AddModelError(nameof(model.OrderType), "POS Order supports only Takeout (1) or Delivery (2).");
+            }
+
+            if (model.OrderType == 2 && string.IsNullOrWhiteSpace(model.CustomerAddress))
+            {
+                ModelState.AddModelError(nameof(model.CustomerAddress), "Address is required for Delivery orders.");
+            }
+
+            if (!ModelState.IsValid)
+            {
+                var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage ?? "Validation failed.";
+                return Json(new { success = false, message = firstError });
+            }
+
+            try
+            {
+                using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (var transaction = connection.BeginTransaction())
+                    {
+                        try
+                        {
+                            int orderId;
+                            string orderNumber;
+
+                            using (var command = new Microsoft.Data.SqlClient.SqlCommand("usp_CreateOrder", connection, transaction))
+                            {
+                                command.CommandType = CommandType.StoredProcedure;
+                                command.Parameters.AddWithValue("@TableTurnoverId", DBNull.Value);
+                                command.Parameters.AddWithValue("@OrderType", model.OrderType);
+                                command.Parameters.AddWithValue("@UserId", GetCurrentUserId());
+                                command.Parameters.AddWithValue("@OrderByUserId", GetCurrentUserId());
+                                command.Parameters.AddWithValue("@OrderByUserName", GetCurrentUserName());
+                                command.Parameters.AddWithValue("@CustomerName", string.IsNullOrWhiteSpace(model.CustomerName) ? (object)DBNull.Value : model.CustomerName);
+                                command.Parameters.AddWithValue("@CustomerPhone", string.IsNullOrWhiteSpace(model.CustomerPhone) ? (object)DBNull.Value : model.CustomerPhone);
+                                command.Parameters.AddWithValue("@CustomerEmailId", string.IsNullOrWhiteSpace(model.CustomerEmailId) ? (object)DBNull.Value : model.CustomerEmailId);
+                                command.Parameters.AddWithValue("@SpecialInstructions", string.IsNullOrWhiteSpace(model.SpecialInstructions) ? (object)DBNull.Value : model.SpecialInstructions);
+
+                                using (var reader = command.ExecuteReader())
+                                {
+                                    orderId = 0;
+                                    orderNumber = string.Empty;
+                                    if (reader.Read())
+                                    {
+                                        orderId = reader.GetInt32(0);
+                                        orderNumber = reader.GetString(1);
+                                    }
+                                }
+                            }
+
+                            if (orderId <= 0)
+                            {
+                                transaction.Rollback();
+                                return Json(new { success = false, message = "Failed to create order." });
+                            }
+
+                            // Ensure Orders.CashierId is populated (schema-safe)
+                            try
+                            {
+                                using (var setCashierCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                    IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'CashierId')
+                                    BEGIN
+                                        UPDATE dbo.Orders
+                                        SET CashierId = @CashierId
+                                        WHERE Id = @OrderId AND CashierId IS NULL;
+                                    END", connection, transaction))
+                                {
+                                    setCashierCmd.Parameters.AddWithValue("@CashierId", GetCurrentUserId());
+                                    setCashierCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                    setCashierCmd.ExecuteNonQuery();
+                                }
+                            }
+                            catch { /* non-fatal */ }
+
+                            // For POS Takeout/Delivery, default to Foods context (schema-safe)
+                            try
+                            {
+                                using (var setKitchenTypeCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                    IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'OrderKitchenType')
+                                    BEGIN
+                                        UPDATE dbo.Orders SET OrderKitchenType = 'Foods' WHERE Id = @OrderId;
+                                    END", connection, transaction))
+                                {
+                                    setKitchenTypeCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                    setKitchenTypeCmd.ExecuteNonQuery();
+                                }
+                            }
+                            catch { /* non-fatal */ }
+
+                            // Persist delivery address if present and column exists
+                            try
+                            {
+                                if (model.OrderType == 2 && !string.IsNullOrWhiteSpace(model.CustomerAddress))
+                                {
+                                    using (var setAddressCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                        IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'CustomerAddress')
+                                        BEGIN
+                                            UPDATE dbo.Orders SET CustomerAddress = @Addr WHERE Id = @OrderId;
+                                        END", connection, transaction))
+                                    {
+                                        setAddressCmd.Parameters.AddWithValue("@Addr", model.CustomerAddress.Trim());
+                                        setAddressCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                        setAddressCmd.ExecuteNonQuery();
+                                    }
+                                }
+                            }
+                            catch { /* non-fatal */ }
+
+                            // Ensure kitchen tickets are in sync (existing flow)
+                            using (var kitchenCommand = new Microsoft.Data.SqlClient.SqlCommand("UpdateKitchenTicketsForOrder", connection, transaction))
+                            {
+                                kitchenCommand.CommandType = CommandType.StoredProcedure;
+                                kitchenCommand.Parameters.AddWithValue("@OrderId", orderId);
+                                kitchenCommand.ExecuteNonQuery();
+                            }
+
+                            transaction.Commit();
+
+                            return Json(new { success = true, orderId, orderNumber, orderType = model.OrderType });
+                        }
+                        catch (Exception)
+                        {
+                            transaction.Rollback();
+                            throw;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "Error creating order: " + ex.Message });
+            }
+        }
+
+        private void LoadPosMenuItems(OrderViewModel order)
+        {
+            // Load menu items for POS catalog rendering (category + optional type-specific pricing).
+            // Only show Foods group to keep the catalog lean for POS and cache briefly to speed reloads.
+            if (order == null) return;
+
+            const string cacheKey = "POS_MENU_FOODS";
+            if (_cache.TryGetValue(cacheKey, out List<MenuItem> cached) && cached != null && cached.Count > 0)
+            {
+                order.AvailableMenuItems = cached.Select(mi => new MenuItem
+                {
+                    Id = mi.Id,
+                    Name = mi.Name,
+                    Price = mi.Price,
+                    TakeoutPrice = mi.TakeoutPrice,
+                    DeliveryPrice = mi.DeliveryPrice,
+                    ImagePath = mi.ImagePath,
+                    CategoryId = mi.CategoryId,
+                    Category = mi.Category != null ? new Category { Id = mi.Category.Id, Name = mi.Category.Name } : null
+                }).ToList();
+                return;
+            }
+
+            try
+            {
+                using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    connection.Open();
+
+                    int? foodsGroupId = null;
+                    using (var groupCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        IF OBJECT_ID('dbo.menuitemgroup','U') IS NOT NULL
+                        BEGIN
+                            SELECT TOP 1 ID FROM dbo.menuitemgroup WHERE LOWER(itemgroup) = 'foods' AND is_active = 1 ORDER BY ID;
+                        END
+                        ELSE SELECT NULL AS ID;", connection))
+                    {
+                        var grpObj = groupCmd.ExecuteScalar();
+                        if (grpObj != null && grpObj != DBNull.Value)
+                        {
+                            foodsGroupId = Convert.ToInt32(grpObj);
+                        }
+                    }
+
+                    // Fallback: if no explicit 'Foods' group exists, use ID=1 if active.
+                    if (!foodsGroupId.HasValue)
+                    {
+                        using (var fallbackCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                            IF OBJECT_ID('dbo.menuitemgroup','U') IS NOT NULL
+                            BEGIN
+                                SELECT TOP 1 ID FROM dbo.menuitemgroup WHERE ID = 1 AND is_active = 1;
+                            END
+                            ELSE SELECT NULL AS ID;", connection))
+                        {
+                            var fb = fallbackCmd.ExecuteScalar();
+                            if (fb != null && fb != DBNull.Value)
+                            {
+                                foodsGroupId = Convert.ToInt32(fb);
+                            }
+                        }
+                    }
+
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        DECLARE @hasNotAvailable bit = CASE WHEN COL_LENGTH('dbo.MenuItems','NotAvailable') IS NULL THEN 0 ELSE 1 END;
+
+                        SELECT 
+                            m.Id,
+                            m.Name,
+                            ISNULL(m.Price, 0) AS Price,
+                            CASE WHEN COL_LENGTH('dbo.MenuItems', 'TakeoutPrice') IS NULL THEN NULL ELSE m.TakeoutPrice END AS TakeoutPrice,
+                            CASE WHEN COL_LENGTH('dbo.MenuItems', 'DeliveryPrice') IS NULL THEN NULL ELSE m.DeliveryPrice END AS DeliveryPrice,
+                            CASE WHEN COL_LENGTH('dbo.MenuItems', 'ImagePath') IS NULL THEN NULL ELSE m.ImagePath END AS ImagePath,
+                            m.CategoryId,
+                            c.Name AS CategoryName
+                        FROM dbo.MenuItems m
+                        INNER JOIN dbo.Categories c ON m.CategoryId = c.Id
+                        WHERE ISNULL(m.IsAvailable, 1) = 1
+                          AND (@hasNotAvailable = 0 OR ISNULL(m.NotAvailable, 0) = 0)
+                          AND (
+                                @GroupId IS NULL 
+                                OR COL_LENGTH('dbo.MenuItems','menuitemgroupID') IS NULL 
+                                OR m.menuitemgroupID = @GroupId
+                              )
+                        ORDER BY c.Name, m.Name;", connection))
+                    {
+                        cmd.Parameters.AddWithValue("@GroupId", (object?)foodsGroupId ?? DBNull.Value);
+
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            order.AvailableMenuItems.Clear();
+                            var hydrated = new List<MenuItem>();
+                            while (reader.Read())
+                            {
+                                var item = new MenuItem
+                                {
+                                    Id = reader.GetInt32(0),
+                                    Name = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+                                    Price = reader.IsDBNull(2) ? 0m : reader.GetDecimal(2),
+                                    TakeoutPrice = reader.IsDBNull(3) ? (decimal?)null : reader.GetDecimal(3),
+                                    DeliveryPrice = reader.IsDBNull(4) ? (decimal?)null : reader.GetDecimal(4),
+                                    ImagePath = reader.IsDBNull(5) ? null : reader.GetString(5),
+                                    CategoryId = reader.IsDBNull(6) ? 0 : reader.GetInt32(6),
+                                    Category = new Category { Name = reader.IsDBNull(7) ? string.Empty : reader.GetString(7) }
+                                };
+                                hydrated.Add(item);
+                            }
+
+                            order.AvailableMenuItems.AddRange(hydrated);
+                            if (hydrated.Count > 0)
+                            {
+                                _cache.Set(cacheKey, hydrated, new MemoryCacheEntryOptions
+                                {
+                                    AbsoluteExpirationRelativeToNow = PosMenuCacheDuration,
+                                    SlidingExpiration = PosMenuCacheDuration
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Non-fatal; page still loads (user can use Order Details page if needed)
+            }
+        }
         
         // Helper Methods
         
@@ -2512,6 +3123,7 @@ namespace RestaurantManagementSystem.Controllers
             {
                 // Step 1: Read current order state and calculate subtotal from OrderItems
                 decimal subtotalFromItems = 0m;
+                decimal gstApplicableSubtotalFromItems = 0m;
                 decimal discountAmount = 0m;
                 decimal tipAmount = 0m;
                 bool isBarOrder = false;
@@ -2519,6 +3131,17 @@ namespace RestaurantManagementSystem.Controllers
                 using (var readCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
                     SELECT 
                         ISNULL((SELECT SUM(oi.Subtotal) FROM OrderItems oi WHERE oi.OrderId = o.Id AND ISNULL(oi.Status,0) <> 5), 0) AS SubtotalFromItems,
+                        ISNULL((
+                            SELECT SUM(
+                                CASE
+                                    WHEN COL_LENGTH('dbo.OrderItems', 'isGstApplicable') IS NULL THEN oi.Subtotal
+                                    WHEN ISNULL(oi.isGstApplicable, 1) = 1 THEN oi.Subtotal
+                                    ELSE 0
+                                END
+                            )
+                            FROM OrderItems oi
+                            WHERE oi.OrderId = o.Id AND ISNULL(oi.Status,0) <> 5
+                        ), 0) AS GstApplicableSubtotalFromItems,
                         ISNULL(o.DiscountAmount, 0) AS DiscountAmount,
                         ISNULL(o.TipAmount, 0) AS TipAmount,
                         CASE 
@@ -2537,9 +3160,10 @@ namespace RestaurantManagementSystem.Controllers
                         if (reader.Read())
                         {
                             subtotalFromItems = reader.GetDecimal(0);
-                            discountAmount = reader.GetDecimal(1);
-                            tipAmount = reader.GetDecimal(2);
-                            isBarOrder = reader.GetInt32(3) == 1;
+                            gstApplicableSubtotalFromItems = reader.GetDecimal(1);
+                            discountAmount = reader.GetDecimal(2);
+                            tipAmount = reader.GetDecimal(3);
+                            isBarOrder = reader.GetInt32(4) == 1;
                         }
                         else
                         {
@@ -2583,45 +3207,46 @@ namespace RestaurantManagementSystem.Controllers
                     }
                 }
                 
-                // Step 3: Calculate GST based on order type
-                decimal netSubtotal;
+                // Step 3: Calculate GST based on order type, but only for GST-applicable items
                 decimal gstAmount;
                 decimal adjustedSubtotal;
                 decimal totalAmount;
-                
+
+                // Split subtotal into GST-applicable vs non-applicable portions
+                decimal applicableGross = Math.Max(0m, gstApplicableSubtotalFromItems);
+                decimal totalGross = Math.Max(0m, subtotalFromItems);
+                if (applicableGross > totalGross) applicableGross = totalGross;
+                decimal nonApplicableGross = Math.Max(0m, totalGross - applicableGross);
+
+                // Allocate discount proportionally between applicable and non-applicable items
+                decimal safeTotalForSplit = Math.Max(0.01m, totalGross);
+                decimal discountOnApplicable = discountAmount * (applicableGross / safeTotalForSplit);
+                if (discountOnApplicable < 0m) discountOnApplicable = 0m;
+                if (discountOnApplicable > discountAmount) discountOnApplicable = discountAmount;
+                decimal discountOnNonApplicable = discountAmount - discountOnApplicable;
+
+                decimal applicableAfterDiscount = Math.Max(0m, applicableGross - discountOnApplicable);
+                decimal nonApplicableAfterDiscount = Math.Max(0m, nonApplicableGross - discountOnNonApplicable);
+                decimal grossAfterDiscount = Math.Max(0m, totalGross - discountAmount);
+
                 if (isBarOrder)
                 {
-                    // BAR Order: INCLUSIVE GST calculation
-                    // Menu price INCLUDES GST, so we extract the taxable value
-                    // Example: ₹100 menu price with 20% GST
-                    //   Taxable Value = ₹100 ÷ 1.20 = ₹83.33
-                    //   GST Amount = ₹83.33 × 20% = ₹16.67
-                    //   Total = ₹100 (customer pays menu price)
-                    
-                    decimal menuPriceAfterDiscount = Math.Max(0m, subtotalFromItems - discountAmount);
-                    decimal gstMultiplier = 1m + (gstPercentage / 100m); // e.g., 1.20 for 20% GST
-                    
-                    // Extract taxable value (GST-exclusive base amount)
-                    decimal taxableValue = Math.Round(menuPriceAfterDiscount / gstMultiplier, 2, MidpointRounding.AwayFromZero);
-                    
-                    // Calculate GST on the taxable value
-                    gstAmount = Math.Round(taxableValue * (gstPercentage / 100m), 2, MidpointRounding.AwayFromZero);
-                    
-                    // For BAR orders:
-                    // - adjustedSubtotal = taxable value (stored in Subtotal column)
-                    // - totalAmount = menu price after discount + tip
-                    adjustedSubtotal = taxableValue;
-                    netSubtotal = taxableValue; // For UI display
-                    totalAmount = menuPriceAfterDiscount + tipAmount;
+                    // BAR: menu prices include GST for applicable items; non-applicable items have no GST
+                    decimal gstMultiplier = 1m + (gstPercentage / 100m);
+                    decimal taxableApplicable = Math.Round(applicableAfterDiscount / gstMultiplier, 2, MidpointRounding.AwayFromZero);
+                    gstAmount = Math.Round(taxableApplicable * (gstPercentage / 100m), 2, MidpointRounding.AwayFromZero);
+
+                    // Subtotal stored as GST-exclusive base: taxable base + non-taxable base
+                    adjustedSubtotal = taxableApplicable + nonApplicableAfterDiscount;
+                    // Total customer pays is gross-after-discount (already includes GST for applicable items) + tip
+                    totalAmount = grossAfterDiscount + tipAmount;
                 }
                 else
                 {
-                    // Foods Order: EXCLUSIVE GST calculation (existing logic)
-                    // GST is added on top of the price
-                    netSubtotal = Math.Max(0m, subtotalFromItems - discountAmount);
-                    gstAmount = Math.Round(netSubtotal * gstPercentage / 100m, 2, MidpointRounding.AwayFromZero);
-                    adjustedSubtotal = netSubtotal;
-                    totalAmount = netSubtotal + gstAmount + tipAmount;
+                    // Foods: prices exclude GST; GST applies only on applicable items
+                    gstAmount = Math.Round(applicableAfterDiscount * gstPercentage / 100m, 2, MidpointRounding.AwayFromZero);
+                    adjustedSubtotal = grossAfterDiscount;
+                    totalAmount = adjustedSubtotal + gstAmount + tipAmount;
                 }
                 
                 // Step 4: Split into CGST and SGST (equal split; handle last-cent rounding)
@@ -2673,6 +3298,88 @@ namespace RestaurantManagementSystem.Controllers
             {
                 // Log error but don't throw - allow order processing to continue even if GST persistence fails
                 System.Diagnostics.Debug.WriteLine($"UpdateOrderFinancials failed for order {orderId}: {ex.Message}");
+            }
+        }
+
+        private void UpdateOrderItemGstDetails(int orderId, Microsoft.Data.SqlClient.SqlConnection connection, Microsoft.Data.SqlClient.SqlTransaction transaction = null)
+        {
+            try
+            {
+                using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.OrderItems') AND name = 'GST_Per')
+                       AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.OrderItems') AND name = 'GST_Amount')
+                       AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.OrderItems') AND name = 'CGST_Perc')
+                       AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.OrderItems') AND name = 'CGST_Amount')
+                       AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.OrderItems') AND name = 'SGST_Perc')
+                       AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.OrderItems') AND name = 'SGST_Amount')
+                       AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.OrderItems') AND name = 'isGstApplicable')
+                    BEGIN
+                        DECLARE @isBar bit = 0;
+                        DECLARE @gstPerc decimal(12,2) = 5.00;
+
+                        SELECT @isBar = CASE 
+                            WHEN EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'OrderKitchenType')
+                                AND ISNULL(o.OrderKitchenType,'') = 'Bar' THEN 1
+                            WHEN EXISTS (SELECT 1 FROM KitchenTickets kt WHERE kt.OrderId = o.Id
+                                AND (kt.KitchenStation = 'BAR' OR kt.TicketNumber LIKE 'BOT-%')) THEN 1
+                            ELSE 0
+                        END
+                        FROM Orders o
+                        WHERE o.Id = @OrderId;
+
+                        BEGIN TRY
+                            SELECT @gstPerc = CASE WHEN @isBar = 1 
+                                THEN ISNULL(BarGSTPerc, ISNULL(DefaultGSTPercentage, 5.0))
+                                ELSE ISNULL(DefaultGSTPercentage, 5.0)
+                            END
+                            FROM dbo.RestaurantSettings;
+                        END TRY
+                        BEGIN CATCH
+                            SELECT @gstPerc = ISNULL(DefaultGSTPercentage, 5.0)
+                            FROM dbo.RestaurantSettings;
+                        END CATCH
+
+                        ;WITH ItemTax AS (
+                            SELECT
+                                oi.Id AS OrderItemId,
+                                CAST(CASE WHEN ISNULL(mi.IsGstApplicable, 1) = 1 THEN 1 ELSE 0 END AS bit) AS IsGstApplicable,
+                                CAST(CASE WHEN ISNULL(mi.IsGstApplicable, 1) = 1 THEN @gstPerc ELSE 0 END AS decimal(12,2)) AS GstPerc,
+                                CAST(CASE
+                                    WHEN ISNULL(mi.IsGstApplicable, 1) = 1 AND @gstPerc > 0 THEN
+                                        CASE
+                                            WHEN @isBar = 1 THEN
+                                                ROUND(oi.Subtotal - ROUND(oi.Subtotal / (1 + (@gstPerc / 100.0)), 2), 2)
+                                            ELSE
+                                                ROUND(oi.Subtotal * @gstPerc / 100.0, 2)
+                                        END
+                                    ELSE 0
+                                END AS decimal(12,2)) AS GstAmount
+                            FROM OrderItems oi
+                            INNER JOIN MenuItems mi ON mi.Id = oi.MenuItemId
+                            WHERE oi.OrderId = @OrderId
+                              AND ISNULL(oi.Status, 0) <> 5
+                        )
+                        UPDATE oi
+                        SET
+                            oi.isGstApplicable = t.IsGstApplicable,
+                            oi.GST_Per = t.GstPerc,
+                            oi.CGST_Perc = CAST(ROUND(t.GstPerc / 2.0, 2) AS decimal(12,2)),
+                            oi.SGST_Perc = CAST(ROUND(t.GstPerc / 2.0, 2) AS decimal(12,2)),
+                            oi.GST_Amount = t.GstAmount,
+                            oi.CGST_Amount = CAST(ROUND(t.GstAmount / 2.0, 2) AS decimal(12,2)),
+                            oi.SGST_Amount = CAST((t.GstAmount - CAST(ROUND(t.GstAmount / 2.0, 2) AS decimal(12,2))) AS decimal(12,2))
+                        FROM OrderItems oi
+                        INNER JOIN ItemTax t ON t.OrderItemId = oi.Id;
+                    END
+                ", connection, transaction))
+                {
+                    cmd.Parameters.AddWithValue("@OrderId", orderId);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"UpdateOrderItemGstDetails failed for order {orderId}: {ex.Message}");
             }
         }
 
@@ -2760,6 +3467,7 @@ namespace RestaurantManagementSystem.Controllers
                             catch { /* ignore if table schema differs */ }
 
                             // Recalculate financials excluding cancelled items
+                            UpdateOrderItemGstDetails(orderId, connection, transaction);
                             UpdateOrderFinancials(orderId, connection, transaction);
 
                             transaction.Commit();
@@ -4045,7 +4753,11 @@ namespace RestaurantManagementSystem.Controllers
                         decimal paid = 0m;
                         if (obj != null && obj != DBNull.Value) paid = Convert.ToDecimal(obj);
                         order.PaidAmount = paid;
-                        order.RemainingAmount = Math.Round(order.TotalAmount - paid, 2, MidpointRounding.AwayFromZero);
+
+                        // POS and payment flows settle to nearest rupee (roundoff).
+                        // Payments.Sum includes RoundoffAdjustmentAmt, so compute remaining against the rounded payable total.
+                        var payableTotal = Math.Round(order.TotalAmount, 0, MidpointRounding.AwayFromZero);
+                        order.RemainingAmount = Math.Round(payableTotal - paid, 2, MidpointRounding.AwayFromZero);
                     }
                 }
             }
@@ -4104,6 +4816,9 @@ namespace RestaurantManagementSystem.Controllers
                         command.Parameters.AddWithValue("@SpecialInstructions", (object?)specialInstructions ?? DBNull.Value);
                         command.ExecuteNonQuery();
                     }
+
+                    UpdateOrderItemGstDetails(orderId, connection, null);
+
                     // Recalculate order totals
                     using (var command = new Microsoft.Data.SqlClient.SqlCommand(@"
                         UPDATE Orders
@@ -4275,6 +4990,7 @@ namespace RestaurantManagementSystem.Controllers
                             }
                             
                             // Recalculate order totals and GST (handles both BAR inclusive and Foods exclusive)
+                            UpdateOrderItemGstDetails(orderId, connection, transaction);
                             UpdateOrderFinancials(orderId, connection, transaction);
                             
                             transaction.Commit();
@@ -4334,6 +5050,7 @@ namespace RestaurantManagementSystem.Controllers
                             }
                             
                             // Recalculate and persist GST fields on submit
+                            UpdateOrderItemGstDetails(orderId, connection, transaction);
                             UpdateOrderFinancials(orderId, connection, transaction);
                             
                             transaction.Commit();

@@ -1,0 +1,1103 @@
+@model RestaurantManagementSystem.Models.PosOrderPageViewModel
+@{
+    ViewData["Title"] = ViewData["Title"] ?? "POS Order";
+    var orderId = Model?.OrderId;
+    var hasOrder = orderId.HasValue && orderId.Value > 0;
+    var catalog = Model?.Order?.AvailableMenuItems ?? new List<RestaurantManagementSystem.Models.MenuItem>();
+    // Keep server-side work minimal; category list is hydrated client-side from catalog DOM.
+    var categories = new List<dynamic>();
+}
+
+<style>
+    .pos-shell { min-height: calc(100vh - 90px); }
+    .pos-topbar { position: sticky; top: 0; z-index: 10; background: var(--bs-body-bg); padding: .5rem 0; border-bottom: 1px solid rgba(0,0,0,.06); }
+    .pos-main { display: grid; grid-template-columns: 240px 1fr 360px; gap: .75rem; }
+    @@media (max-width: 1199.98px) { .pos-main { grid-template-columns: 220px 1fr 340px; } }
+    @@media (max-width: 991.98px) { .pos-main { grid-template-columns: 1fr; } }
+    .pos-panel { border: 1px solid rgba(0,0,0,.08); border-radius: .75rem; background: #fff; }
+    .pos-panel-header { padding: .75rem .9rem; border-bottom: 1px solid rgba(0,0,0,.06); }
+    .pos-panel-body { padding: .75rem .9rem; }
+    .pos-scroll { overflow: auto; max-height: calc(100vh - 170px); }
+    .pos-product-card { cursor: pointer; }
+    .pos-product-img { width: 100%; height: 110px; object-fit: cover; background: var(--bs-light); }
+    .pos-cart-item { padding: .65rem .75rem; }
+    .pos-disabled { opacity: .65; pointer-events: none; }
+    .pos-loading { position: sticky; top: 0; z-index: 20; background: var(--bs-body-bg); border: 1px solid rgba(0,0,0,.08); border-radius: .75rem; padding: .75rem .9rem; }
+</style>
+
+<div class="container-fluid py-2 pos-shell">
+    @Html.AntiForgeryToken()
+
+    <div class="pos-topbar">
+        <div class="d-flex align-items-center gap-2">
+            <div class="fw-bold">@ViewData["Title"]</div>
+            <div class="text-muted small" id="posTopSubtitle">
+                @if (hasOrder)
+                {
+                    <span>Order #@Model.OrderNumber</span>
+                }
+                else
+                {
+                    <span>Create Takeout / Delivery order</span>
+                }
+            </div>
+            <div class="flex-grow-1"></div>
+            <div class="input-group" style="max-width: 520px;">
+                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                <input class="form-control" id="posSearch" placeholder="Search products..." autocomplete="off" />
+            </div>
+                <button class="btn btn-primary ms-2" type="button" id="posNewOrderBtn">
+                    <i class="fas fa-plus-circle me-1"></i> New Order
+                </button>
+            <a asp-action="Dashboard" class="btn btn-outline-secondary ms-2">
+                <i class="fas fa-arrow-left me-1"></i> Back
+            </a>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success mt-2 mb-0">@TempData["SuccessMessage"]</div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger mt-2 mb-0">@TempData["ErrorMessage"]</div>
+    }
+
+    <div class="pos-main mt-3">
+        <div class="pos-loading" id="posLoading">
+            <div class="d-flex align-items-center gap-2">
+                <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+                <div class="text-muted">Loading menu…</div>
+            </div>
+        </div>
+        <!-- Categories -->
+        <div class="pos-panel" id="posLeftPanel">
+            <div class="pos-panel-header d-flex justify-content-between align-items-center">
+                <div class="fw-semibold">All Categories</div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="posClearFilters"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="pos-panel-body p-0">
+                <div class="list-group list-group-flush pos-scroll" id="posCategoryList"></div>
+            </div>
+        </div>
+
+        <!-- Products -->
+        <div class="pos-panel" id="posCenterPanel">
+            <div class="pos-panel-header d-flex justify-content-between align-items-center">
+                <div class="fw-semibold" id="posProductHeader">Products</div>
+                <button class="btn btn-sm btn-outline-secondary" type="button" id="posRefreshBtn" @(hasOrder ? "" : "disabled")>
+                    <i class="fas fa-sync-alt me-1"></i> Refresh
+                </button>
+            </div>
+            <div class="pos-panel-body pos-scroll">
+                @if (!catalog.Any())
+                {
+                    <div class="text-muted">No menu items available.</div>
+                }
+                else
+                {
+                    <div class="row row-cols-2 row-cols-md-3 row-cols-xl-4 g-3" id="posProductGrid">
+                        @foreach (var mi in catalog)
+                        {
+                            var catId = mi.CategoryId;
+                            var catName = mi.Category?.Name ?? "";
+                            var displayName = mi.Name ?? string.Empty;
+                            var basePrice = mi.Price;
+                            var takeoutPrice = mi.TakeoutPrice;
+                            var deliveryPrice = mi.DeliveryPrice;
+                            var img = mi.ImagePath;
+
+                            <div class="col pos-product" 
+                                 data-category="@catId"
+                                 data-category-name="@catName"
+                                 data-name="@displayName"
+                                 data-price="@basePrice"
+                                 data-takeout-price="@(takeoutPrice.HasValue ? takeoutPrice.Value.ToString("F2") : "")"
+                                 data-delivery-price="@(deliveryPrice.HasValue ? deliveryPrice.Value.ToString("F2") : "")"
+                                 data-id="@mi.Id">
+                                <div class="card h-100 shadow-sm pos-product-card" role="button" tabindex="0">
+                                    @if (!string.IsNullOrWhiteSpace(img))
+                                    {
+                                        <img src="@img" class="pos-product-img" alt="@displayName" />
+                                    }
+                                    else
+                                    {
+                                        <div class="pos-product-img d-flex align-items-center justify-content-center text-muted">
+                                            <i class="fas fa-utensils"></i>
+                                        </div>
+                                    }
+                                    <div class="card-body py-2">
+                                        <div class="fw-semibold text-truncate">@displayName</div>
+                                        <div class="small text-muted" data-role="price">₹@basePrice.ToString("F2")</div>
+                                    </div>
+                                    <div class="card-footer bg-white border-0 pt-0">
+                                        <button type="button" class="btn btn-primary w-100 btn-sm pos-add-btn" @(hasOrder ? "" : "disabled")>
+                                            <i class="fas fa-plus me-1"></i> Add
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    @if (!hasOrder)
+                    {
+                        <div class="alert alert-info mt-3 mb-0">
+                            Create an order to start adding items.
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <!-- Current Order + Payment -->
+        <div class="pos-panel" id="posRightPanel">
+            <div class="pos-panel-header d-flex justify-content-between align-items-center">
+                <div class="fw-semibold">Current Order</div>
+                <button class="btn btn-sm btn-outline-secondary" type="button" id="posPayBtnTop" @(hasOrder ? "" : "disabled")>
+                    <i class="fas fa-credit-card me-1"></i> Pay
+                </button>
+            </div>
+            <div class="pos-panel-body">
+                <form asp-action="CreatePOSOrder" method="post" autocomplete="off" id="posCreateForm" style="display:@(hasOrder ? "none" : "block")">
+                    <div class="row g-2">
+                        <div class="col-12">
+                            <label class="form-label">Order Type</label>
+                            <select class="form-select" name="OrderType" id="posOrderType">
+                                <option value="1" selected>Takeout</option>
+                                <option value="2">Delivery</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Customer Name</label>
+                            <input class="form-control" name="CustomerName" value="@Model.Create.CustomerName" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Customer Phone</label>
+                            <input class="form-control" name="CustomerPhone" value="@Model.Create.CustomerPhone" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Customer Email</label>
+                            <input class="form-control" name="CustomerEmailId" value="@Model.Create.CustomerEmailId" />
+                        </div>
+                        <div class="col-12 d-none" id="posAddressWrap">
+                            <label class="form-label">Address (Delivery)</label>
+                            <textarea class="form-control" rows="2" name="CustomerAddress">@Model.Create.CustomerAddress</textarea>
+                            <div class="form-text">Required for Delivery orders.</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Special Instructions</label>
+                            <textarea class="form-control" rows="2" name="SpecialInstructions">@Model.Create.SpecialInstructions</textarea>
+                        </div>
+                        <div class="col-12 d-grid mt-2">
+                            <button class="btn btn-primary" type="submit" id="posCreateBtn">
+                                <i class="fas fa-plus-circle me-1"></i> Create Order
+                            </button>
+                        </div>
+                        <div class="col-12 mt-2">
+                            <div class="alert d-none" id="posCreateMsg" role="alert"></div>
+                        </div>
+                    </div>
+                </form>
+
+                <div id="posActiveOrder" style="display:@(hasOrder ? "block" : "none")">
+                    <input type="hidden" id="posOrderId" value="@orderId" />
+
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="text-muted small">Order Type</div>
+                            <div class="fw-semibold" id="posOrderTypeDisplay">@Model.Order?.OrderTypeDisplay</div>
+                        </div>
+                        <div class="text-end">
+                            <div class="text-muted small">Remaining</div>
+                            <div class="fw-bold text-success">₹<span id="posRemaining">@(Model.Order?.RemainingAmount.ToString("F2") ?? "0.00")</span></div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <div class="list-group" id="posCartItems">
+                            @if (Model.Order?.Items != null && Model.Order.Items.Any(i => i.Status != 5))
+                            {
+                                foreach (var it in Model.Order.Items.Where(x => x.Status != 5))
+                                {
+                                    <div class="list-group-item pos-cart-item" data-id="@it.Id" data-notes="@it.SpecialInstructions">
+                                        <div class="d-flex justify-content-between">
+                                            <div class="fw-semibold text-truncate">@(string.IsNullOrWhiteSpace(it.Name) ? it.MenuItemName : it.Name)</div>
+                                            <div class="fw-semibold">₹@it.Subtotal.ToString("F2")</div>
+                                        </div>
+                                        <div class="d-flex justify-content-between align-items-center mt-2">
+                                            <div class="small text-muted">₹@it.UnitPrice.ToString("F2")</div>
+                                            <div class="btn-group" role="group" aria-label="Quantity">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary pos-qty-minus">-</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary disabled"><span class="pos-qty">@it.Quantity</span></button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary pos-qty-plus">+</button>
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-outline-danger pos-remove"><i class="fas fa-trash"></i></button>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="list-group-item text-muted">No items added yet.</div>
+                            }
+                        </div>
+                    </div>
+
+                    <hr class="my-3" />
+
+                    <div class="d-flex justify-content-between">
+                        <div class="text-muted">Subtotal</div>
+                        <div>₹<span id="posSubtotal">@(Model.Order?.Subtotal.ToString("F2") ?? "0.00")</span></div>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <div class="text-muted">GST</div>
+                        <div>₹<span id="posTax">@(Model.Order?.TaxAmount.ToString("F2") ?? "0.00")</span></div>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <div class="text-muted">Discount</div>
+                        <div>-₹<span id="posDiscount">@(Model.Order?.DiscountAmount.ToString("F2") ?? "0.00")</span></div>
+                    </div>
+                    <div class="d-flex justify-content-between mt-2">
+                        <div class="fw-semibold">Total</div>
+                        <div class="fw-semibold">₹<span id="posTotal">@(Model.Order?.TotalAmount.ToString("F2") ?? "0.00")</span></div>
+                    </div>
+
+                    <div class="d-flex justify-content-between mt-2">
+                        <div class="text-muted">Payable (Rounded)</div>
+                        <div>₹<span id="posPayableTotal">@((Model.Order != null) ? Math.Round(Model.Order.TotalAmount, 0, MidpointRounding.AwayFromZero).ToString("F2") : "0.00")</span></div>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <div class="text-muted">Round Off</div>
+                        <div>₹<span id="posBillRoundoff">@((Model.Order != null) ? Math.Round(Math.Round(Model.Order.TotalAmount, 0, MidpointRounding.AwayFromZero) - Model.Order.TotalAmount, 2, MidpointRounding.AwayFromZero).ToString("F2") : "0.00")</span></div>
+                    </div>
+
+                    <hr class="my-3" />
+
+                    <div class="fw-semibold mb-2">Payment Method</div>
+                    <div id="posPaymentMsg" class="d-none"></div>
+
+                    <div class="d-flex flex-wrap gap-2" id="posPaymentButtons">
+                        @foreach (var pm in Model.Payment.AvailablePaymentMethods)
+                        {
+                            var active = pm.Value == Model.Payment.PaymentMethodId.ToString();
+                            <button type="button" class="btn btn-sm @(active ? "btn-primary" : "btn-outline-primary") pos-pay-method" data-method="@pm.Value">
+                                @pm.Text
+                            </button>
+                        }
+                    </div>
+                    <select class="form-select d-none" id="posPaymentMethod">
+                        @foreach (var pm in Model.Payment.AvailablePaymentMethods)
+                        {
+                            <option value="@pm.Value" selected="@(pm.Value == Model.Payment.PaymentMethodId.ToString() ? "selected" : null)">@pm.Text</option>
+                        }
+                    </select>
+
+                    <div class="row g-2 mt-2">
+                        <div class="col-6">
+                            <label class="form-label">Amount</label>
+                            <input class="form-control" id="posPayAmount" type="number" step="0.01" min="0" value="@Model.Payment.RemainingAmount.ToString("F2")" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Tip</label>
+                            <input class="form-control" id="posPayTip" type="number" step="0.01" min="0" value="0.00" />
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between mt-2">
+                        <div class="text-muted">Round Off</div>
+                        <div>₹<span id="posRoundoff">0.00</span></div>
+                    </div>
+
+                    <div class="row g-2 mt-1">
+                        <div class="col-12">
+                            <label class="form-label">Reference / UTR</label>
+                            <input class="form-control" id="posPayRef" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Card Last 4</label>
+                            <input class="form-control" id="posCardLast4" maxlength="4" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Card Type</label>
+                            <select class="form-select" id="posCardType">
+                                <option value="">Select...</option>
+                                <option value="VISA">Visa</option>
+                                <option value="MASTERCARD">MasterCard</option>
+                                <option value="AMEX">American Express</option>
+                                <option value="DISCOVER">Discover</option>
+                                <option value="OTHER">Other</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Notes</label>
+                            <input class="form-control" id="posPayNotes" />
+                        </div>
+                    </div>
+
+                    <div class="d-grid mt-3">
+                        <button class="btn btn-success" type="button" id="posPayBtn">
+                            Place Order
+                        </button>
+                    </div>
+                    <a class="btn btn-outline-dark w-100 mt-2" id="posPrintBtn" target="_blank" style="display:@((hasOrder && Model.Order?.IsFullyPaid == true) ? "block" : "none")" href="@(hasOrder ? Url.Action("PrintPOS", "Payment", new { orderId = orderId }) : "#")">
+                        <i class="fas fa-print me-1"></i> Print POS Bill
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Print confirmation popup (shown after order is completed) -->
+<div class="modal fade" id="posPrintModal" tabindex="-1" aria-labelledby="posPrintModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="posPrintModalLabel">Order Completed</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Payment successful. Do you want to open the POS bill for printing?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Not now</button>
+                <button type="button" class="btn btn-primary" id="posPrintNowBtn">
+                    <i class="fas fa-print me-1"></i> Print
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        (function(){
+            let orderId = @((orderId ?? 0));
+            let orderNumber = '@(Model?.OrderNumber ?? string.Empty)';
+            const initialFullyPaid = @((Model?.Order?.IsFullyPaid == true) ? "true" : "false");
+            let selectedCategory = 'all';
+            let isLocked = false;
+            let manualPayAmountOverride = false;
+
+            // Consistent rounding helpers (match Payment/ProcessPayment page)
+            function roundMoney(val) { return Math.round((val + (val >= 0 ? 0.0000001 : -0.0000001)) * 100) / 100; }
+            function roundHalfUp(val) {
+                // Nearest rupee, half-away-from-zero. Integers remain unchanged.
+                if (!isFinite(val)) return 0;
+                return (val >= 0) ? Math.floor(val + 0.5) : Math.ceil(val - 0.5);
+            }
+
+            function parseMoneyText(txt){
+                if (!txt) return 0;
+                const cleaned = String(txt).replace(/[^0-9\.-]/g, '');
+                const v = parseFloat(cleaned);
+                return isNaN(v) ? 0 : v;
+            }
+
+            function updateRoundoffPreview(remainingOverride){
+                const remaining = isFinite(remainingOverride) ? remainingOverride : parseMoneyText(document.getElementById('posRemaining')?.textContent);
+                const amountEl = document.getElementById('posPayAmount');
+                if (!amountEl) return;
+
+                let displayed = parseFloat(amountEl.value);
+                if (!manualPayAmountOverride || !isFinite(displayed)) {
+                    displayed = roundHalfUp(remaining);
+                    amountEl.value = displayed.toFixed(2);
+                }
+
+                const roundoff = roundMoney(displayed - remaining);
+                const roEl = document.getElementById('posRoundoff');
+                if (roEl) roEl.textContent = roundoff.toFixed(2);
+            }
+
+            function buildCategoryList(){
+                const list = document.getElementById('posCategoryList');
+                if (!list) return;
+                const products = Array.from(document.querySelectorAll('.pos-product'));
+                const counts = new Map();
+                products.forEach(p => {
+                    const id = p.getAttribute('data-category') || '0';
+                    const name = (p.getAttribute('data-category-name') || '').trim() || 'Other';
+                    const key = id + '|' + name;
+                    counts.set(key, (counts.get(key) || 0) + 1);
+                });
+
+                const total = products.length;
+                const entries = Array.from(counts.entries())
+                    .map(([key, count]) => {
+                        const [id, name] = key.split('|');
+                        return { id, name, count };
+                    })
+                    .sort((a,b) => (a.name || '').localeCompare(b.name || ''));
+
+                list.innerHTML = '';
+
+                const allBtn = document.createElement('button');
+                allBtn.type = 'button';
+                allBtn.className = 'list-group-item list-group-item-action active';
+                allBtn.setAttribute('data-category', 'all');
+                allBtn.innerHTML = 'All <span class="badge bg-secondary float-end">' + total + '</span>';
+                list.appendChild(allBtn);
+
+                entries.forEach(e => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'list-group-item list-group-item-action';
+                    btn.setAttribute('data-category', e.id);
+                    btn.textContent = e.name;
+                    const badge = document.createElement('span');
+                    badge.className = 'badge bg-secondary float-end';
+                    badge.textContent = String(e.count);
+                    btn.appendChild(badge);
+                    list.appendChild(btn);
+                });
+            }
+
+            function showLoading(show){
+                const el = document.getElementById('posLoading');
+                const left = document.getElementById('posLeftPanel');
+                const center = document.getElementById('posCenterPanel');
+                if (el) el.style.display = show ? 'block' : 'none';
+                if (left) left.style.display = show ? 'none' : '';
+                if (center) center.style.display = show ? 'none' : '';
+            }
+
+            // First paint: keep UI responsive while building category list
+            showLoading(true);
+            requestAnimationFrame(() => {
+                buildCategoryList();
+                showLoading(false);
+                // Initialize payment roundoff preview on first render
+                updateRoundoffPreview();
+            });
+
+            // create form address toggle (when order not yet created)
+            const $type = document.getElementById('posOrderType');
+            const $addr = document.getElementById('posAddressWrap');
+            if ($type && $addr) {
+                const toggle = () => {
+                    if ($type.value === '2') $addr.classList.remove('d-none');
+                    else $addr.classList.add('d-none');
+
+                    // Update displayed catalog prices to match type selection
+                    applyCatalogPrices(parseInt($type.value || '1'));
+                };
+                $type.addEventListener('change', toggle);
+                toggle();
+            } else {
+                // If order exists, ensure catalog prices match order type from JSON refresh later
+                applyCatalogPrices(1);
+            }
+
+            function getToken(){
+                const el = document.querySelector('input[name="__RequestVerificationToken"]');
+                return el ? el.value : '';
+            }
+
+            function applyFilters(){
+                const search = (document.getElementById('posSearch')?.value || '').trim().toLowerCase();
+                document.querySelectorAll('.pos-product').forEach(el => {
+                    const cat = el.getAttribute('data-category');
+                    const name = (el.getAttribute('data-name') || '').toLowerCase();
+                    const matchesCat = (selectedCategory === 'all') || (String(cat) === String(selectedCategory));
+                    const matchesSearch = !search || name.includes(search);
+                    el.style.display = (matchesCat && matchesSearch) ? '' : 'none';
+                });
+            }
+
+            function applyCatalogPrices(orderType){
+                // orderType: 1=Takeout, 2=Delivery
+                document.querySelectorAll('.pos-product').forEach(el => {
+                    const base = parseFloat(el.getAttribute('data-price') || '0') || 0;
+                    const takeout = parseFloat(el.getAttribute('data-takeout-price') || '')
+                    const delivery = parseFloat(el.getAttribute('data-delivery-price') || '')
+
+                    let price = base;
+                    if (orderType === 1 && !Number.isNaN(takeout)) price = takeout;
+                    if (orderType === 2 && !Number.isNaN(delivery)) price = delivery;
+
+                    const priceEl = el.querySelector('[data-role="price"]');
+                    if (priceEl) priceEl.textContent = '₹' + price.toFixed(2);
+                });
+            }
+
+            function getOrderTypeName(orderType){
+                return orderType === 2 ? 'Delivery' : 'Takeout';
+            }
+
+            function updateTopBarSubtitle(){
+                const el = document.getElementById('posTopSubtitle');
+                if (!el) return;
+                el.textContent = orderId ? ('Order #' + orderNumber) : 'Create Takeout / Delivery order';
+            }
+
+            function toggleOrderSections(hasActive){
+                const createForm = document.getElementById('posCreateForm');
+                const active = document.getElementById('posActiveOrder');
+                if (createForm) createForm.style.display = hasActive ? 'none' : 'block';
+                if (active) active.style.display = hasActive ? 'block' : 'none';
+
+                // Immediately reflect enabled state without waiting for refresh
+                document.querySelectorAll('.pos-add-btn').forEach(b => {
+                    b.disabled = !hasActive || isLocked;
+                });
+
+                const refreshBtn = document.getElementById('posRefreshBtn');
+                if (refreshBtn) refreshBtn.disabled = !hasActive || isLocked;
+                const payTop = document.getElementById('posPayBtnTop');
+                if (payTop) payTop.disabled = !hasActive || isLocked;
+            }
+
+            function resetActiveUi(){
+                document.getElementById('posOrderId')?.setAttribute('value', '');
+                const typeDisplay = document.getElementById('posOrderTypeDisplay');
+                if (typeDisplay) typeDisplay.textContent = '-';
+                const setZero = id => { const el = document.getElementById(id); if (el) el.textContent = '0.00'; };
+                ['posSubtotal','posTax','posDiscount','posTotal','posPayableTotal','posBillRoundoff','posRemaining'].forEach(setZero);
+                const cart = document.getElementById('posCartItems');
+                if (cart) cart.innerHTML = '<div class="list-group-item text-muted">No items added yet.</div>';
+            }
+
+            async function refresh(){
+                const res = await fetch('/Order/GetPOSOrderJson?orderId=' + orderId);
+                const data = await res.json();
+                if (!data || !data.success) {
+                    alert(data && data.message ? data.message : 'Refresh failed');
+                    return;
+                }
+
+                if (data.orderNumber) {
+                    orderNumber = data.orderNumber;
+                    updateTopBarSubtitle();
+                }
+
+                applyCatalogPrices(parseInt(data.orderType || '1'));
+                const typeDisplay = document.getElementById('posOrderTypeDisplay');
+                if (typeDisplay) typeDisplay.textContent = getOrderTypeName(parseInt(data.orderType || '1'));
+
+                document.getElementById('posSubtotal').textContent = (+data.subtotal).toFixed(2);
+                document.getElementById('posTax').textContent = (+data.taxAmount).toFixed(2);
+                document.getElementById('posDiscount').textContent = (+data.discountAmount).toFixed(2);
+
+                const totalAmount = (+data.totalAmount) || 0;
+                document.getElementById('posTotal').textContent = totalAmount.toFixed(2);
+                const payableTotal = roundHalfUp(totalAmount);
+                const billRoundoff = roundMoney(payableTotal - totalAmount);
+                const payableEl = document.getElementById('posPayableTotal');
+                if (payableEl) payableEl.textContent = payableTotal.toFixed(2);
+                const billRoundoffEl = document.getElementById('posBillRoundoff');
+                if (billRoundoffEl) billRoundoffEl.textContent = billRoundoff.toFixed(2);
+
+                // Remaining can go slightly negative when roundoff is used; never show negatives in POS UI.
+                const remainingRaw = (+data.remainingAmount) || 0;
+                const remainingUi = remainingRaw < 0 ? 0 : remainingRaw;
+                document.getElementById('posRemaining').textContent = remainingUi.toFixed(2);
+
+                // Default POS payments to rounded rupee amount with roundoff preview
+                updateRoundoffPreview(remainingUi);
+
+                const cart = document.getElementById('posCartItems');
+                if (cart) {
+                    cart.innerHTML = '';
+                    const items = (data.items || []).filter(x => x && x.orderItemId);
+                    if (!items.length) {
+                        const empty = document.createElement('div');
+                        empty.className = 'list-group-item text-muted';
+                        empty.textContent = 'No items added yet.';
+                        cart.appendChild(empty);
+                    } else {
+                        items.forEach(it => {
+                            const row = document.createElement('div');
+                            row.className = 'list-group-item pos-cart-item';
+                            row.setAttribute('data-id', String(it.orderItemId));
+                            row.setAttribute('data-notes', it.specialInstructions || '');
+                            row.innerHTML = `
+                                <div class="d-flex justify-content-between">
+                                    <div class="fw-semibold text-truncate">${it.name}</div>
+                                    <div class="fw-semibold">₹${(+it.subtotal).toFixed(2)}</div>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                    <div class="small text-muted">₹${(+it.unitPrice).toFixed(2)}</div>
+                                    <div class="btn-group" role="group" aria-label="Quantity">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary pos-qty-minus">-</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary disabled"><span class="pos-qty">${it.quantity}</span></button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary pos-qty-plus">+</button>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-danger pos-remove"><i class="fas fa-trash"></i></button>
+                                </div>
+                            `;
+                            cart.appendChild(row);
+                        });
+                    }
+                }
+
+                // Keep payment amount aligned to remaining (professional roundoff behavior):
+                // default Amount to nearest rupee (unless cashier manually overrides).
+                const amt = document.getElementById('posPayAmount');
+                if (amt && !manualPayAmountOverride) {
+                    const r = remainingUi;
+                    amt.value = Math.max(0, roundHalfUp(r)).toFixed(2);
+                }
+                updateRoundoffPreview(remainingUi);
+
+                const remaining = remainingUi;
+                const total = totalAmount;
+                // Treat as completed when server marks fully-paid OR remaining is effectively zero for a non-zero order
+                // (new/empty orders have total=0 and should not be locked).
+                const fullyPaid = (!!data.isFullyPaid || (total > 0.001 && remaining <= 0.001));
+                setLockedState(fullyPaid);
+                updatePrintButton(fullyPaid);
+
+                return { fullyPaid, remaining, orderNumber: data.orderNumber || orderNumber };
+            }
+
+            function showPrintPopup(){
+                const modalEl = document.getElementById('posPrintModal');
+                if (window.bootstrap && modalEl) {
+                    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    modal.show();
+                    return;
+                }
+                // Fallback if Bootstrap modal isn't available
+                if (confirm('Payment successful. Open POS bill for printing?')) {
+                    window.open('/Payment/PrintPOS?orderId=' + orderId, '_blank');
+                }
+            }
+
+            function showPayMsg(message, isError) {
+                const el = document.getElementById('posPaymentMsg');
+                if (!el) return;
+                el.classList.remove('d-none');
+                el.className = isError ? 'alert alert-danger' : 'alert alert-success';
+                el.textContent = message;
+            }
+
+            function setLockedState(locked){
+                isLocked = !!locked;
+                const right = document.getElementById('posRightPanel');
+                if (right) {
+                    if (isLocked) right.classList.add('pos-disabled');
+                    else right.classList.remove('pos-disabled');
+                }
+
+                // Disable add buttons in product grid
+                document.querySelectorAll('.pos-add-btn').forEach(b => {
+                    b.disabled = isLocked || !orderId;
+                });
+
+                const refreshBtn = document.getElementById('posRefreshBtn');
+                if (refreshBtn) refreshBtn.disabled = isLocked || !orderId;
+
+                const payTop = document.getElementById('posPayBtnTop');
+                if (payTop) payTop.disabled = isLocked || !orderId;
+            }
+
+            function getSelectedPaymentText(){
+                const select = document.getElementById('posPaymentMethod');
+                if (!select) return '';
+                const opt = select.options[select.selectedIndex];
+                return (opt && opt.text ? opt.text : '').trim();
+            }
+
+            function updatePrintButton(visible){
+                const btn = document.getElementById('posPrintBtn');
+                if (!btn) return;
+                if (!orderId) {
+                    btn.style.display = 'none';
+                    return;
+                }
+                btn.href = '/Payment/PrintPOS?orderId=' + orderId;
+                btn.style.display = visible ? 'block' : 'none';
+            }
+
+            function showCreateMsg(msg, isError){
+                const el = document.getElementById('posCreateMsg');
+                if (!el) return;
+                if (!msg) {
+                    el.classList.add('d-none');
+                    el.textContent = '';
+                    return;
+                }
+                el.className = 'alert ' + (isError ? 'alert-danger' : 'alert-success');
+                el.textContent = msg;
+                el.classList.remove('d-none');
+            }
+
+            function resetCreateForm(){
+                const form = document.getElementById('posCreateForm');
+                if (!form) return;
+                form.reset();
+                if ($type) {
+                    $type.value = '1';
+                    $type.dispatchEvent(new Event('change'));
+                }
+            }
+
+            function startNewOrder(){
+                orderId = 0;
+                orderNumber = '';
+                updateTopBarSubtitle();
+                resetCreateForm();
+                resetActiveUi();
+                toggleOrderSections(false);
+                setLockedState(false);
+                updatePrintButton(false);
+                showCreateMsg('', false);
+                document.getElementById('posPaymentMsg')?.classList.add('d-none');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
+            async function submitCreateForm(e){
+                e.preventDefault();
+                if (isLocked) return;
+
+                const form = document.getElementById('posCreateForm');
+                if (!form) return;
+
+                const formData = new FormData(form);
+                const orderType = parseInt(formData.get('OrderType') || '1');
+                const address = (formData.get('CustomerAddress') || '').toString().trim();
+
+                if (orderType === 2 && !address) {
+                    showCreateMsg('Address is required for Delivery orders.', true);
+                    return;
+                }
+
+                const payload = new URLSearchParams();
+                formData.forEach((value, key) => {
+                    payload.set(key, typeof value === 'string' ? value : value.toString());
+                });
+
+                try {
+                    const res = await fetch('/Order/CreatePOSOrderAjax', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                            'RequestVerificationToken': getToken(),
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json'
+                        },
+                        body: payload.toString()
+                    });
+
+                    const data = await res.json().catch(() => null);
+                    if (!res.ok || !data || !data.success) {
+                        const msg = (data && data.message) ? data.message : 'Unable to create order.';
+                        showCreateMsg(msg, true);
+                        return;
+                    }
+
+                    orderId = data.orderId;
+                    orderNumber = data.orderNumber || String(data.orderId);
+                    document.getElementById('posOrderId')?.setAttribute('value', String(orderId));
+                    const typeDisplay = document.getElementById('posOrderTypeDisplay');
+                    if (typeDisplay) typeDisplay.textContent = getOrderTypeName(orderType);
+
+                    applyCatalogPrices(orderType);
+                    toggleOrderSections(true);
+                    updateTopBarSubtitle();
+                    setLockedState(false);
+                    updatePrintButton(false);
+                    showCreateMsg('Order #' + orderNumber + ' created.', false);
+
+                    await refresh();
+                } catch (err) {
+                    const msg = err && err.message ? err.message : 'Error creating order.';
+                    showCreateMsg(msg, true);
+                }
+            }
+
+            function validatePaymentFields(){
+                const select = document.getElementById('posPaymentMethod');
+                const methodValue = (select?.value || '').trim();
+                if (!methodValue) {
+                    showPayMsg('Select a payment method.', true);
+                    return false;
+                }
+
+                const methodText = getSelectedPaymentText().toLowerCase();
+                const ref = (document.getElementById('posPayRef')?.value || '').trim();
+                const last4 = (document.getElementById('posCardLast4')?.value || '').trim();
+
+                const isCard = methodText.includes('credit') || methodText.includes('debit');
+                const isUpi = methodText.includes('upi');
+
+                if (isCard) {
+                    if (!/^[0-9]{4}$/.test(last4)) {
+                        showPayMsg('Card Last 4 is mandatory for Card payments.', true);
+                        document.getElementById('posCardLast4')?.focus();
+                        return false;
+                    }
+                }
+                if (isUpi) {
+                    if (!ref) {
+                        showPayMsg('Reference / UTR is mandatory for UPI payments.', true);
+                        document.getElementById('posPayRef')?.focus();
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            async function payNow(){
+                if (isLocked) return;
+                if (!orderId) {
+                    showPayMsg('Create an order first.', true);
+                    return;
+                }
+                if (!validatePaymentFields()) return;
+
+                const token = getToken();
+                const pm = document.getElementById('posPaymentMethod')?.value;
+                const amount = document.getElementById('posPayAmount')?.value;
+                const tip = document.getElementById('posPayTip')?.value;
+                const ref = document.getElementById('posPayRef')?.value || '';
+                const last4 = document.getElementById('posCardLast4')?.value || '';
+                const cardType = document.getElementById('posCardType')?.value || '';
+                const notes = document.getElementById('posPayNotes')?.value || '';
+
+                const payload = new URLSearchParams();
+                payload.set('OrderId', String(orderId));
+                payload.set('PaymentMethodId', String(pm || '0'));
+                const methodText = (getSelectedPaymentText() || '').toLowerCase();
+                const remaining = parseMoneyText(document.getElementById('posRemaining')?.textContent);
+
+                // Special-case Complementary (100% discount): do not apply roundoff math.
+                // The server computes discount/GST and will store Amount=0; keep UI-friendly Amount>=0.01 for model validation.
+                if (methodText.includes('complementary')) {
+                    payload.set('Amount', '0.01');
+                    payload.set('OriginalAmount', '0.00');
+                    payload.set('RoundoffAdjustmentAmt', '0.00');
+                } else {
+                    const displayed = parseFloat(amount || '0');
+                    const safeDisplayed = isFinite(displayed) ? displayed : roundHalfUp(remaining);
+                    const diff = roundMoney(safeDisplayed - remaining);
+
+                    // Guard: POS roundoff is only meant for nearest-rupee settlement (±0.50).
+                    // For partial payments, use Split Payments screen.
+                    if (Math.abs(diff) > 0.50) {
+                        showPayMsg('Amount should be within ₹0.50 of Remaining (round off). For partial payments, use Split Payment.', true);
+                        return;
+                    }
+
+                    payload.set('Amount', safeDisplayed.toFixed(2));
+                    // Professional roundoff: store canonical payment (pre-round) + roundoff delta
+                    payload.set('OriginalAmount', roundMoney(remaining).toFixed(2));
+                    payload.set('RoundoffAdjustmentAmt', diff.toFixed(2));
+                }
+                payload.set('TipAmount', String(tip || '0'));
+                payload.set('ReferenceNumber', ref);
+                payload.set('UPIReference', ref);
+                payload.set('LastFourDigits', last4);
+                payload.set('CardType', cardType);
+                payload.set('Notes', notes);
+
+                try {
+                    const res = await fetch('/Payment/ProcessPayment', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                            'RequestVerificationToken': token,
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json'
+                        },
+                        body: payload.toString()
+                    });
+
+                    const data = await res.json().catch(() => null);
+                    if (!res.ok) {
+                        const msg = (data && data.message) ? data.message : 'Payment failed';
+                        showPayMsg(msg, true);
+                        return;
+                    }
+
+                    if (data && data.success) {
+                        showPayMsg(data.message || 'Payment successful', false);
+                        const state = await refresh();
+                        if (state && state.fullyPaid) {
+                            showPrintPopup();
+                        }
+                    } else {
+                        showPayMsg((data && data.message) ? data.message : 'Payment not completed', true);
+                    }
+                } catch (e) {
+                    showPayMsg('Payment error: ' + (e && e.message ? e.message : e), true);
+                }
+            }
+
+            async function removeItem(orderItemId){
+                const token = getToken();
+                const res = await fetch('/Order/CancelItem', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                        'RequestVerificationToken': token
+                    },
+                    body: 'orderItemId=' + encodeURIComponent(orderItemId)
+                });
+                const data = await res.json();
+                if (data && data.success) {
+                    await refresh();
+                } else {
+                    alert(data && data.message ? data.message : 'Remove failed');
+                }
+            }
+
+            async function updateItem(orderItemId, qty, notes){
+                const token = getToken();
+                const items = [{ OrderItemId: orderItemId, Quantity: qty, SpecialInstructions: notes || '', IsNew: false }];
+                const res = await fetch('/Order/UpdateMultipleOrderItems?orderId=' + orderId, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify(items)
+                });
+                const data = await res.json();
+                if (data && data.success) {
+                    await refresh();
+                } else {
+                    alert(data && data.message ? data.message : 'Update failed');
+                }
+            }
+
+            async function addItemById(menuItemId){
+                if (!orderId) {
+                    alert('Create an order first.');
+                    return;
+                }
+                const token = getToken();
+                const items = [{ OrderItemId: -1, MenuItemId: menuItemId, Quantity: 1, SpecialInstructions: '', IsNew: true, TempId: -1 }];
+                const res = await fetch('/Order/UpdateMultipleOrderItems?orderId=' + orderId, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify(items)
+                });
+                const data = await res.json();
+                if (data && data.success) {
+                    await refresh();
+                } else {
+                    alert(data && data.message ? data.message : 'Add failed');
+                }
+            }
+
+            // Category click
+            document.getElementById('posCategoryList')?.addEventListener('click', function(e){
+                const btn = e.target.closest('[data-category]');
+                if (!btn) return;
+                document.querySelectorAll('#posCategoryList [data-category]').forEach(x => x.classList.remove('active'));
+                btn.classList.add('active');
+                selectedCategory = btn.getAttribute('data-category') || 'all';
+                applyFilters();
+            });
+
+            document.getElementById('posSearch')?.addEventListener('input', applyFilters);
+            document.getElementById('posClearFilters')?.addEventListener('click', function(){
+                selectedCategory = 'all';
+                document.getElementById('posSearch').value = '';
+                document.querySelectorAll('#posCategoryList [data-category]').forEach(x => x.classList.remove('active'));
+                document.querySelector('#posCategoryList [data-category="all"]')?.classList.add('active');
+                applyFilters();
+            });
+
+            document.getElementById('posRefreshBtn')?.addEventListener('click', refresh);
+            document.getElementById('posCreateForm')?.addEventListener('submit', submitCreateForm);
+            document.getElementById('posNewOrderBtn')?.addEventListener('click', startNewOrder);
+            document.getElementById('posPayBtn')?.addEventListener('click', payNow);
+            document.getElementById('posPayAmount')?.addEventListener('input', function(){
+                manualPayAmountOverride = true;
+                updateRoundoffPreview();
+            });
+            document.getElementById('posPayTip')?.addEventListener('input', function(){
+                // Tip does not affect roundoff preview; keep preview consistent for cashier
+                updateRoundoffPreview();
+            });
+            document.getElementById('posPayBtnTop')?.addEventListener('click', function(){
+                document.getElementById('posPayBtn')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+
+            // Print popup action
+            document.getElementById('posPrintNowBtn')?.addEventListener('click', function(){
+                if (!orderId) return;
+                window.open('/Payment/PrintPOS?orderId=' + orderId, '_blank');
+                const modalEl = document.getElementById('posPrintModal');
+                if (window.bootstrap && modalEl) {
+                    bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+                }
+            });
+
+            // Add from product card
+            document.getElementById('posProductGrid')?.addEventListener('click', function(e){
+                const btn = e.target.closest('.pos-add-btn');
+                if (!btn) return;
+                const card = btn.closest('.pos-product');
+                const id = parseInt(card?.getAttribute('data-id') || '0');
+                if (id) addItemById(id);
+            });
+
+            // Cart controls
+            document.getElementById('posCartItems')?.addEventListener('click', function(e){
+                const row = e.target.closest('.pos-cart-item');
+                if (!row) return;
+                const id = parseInt(row.getAttribute('data-id') || '0');
+                const notes = row.getAttribute('data-notes') || '';
+                if (!id) return;
+
+                if (e.target.closest('.pos-remove')) {
+                    removeItem(id);
+                    return;
+                }
+                if (e.target.closest('.pos-qty-plus')) {
+                    const q = parseInt(row.querySelector('.pos-qty')?.textContent || '1');
+                    updateItem(id, q + 1, notes);
+                    return;
+                }
+                if (e.target.closest('.pos-qty-minus')) {
+                    const q = parseInt(row.querySelector('.pos-qty')?.textContent || '1');
+                    if (q > 1) updateItem(id, q - 1, notes);
+                    return;
+                }
+            });
+
+            // Payment method buttons
+            document.getElementById('posPaymentButtons')?.addEventListener('click', function(e){
+                const btn = e.target.closest('.pos-pay-method');
+                if (!btn) return;
+                const method = btn.getAttribute('data-method');
+                const select = document.getElementById('posPaymentMethod');
+                if (select && method) select.value = method;
+                document.querySelectorAll('#posPaymentButtons .pos-pay-method').forEach(b => {
+                    b.classList.remove('btn-primary');
+                    b.classList.add('btn-outline-primary');
+                });
+                btn.classList.remove('btn-outline-primary');
+                btn.classList.add('btn-primary');
+
+                // Clear message on method change
+                document.getElementById('posPaymentMsg')?.classList.add('d-none');
+            });
+
+            applyFilters();
+            toggleOrderSections(!!orderId);
+            updateTopBarSubtitle();
+            updatePrintButton(!!(orderId && initialFullyPaid === 'true'));
+
+            // If order is present, do an initial refresh to sync UI (totals + cart)
+            if (orderId) {
+                refresh();
+            }
+            else {
+                resetActiveUi();
+                setLockedState(false);
+            }
+
+        })();
+    </script>
+}

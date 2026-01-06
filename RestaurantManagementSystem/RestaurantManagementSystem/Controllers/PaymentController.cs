@@ -308,6 +308,78 @@ namespace RestaurantManagementSystem.Controllers
                 GSTPercentage = paymentViewModel.GSTPercentage, // persisted GST %
                 DiscountAmount = paymentViewModel.DiscountAmount // persisted discount
             };
+
+            // Compute GST-applicable share for UI preview (GST applies only to applicable items)
+            try
+            {
+                decimal gstApplicableShare = 1.0m;
+                using (var shareConn = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    shareConn.Open();
+                    using (var shareCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        SELECT
+                            ISNULL((SELECT SUM(oi.Subtotal) FROM OrderItems oi WHERE oi.OrderId = o.Id AND ISNULL(oi.Status,0) <> 5), 0) AS TotalItemsSubtotal,
+                            ISNULL((
+                                SELECT SUM(
+                                    CASE
+                                        WHEN COL_LENGTH('dbo.OrderItems', 'isGstApplicable') IS NULL THEN oi.Subtotal
+                                        WHEN ISNULL(oi.isGstApplicable, 1) = 1 THEN oi.Subtotal
+                                        ELSE 0
+                                    END
+                                )
+                                FROM OrderItems oi
+                                WHERE oi.OrderId = o.Id AND ISNULL(oi.Status,0) <> 5
+                            ), 0) AS ApplicableItemsSubtotal,
+                            CASE
+                                WHEN EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'OrderKitchenType')
+                                    AND ISNULL(o.OrderKitchenType,'') = 'Bar' THEN 1
+                                WHEN EXISTS (SELECT 1 FROM KitchenTickets kt WHERE kt.OrderId = o.Id
+                                    AND (kt.KitchenStation = 'BAR' OR kt.TicketNumber LIKE 'BOT-%')) THEN 1
+                                ELSE 0
+                            END AS IsBarOrder
+                        FROM Orders o
+                        WHERE o.Id = @OrderId", shareConn))
+                    {
+                        shareCmd.Parameters.AddWithValue("@OrderId", actualOrderId);
+                        using (var rd = shareCmd.ExecuteReader())
+                        {
+                            if (rd.Read())
+                            {
+                                decimal totalItemsSubtotal = rd.IsDBNull(0) ? 0m : rd.GetDecimal(0);
+                                decimal applicableItemsSubtotal = rd.IsDBNull(1) ? 0m : rd.GetDecimal(1);
+                                bool isBarOrder = !rd.IsDBNull(2) && rd.GetInt32(2) == 1;
+
+                                if (totalItemsSubtotal > 0m)
+                                {
+                                    decimal safeGstPerc = model.GSTPercentage;
+                                    decimal gstMultiplier = 1m + (safeGstPerc / 100m);
+
+                                    // For BAR orders, Subtotal includes GST for applicable items; convert that part to base for share.
+                                    decimal applicableBase = isBarOrder ? (applicableItemsSubtotal / gstMultiplier) : applicableItemsSubtotal;
+                                    decimal nonApplicableBase = totalItemsSubtotal - applicableItemsSubtotal;
+                                    if (nonApplicableBase < 0m) nonApplicableBase = 0m;
+                                    decimal totalBase = applicableBase + nonApplicableBase;
+
+                                    gstApplicableShare = totalBase > 0m ? (applicableBase / totalBase) : 0m;
+                                    if (gstApplicableShare < 0m) gstApplicableShare = 0m;
+                                    if (gstApplicableShare > 1m) gstApplicableShare = 1m;
+                                }
+                                else
+                                {
+                                    gstApplicableShare = 0m;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                model.GstApplicableShare = gstApplicableShare;
+            }
+            catch
+            {
+                // Fallback: keep existing behavior (assume all items taxable)
+                model.GstApplicableShare = 1.0m;
+            }
             
             // Note: Discount is now persisted in database via ApplyDiscount endpoint
             // The actualDiscount parameter is only used for preview (backward compat)
@@ -381,6 +453,29 @@ END", connection))
         [ValidateAntiForgeryTokenAttribute]
         public async Task<IActionResult> ProcessPayment(ProcessPaymentViewModel model)
         {
+            var wantsJson = string.Equals(Request.Headers["X-Requested-With"], "XMLHttpRequest", StringComparison.OrdinalIgnoreCase)
+                || (Request.Headers.TryGetValue("Accept", out var accept) && accept.ToString().Contains("application/json", StringComparison.OrdinalIgnoreCase));
+
+            object BuildModelStateErrors()
+            {
+                var dict = new Dictionary<string, string[]>();
+                foreach (var kvp in ModelState)
+                {
+                    if (kvp.Value?.Errors == null || kvp.Value.Errors.Count == 0) continue;
+                    dict[kvp.Key] = kvp.Value.Errors.Select(e => e.ErrorMessage).Where(m => !string.IsNullOrWhiteSpace(m)).ToArray();
+                }
+                return dict;
+            }
+
+            if (!ModelState.IsValid)
+            {
+                if (wantsJson)
+                {
+                    return BadRequest(new { success = false, message = "Validation failed.", errors = BuildModelStateErrors() });
+                }
+                return View(model);
+            }
+
             if (ModelState.IsValid)
             {
                 try
@@ -409,17 +504,20 @@ END", connection))
 
                                         if (status == 3)
                                         {
+                                            if (wantsJson) return Ok(new { success = false, message = "Order is already completed.", orderId = model.OrderId });
                                             TempData["InfoMessage"] = "Order is already completed.";
                                             return RedirectToAction("Index", new { id = model.OrderId });
                                         }
                                         if (status == 4)
                                         {
+                                            if (wantsJson) return Ok(new { success = false, message = "Order is cancelled. Payments cannot be processed.", orderId = model.OrderId });
                                             TempData["ErrorMessage"] = "Order is cancelled. Payments cannot be processed.";
                                             return RedirectToAction("Index", new { id = model.OrderId });
                                         }
 
                                         if (approved >= total - 0.05m)
                                         {
+                                            if (wantsJson) return Ok(new { success = false, message = "Order is already fully paid.", orderId = model.OrderId });
                                             TempData["InfoMessage"] = "Order is already fully paid.";
                                             return RedirectToAction("Index", new { id = model.OrderId });
                                         }
@@ -487,12 +585,14 @@ END", connection))
                         if (string.IsNullOrEmpty(model.LastFourDigits))
                         {
                             ModelState.AddModelError("LastFourDigits", "Last four digits of card are required for this payment method.");
+                            if (wantsJson) return BadRequest(new { success = false, message = "Validation failed.", errors = BuildModelStateErrors() });
                             return View(model);
                         }
                         
                         if (string.IsNullOrEmpty(model.CardType))
                         {
                             ModelState.AddModelError("CardType", "Card type is required for this payment method.");
+                            if (wantsJson) return BadRequest(new { success = false, message = "Validation failed.", errors = BuildModelStateErrors() });
                             return View(model);
                         }
                     }
@@ -503,6 +603,7 @@ END", connection))
                         if (string.IsNullOrWhiteSpace(model.UPIReference) && string.IsNullOrWhiteSpace(model.ReferenceNumber))
                         {
                             ModelState.AddModelError("UPIReference", "UPI reference (UTR / transaction reference) is required for UPI payments.");
+                            if (wantsJson) return BadRequest(new { success = false, message = "Validation failed.", errors = BuildModelStateErrors() });
                             return View(model);
                         }
                     }
@@ -510,6 +611,7 @@ END", connection))
                     // Get GST percentage and order details - IMPORTANT: Use persisted GST from Orders table
                     decimal paymentGstPercentage = 5.0m; // Default fallback
                     decimal orderSubtotal = 0m;
+                    decimal gstApplicableShare = 1.0m;
                     using (var gstConnection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
                     {
                         gstConnection.Open();
@@ -537,6 +639,71 @@ END", connection))
                                 }
                             }
                         }
+
+                        // Compute share of GST-applicable items from OrderItems (for mixed GST applicability)
+                        try
+                        {
+                            using (var shareCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                SELECT
+                                    ISNULL((SELECT SUM(oi.Subtotal) FROM OrderItems oi WHERE oi.OrderId = o.Id AND ISNULL(oi.Status,0) <> 5), 0) AS TotalItemsSubtotal,
+                                    ISNULL((
+                                        SELECT SUM(
+                                            CASE
+                                                WHEN COL_LENGTH('dbo.OrderItems', 'isGstApplicable') IS NULL THEN oi.Subtotal
+                                                WHEN ISNULL(oi.isGstApplicable, 1) = 1 THEN oi.Subtotal
+                                                ELSE 0
+                                            END
+                                        )
+                                        FROM OrderItems oi
+                                        WHERE oi.OrderId = o.Id AND ISNULL(oi.Status,0) <> 5
+                                    ), 0) AS ApplicableItemsSubtotal,
+                                    CASE
+                                        WHEN EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'OrderKitchenType')
+                                            AND ISNULL(o.OrderKitchenType,'') = 'Bar' THEN 1
+                                        WHEN EXISTS (SELECT 1 FROM KitchenTickets kt WHERE kt.OrderId = o.Id
+                                            AND (kt.KitchenStation = 'BAR' OR kt.TicketNumber LIKE 'BOT-%')) THEN 1
+                                        ELSE 0
+                                    END AS IsBarOrder
+                                FROM Orders o
+                                WHERE o.Id = @OrderId", gstConnection))
+                            {
+                                shareCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
+                                using (var srd = shareCmd.ExecuteReader())
+                                {
+                                    if (srd.Read())
+                                    {
+                                        decimal totalItemsSubtotal = srd.IsDBNull(0) ? 0m : srd.GetDecimal(0);
+                                        decimal applicableItemsSubtotal = srd.IsDBNull(1) ? 0m : srd.GetDecimal(1);
+                                        bool isBarOrder = !srd.IsDBNull(2) && srd.GetInt32(2) == 1;
+
+                                        if (totalItemsSubtotal > 0)
+                                        {
+                                            decimal safeGstPerc = paymentGstPercentage;
+                                            decimal gstMultiplier = 1m + (safeGstPerc / 100m);
+
+                                            // For BAR orders, Subtotal includes GST for applicable items; convert to base before computing share
+                                            decimal applicableBase = isBarOrder ? (applicableItemsSubtotal / gstMultiplier) : applicableItemsSubtotal;
+                                            decimal nonApplicableBase = totalItemsSubtotal - applicableItemsSubtotal; // non-GST items have no GST component
+                                            if (nonApplicableBase < 0m) nonApplicableBase = 0m;
+                                            decimal totalBase = applicableBase + nonApplicableBase;
+
+                                            gstApplicableShare = totalBase > 0 ? (applicableBase / totalBase) : 0m;
+                                            if (gstApplicableShare < 0m) gstApplicableShare = 0m;
+                                            if (gstApplicableShare > 1m) gstApplicableShare = 1m;
+                                        }
+                                        else
+                                        {
+                                            gstApplicableShare = 0m;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            // Fallback: assume all items are GST-applicable
+                            gstApplicableShare = 1.0m;
+                        }
                     }
                     
                     // NEW CORRECT PROCESS: Apply discount on subtotal, then recalculate GST
@@ -563,8 +730,8 @@ END", connection))
                     catch { /* ignore malformed discount params */ }
                     decimal discountedSubtotal = orderSubtotal - discountAmount;
                     
-                    // Step 2: Calculate GST on the discounted subtotal
-                    decimal paymentGstAmount = Math.Round(discountedSubtotal * paymentGstPercentage / 100m, 2, MidpointRounding.AwayFromZero);
+                    // Step 2: Calculate GST on the discounted subtotal (only for GST-applicable items)
+                    decimal paymentGstAmount = Math.Round(discountedSubtotal * gstApplicableShare * paymentGstPercentage / 100m, 2, MidpointRounding.AwayFromZero);
                     
                     // Step 3: Calculate final amounts
                     decimal paymentAmountExclGST = discountedSubtotal; // This is the subtotal after discount
@@ -1039,6 +1206,10 @@ END", connection))
                                             }
                                         }
                                         catch { /* don't block the happy path if this fails */ }
+                                        if (wantsJson)
+                                        {
+                                            return Ok(new { success = true, message = "Payment processed successfully.", orderId = model.OrderId });
+                                        }
                                         return RedirectToAction("Index", new { id = model.OrderId });
                                     }
                                     else
@@ -1061,6 +1232,11 @@ END", connection))
             }
             
             // If we get here, something went wrong - repopulate the model
+            if (wantsJson)
+            {
+                return BadRequest(new { success = false, message = "Payment failed.", errors = BuildModelStateErrors() });
+            }
+
             using (Microsoft.Data.SqlClient.SqlConnection connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
             {
                 connection.Open();
@@ -1161,6 +1337,7 @@ END", connection))
                 decimal persistedGSTAmount = 0m;
                 decimal persistedDiscountAmount = 0m;
                 decimal persistedTotalAmount = 0m;
+                decimal gstApplicableShare = 1.0m;
                 
                 using (var conn = new SqlConnection(_connectionString))
                 {
@@ -1197,6 +1374,66 @@ END", connection))
                                 }
                             }
                         }
+                    }
+
+                    // Compute share of GST-applicable items from OrderItems (for mixed GST applicability)
+                    try
+                    {
+                        using (var shareCmd = new SqlCommand(@"
+                            SELECT
+                                ISNULL((SELECT SUM(oi.Subtotal) FROM OrderItems oi WHERE oi.OrderId = o.Id AND ISNULL(oi.Status,0) <> 5), 0) AS TotalItemsSubtotal,
+                                ISNULL((
+                                    SELECT SUM(
+                                        CASE
+                                            WHEN COL_LENGTH('dbo.OrderItems', 'isGstApplicable') IS NULL THEN oi.Subtotal
+                                            WHEN ISNULL(oi.isGstApplicable, 1) = 1 THEN oi.Subtotal
+                                            ELSE 0
+                                        END
+                                    )
+                                    FROM OrderItems oi
+                                    WHERE oi.OrderId = o.Id AND ISNULL(oi.Status,0) <> 5
+                                ), 0) AS ApplicableItemsSubtotal,
+                                CASE
+                                    WHEN EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'OrderKitchenType')
+                                        AND ISNULL(o.OrderKitchenType,'') = 'Bar' THEN 1
+                                    WHEN EXISTS (SELECT 1 FROM KitchenTickets kt WHERE kt.OrderId = o.Id
+                                        AND (kt.KitchenStation = 'BAR' OR kt.TicketNumber LIKE 'BOT-%')) THEN 1
+                                    ELSE 0
+                                END AS IsBarOrder
+                            FROM Orders o
+                            WHERE o.Id = @OrderId", conn))
+                        {
+                            shareCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
+                            using (var rd2 = shareCmd.ExecuteReader())
+                            {
+                                if (rd2.Read())
+                                {
+                                    decimal totalItemsSubtotal = rd2.IsDBNull(0) ? 0m : rd2.GetDecimal(0);
+                                    decimal applicableItemsSubtotal = rd2.IsDBNull(1) ? 0m : rd2.GetDecimal(1);
+                                    bool isBarOrder = !rd2.IsDBNull(2) && rd2.GetInt32(2) == 1;
+
+                                    if (totalItemsSubtotal > 0)
+                                    {
+                                        decimal gstMultiplier = 1m + (gstPerc / 100m);
+                                        decimal applicableBase = isBarOrder ? (applicableItemsSubtotal / gstMultiplier) : applicableItemsSubtotal;
+                                        decimal nonApplicableBase = totalItemsSubtotal - applicableItemsSubtotal;
+                                        if (nonApplicableBase < 0m) nonApplicableBase = 0m;
+                                        decimal totalBase = applicableBase + nonApplicableBase;
+                                        gstApplicableShare = totalBase > 0 ? (applicableBase / totalBase) : 0m;
+                                        if (gstApplicableShare < 0m) gstApplicableShare = 0m;
+                                        if (gstApplicableShare > 1m) gstApplicableShare = 1m;
+                                    }
+                                    else
+                                    {
+                                        gstApplicableShare = 0m;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        gstApplicableShare = 1.0m;
                     }
                     
                     // Fallback to default GST ONLY if not persisted (0 or NULL in Orders.GSTPercentage)
@@ -1254,14 +1491,14 @@ END", connection))
                 {
                     // No discount, use persisted total and GST
                     orderTotal = persistedTotalAmount;
-                    gstAmount = persistedGSTAmount > 0 ? persistedGSTAmount : Math.Round(orderSubtotal * gstPerc / 100m, 2, MidpointRounding.AwayFromZero);
+                    gstAmount = persistedGSTAmount > 0 ? persistedGSTAmount : Math.Round(orderSubtotal * gstApplicableShare * gstPerc / 100m, 2, MidpointRounding.AwayFromZero);
                     _logger?.LogInformation("Split payment using persisted total (no discount): {Total}, GST: {GST}", orderTotal, gstAmount);
                 }
                 else
                 {
                     // Calculate fresh (new discount being applied or no persisted values)
                     decimal discountedSubtotal = Math.Max(0, orderSubtotal - discountAmount);
-                    gstAmount = Math.Round(discountedSubtotal * gstPerc / 100m, 2, MidpointRounding.AwayFromZero);
+                    gstAmount = Math.Round(discountedSubtotal * gstApplicableShare * gstPerc / 100m, 2, MidpointRounding.AwayFromZero);
                     orderTotal = discountedSubtotal + gstAmount + orderTip;
                     _logger?.LogInformation("Split payment calculating fresh total: subtotal={Subtotal}, discount={Discount}, GST={GST}, tip={Tip}, total={Total}", 
                         orderSubtotal, discountAmount, gstAmount, orderTip, orderTotal);
@@ -1318,7 +1555,7 @@ END", connection))
                                 DECLARE @NewDiscountAmount DECIMAL(18,2) = @Disc; -- Use provided discount, not CurrentDiscount + Disc
                                 DECLARE @NetSubtotal DECIMAL(18,2) = @CurrentSubtotal - @NewDiscountAmount;
                                 IF @NetSubtotal < 0 SET @NetSubtotal = 0;
-                                DECLARE @NewGSTAmount DECIMAL(18,2) = ROUND(@NetSubtotal * @GSTPerc / 100, 2);
+                                DECLARE @NewGSTAmount DECIMAL(18,2) = ROUND(@NetSubtotal * @GstShare * @GSTPerc / 100, 2);
                                 -- Round total amount to match split payment rounding logic (round to nearest rupee)
                                 DECLARE @NewTotalAmount DECIMAL(18,2) = ROUND(@NetSubtotal + @NewGSTAmount + @CurrentTipAmount, 0);
 
@@ -1333,6 +1570,7 @@ END", connection))
                             discountCmd.Parameters.AddWithValue("@Disc", discountAmount);
                             discountCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
                             discountCmd.Parameters.AddWithValue("@GSTPerc", gstPerc);
+                            discountCmd.Parameters.AddWithValue("@GstShare", gstApplicableShare);
                             discountCmd.ExecuteNonQuery();
                         }
                     }
@@ -3927,22 +4165,116 @@ END", connection))
                         // Step 2: If no persisted GST found, fall back to runtime calculation from settings
                         if (!foundPersistedGST)
                         {
-                            using (Microsoft.Data.SqlClient.SqlCommand gstCmd = new Microsoft.Data.SqlClient.SqlCommand(
-                                "SELECT DefaultGSTPercentage FROM dbo.RestaurantSettings", connection))
+                            // Determine BAR vs Foods context
+                            bool isBarOrder = false;
+                            try
                             {
-                                var result = gstCmd.ExecuteScalar();
-                                if (result != null && result != DBNull.Value)
+                                using (var barCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                    SELECT CASE
+                                        WHEN EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'OrderKitchenType')
+                                            AND EXISTS (SELECT 1 FROM dbo.Orders WHERE Id = @OrderId AND ISNULL(OrderKitchenType,'') = 'Bar') THEN 1
+                                        WHEN EXISTS (SELECT 1 FROM dbo.KitchenTickets WHERE OrderId = @OrderId AND (KitchenStation = 'BAR' OR TicketNumber LIKE 'BOT-%')) THEN 1
+                                        ELSE 0
+                                    END", connection))
                                 {
-                                    model.GSTPercentage = Convert.ToDecimal(result);
-                                }
-                                else
-                                {
-                                    model.GSTPercentage = 5.0m;
+                                    barCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                    var obj = barCmd.ExecuteScalar();
+                                    isBarOrder = obj != null && obj != DBNull.Value && Convert.ToInt32(obj) == 1;
                                 }
                             }
-                            
-                            decimal gstAmount = model.TaxAmount > 0 ? model.TaxAmount : 
-                                Math.Round(model.Subtotal * model.GSTPercentage / 100m, 2, MidpointRounding.AwayFromZero);
+                            catch { isBarOrder = false; }
+
+                            // Read GST percentage from RestaurantSettings (BAR vs Foods). Schema-safe if BarGSTPerc doesn't exist.
+                            decimal gstPerc = 5.0m;
+                            try
+                            {
+                                using (var settingsCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                    SELECT ISNULL(DefaultGSTPercentage, 5.0) AS DefaultGSTPercentage,
+                                           ISNULL(BarGSTPerc, 5.0) AS BarGSTPerc
+                                    FROM dbo.RestaurantSettings", connection))
+                                {
+                                    using (var sr = settingsCmd.ExecuteReader())
+                                    {
+                                        if (sr.Read())
+                                        {
+                                            var defaultGst = sr.IsDBNull(0) ? 5.0m : sr.GetDecimal(0);
+                                            var barGst = sr.IsDBNull(1) ? defaultGst : sr.GetDecimal(1);
+                                            gstPerc = isBarOrder ? barGst : defaultGst;
+                                        }
+                                    }
+                                }
+                            }
+                            catch
+                            {
+                                try
+                                {
+                                    using (var gstCmd = new Microsoft.Data.SqlClient.SqlCommand(
+                                        "SELECT ISNULL(DefaultGSTPercentage, 5.0) FROM dbo.RestaurantSettings", connection))
+                                    {
+                                        var result = gstCmd.ExecuteScalar();
+                                        gstPerc = (result != null && result != DBNull.Value) ? Convert.ToDecimal(result) : 5.0m;
+                                    }
+                                }
+                                catch { gstPerc = 5.0m; }
+                            }
+                            if (gstPerc <= 0m) gstPerc = 5.0m;
+                            model.GSTPercentage = gstPerc;
+
+                            // Compute GST-applicable share from OrderItems (schema-safe) so GST applies only to taxable items.
+                            decimal gstApplicableShare = 1.0m;
+                            try
+                            {
+                                using (var shareCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                    SELECT
+                                        ISNULL((SELECT SUM(oi.Subtotal) FROM OrderItems oi WHERE oi.OrderId = o.Id AND ISNULL(oi.Status,0) <> 5), 0) AS TotalItemsSubtotal,
+                                        ISNULL((
+                                            SELECT SUM(
+                                                CASE
+                                                    WHEN COL_LENGTH('dbo.OrderItems', 'isGstApplicable') IS NULL THEN oi.Subtotal
+                                                    WHEN ISNULL(oi.isGstApplicable, 1) = 1 THEN oi.Subtotal
+                                                    ELSE 0
+                                                END
+                                            )
+                                            FROM OrderItems oi
+                                            WHERE oi.OrderId = o.Id AND ISNULL(oi.Status,0) <> 5
+                                        ), 0) AS ApplicableItemsSubtotal
+                                    FROM Orders o
+                                    WHERE o.Id = @OrderId", connection))
+                                {
+                                    shareCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                    using (var rdShare = shareCmd.ExecuteReader())
+                                    {
+                                        if (rdShare.Read())
+                                        {
+                                            decimal totalItemsSubtotal = rdShare.IsDBNull(0) ? 0m : rdShare.GetDecimal(0);
+                                            decimal applicableItemsSubtotal = rdShare.IsDBNull(1) ? 0m : rdShare.GetDecimal(1);
+
+                                            if (totalItemsSubtotal > 0m)
+                                            {
+                                                decimal gstMultiplier = 1m + (gstPerc / 100m);
+                                                decimal applicableBase = isBarOrder ? (applicableItemsSubtotal / gstMultiplier) : applicableItemsSubtotal;
+                                                decimal nonApplicableBase = totalItemsSubtotal - applicableItemsSubtotal;
+                                                if (nonApplicableBase < 0m) nonApplicableBase = 0m;
+                                                decimal totalBase = applicableBase + nonApplicableBase;
+                                                gstApplicableShare = totalBase > 0m ? (applicableBase / totalBase) : 0m;
+                                                if (gstApplicableShare < 0m) gstApplicableShare = 0m;
+                                                if (gstApplicableShare > 1m) gstApplicableShare = 1m;
+                                            }
+                                            else
+                                            {
+                                                gstApplicableShare = 0m;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            catch
+                            {
+                                gstApplicableShare = 1.0m;
+                            }
+
+                            decimal gstAmount = model.TaxAmount > 0 ? model.TaxAmount :
+                                Math.Round(model.Subtotal * model.GSTPercentage * gstApplicableShare / 100m, 2, MidpointRounding.AwayFromZero);
                             
                             // Update TaxAmount if it was 0 (calculated GST)
                             if (model.TaxAmount == 0 && gstAmount > 0)
@@ -4895,9 +5227,60 @@ END", connection))
                     }
                 }
                 
-                // Calculate GST on discounted subtotal
+                // Compute share of GST-applicable items from OrderItems (for mixed GST applicability)
+                decimal gstApplicableShare = 1.0m;
+                try
+                {
+                    using (var shareCmd = new SqlCommand(@"
+                        SELECT
+                            ISNULL((SELECT SUM(oi.Subtotal) FROM OrderItems oi WHERE oi.OrderId = @OrderId AND ISNULL(oi.Status,0) <> 5), 0) AS TotalItemsSubtotal,
+                            ISNULL((
+                                SELECT SUM(
+                                    CASE
+                                        WHEN COL_LENGTH('dbo.OrderItems', 'isGstApplicable') IS NULL THEN oi.Subtotal
+                                        WHEN ISNULL(oi.isGstApplicable, 1) = 1 THEN oi.Subtotal
+                                        ELSE 0
+                                    END
+                                )
+                                FROM OrderItems oi
+                                WHERE oi.OrderId = @OrderId AND ISNULL(oi.Status,0) <> 5
+                            ), 0) AS ApplicableItemsSubtotal
+                    ", connection, transaction))
+                    {
+                        shareCmd.Parameters.AddWithValue("@OrderId", orderId);
+                        using (var rd = shareCmd.ExecuteReader())
+                        {
+                            if (rd.Read())
+                            {
+                                decimal totalItemsSubtotal = rd.IsDBNull(0) ? 0m : rd.GetDecimal(0);
+                                decimal applicableItemsSubtotal = rd.IsDBNull(1) ? 0m : rd.GetDecimal(1);
+                                if (totalItemsSubtotal > 0)
+                                {
+                                    decimal gstMultiplier = 1m + (gstPercentage / 100m);
+                                    decimal applicableBase = isBarOrder ? (applicableItemsSubtotal / gstMultiplier) : applicableItemsSubtotal;
+                                    decimal nonApplicableBase = totalItemsSubtotal - applicableItemsSubtotal;
+                                    if (nonApplicableBase < 0m) nonApplicableBase = 0m;
+                                    decimal totalBase = applicableBase + nonApplicableBase;
+                                    gstApplicableShare = totalBase > 0 ? (applicableBase / totalBase) : 0m;
+                                    if (gstApplicableShare < 0m) gstApplicableShare = 0m;
+                                    if (gstApplicableShare > 1m) gstApplicableShare = 1m;
+                                }
+                                else
+                                {
+                                    gstApplicableShare = 0m;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    gstApplicableShare = 1.0m;
+                }
+
+                // Calculate GST on discounted subtotal, applying only to GST-applicable portion
                 decimal netSubtotal = Math.Max(0m, subtotal - discountAmount);
-                decimal gstAmount = Math.Round(netSubtotal * gstPercentage / 100m, 2, MidpointRounding.AwayFromZero);
+                decimal gstAmount = Math.Round(netSubtotal * gstApplicableShare * gstPercentage / 100m, 2, MidpointRounding.AwayFromZero);
                 
                 // Split into CGST and SGST
                 decimal cgstPercentage = gstPercentage / 2m;

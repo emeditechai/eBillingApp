@@ -74,6 +74,10 @@ namespace RestaurantManagementSystem.Models
         public decimal Subtotal { get; set; }
         // New: GST percentage (e.g. 5.00) to recompute GST after discount
         public decimal GSTPercentage { get; set; }
+
+        // Share (0..1) of subtotal that is GST-applicable, derived from OrderItems.isGstApplicable.
+        // Used only for UI preview computations; server re-computes from DB during POST.
+        public decimal GstApplicableShare { get; set; } = 1.0m;
         
         [Required]
         [Display(Name = "Payment Method")]
@@ -184,6 +188,9 @@ namespace RestaurantManagementSystem.Models
         public decimal Subtotal { get; set; }
         public decimal GSTPercentage { get; set; }
         public decimal RemainingAmount { get; set; }
+
+        // Optional UI hint; server re-computes from DB during POST.
+        public decimal GstApplicableShare { get; set; } = 1.0m;
 
         // Discount to apply once for the order (amount or percent)
         public decimal DiscountAmount { get; set; }
