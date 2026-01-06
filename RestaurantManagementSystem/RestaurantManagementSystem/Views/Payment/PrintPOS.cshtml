@@ -149,13 +149,20 @@
 
     <div class="dashed"></div>
     
-    @* UPI QR Code Section - Show only if enabled and there's remaining balance *@
-    @if (Model.UPIEnabled && Model.RemainingAmount > 0 && !string.IsNullOrEmpty(Model.UPIQRCodeDataUrl))
+    @* UPI QR Code Section - Show only if enabled and there's remaining balance.
+       Use rounded-total settlement so QR doesn't show when roundoff completes the order. *@
+    @{
+        var qrTotal = Model.TotalAmount;
+        var qrTotalRounded = Math.Round(qrTotal, 0, MidpointRounding.AwayFromZero);
+        var qrPaid = Model.PaidAmount;
+        var qrOutstanding = Math.Max(0M, qrTotalRounded - qrPaid);
+    }
+    @if (Model.UPIEnabled && qrOutstanding > 0.001M && !string.IsNullOrEmpty(Model.UPIQRCodeDataUrl))
     {
         <div class="center" style="margin-top:12px; margin-bottom:12px;">
             <div style="font-weight:700; font-size:14px; margin-bottom:6px;">Scan to Pay</div>
             <img src="@Model.UPIQRCodeDataUrl" alt="UPI QR Code" style="max-width: 160px; height: auto; display:block; margin:0 auto;" />
-            <div style="font-size:16px; font-weight:700; margin-top:6px;">₹@Model.RemainingAmount.ToString("F2")</div>
+            <div style="font-size:16px; font-weight:700; margin-top:6px;">₹@qrOutstanding.ToString("F2")</div>
             <div class="tiny" style="margin-top:4px;">Google Pay | PhonePe | Paytm | BHIM</div>
             @if (!string.IsNullOrEmpty(Model.UPIPayeeName))
             {

@@ -277,8 +277,15 @@
         </div>
     }
 
-    @* UPI QR Code Section - Show only if enabled and there's remaining balance *@
-    @if (Model.UPIEnabled && Model.RemainingAmount > 0 && !string.IsNullOrEmpty(Model.UPIQRCodeDataUrl))
+    @* UPI QR Code Section - Show only if enabled and there's remaining balance.
+       Use rounded-total settlement so QR doesn't show when roundoff completes the order. *@
+    @{ 
+        var qrTotal = Model.TotalAmount;
+        var qrTotalRounded = Math.Round(qrTotal, 0, MidpointRounding.AwayFromZero);
+        var qrPaid = Model.PaidAmount;
+        var qrOutstanding = Math.Max(0M, qrTotalRounded - qrPaid);
+    }
+    @if (Model.UPIEnabled && qrOutstanding > 0.001M && !string.IsNullOrEmpty(Model.UPIQRCodeDataUrl))
     {
         <div class="row mt-4">
             <div class="col-12">
@@ -291,7 +298,7 @@
                             <img src="@Model.UPIQRCodeDataUrl" alt="UPI QR Code" style="max-width: 200px; height: auto;" />
                         </div>
                         <div class="mb-2">
-                            <h4 class="text-primary mb-0">₹@Model.RemainingAmount.ToString("F2")</h4>
+                            <h4 class="text-primary mb-0">₹@qrOutstanding.ToString("F2")</h4>
                             <p class="small text-muted mb-0">Amount to Pay</p>
                         </div>
                         <div class="mb-2">
