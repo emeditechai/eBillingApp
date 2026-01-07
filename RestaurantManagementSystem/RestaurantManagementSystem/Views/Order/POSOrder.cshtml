@@ -16,7 +16,20 @@
         --pos-surface: #fff;
         --pos-surface-2: var(--bs-body-bg);
     }
-    .pos-shell { min-height: calc(100vh - 90px); }
+    /* Full-width breakout for POS page (prevents side white margins from layout containers) */
+    .pos-shell {
+        min-height: calc(100vh - 90px);
+        width: 100vw;
+        max-width: 100vw;
+        position: relative;
+        left: 50%;
+        right: 50%;
+        margin-left: -50vw;
+        margin-right: -50vw;
+        padding-left: var(--bs-gutter-x, 1.5rem);
+        padding-right: var(--bs-gutter-x, 1.5rem);
+        overflow-x: clip;
+    }
     .pos-topbar {
         position: sticky;
         top: 0;
@@ -31,6 +44,8 @@
         );
     }
     .pos-main { display: grid; grid-template-columns: 240px 1fr 360px; gap: .75rem; }
+    .pos-main.pos-left-collapsed { grid-template-columns: 1fr 360px; }
+    @@media (max-width: 991.98px) { .pos-main.pos-left-collapsed { grid-template-columns: 1fr; } }
     @@media (max-width: 1199.98px) { .pos-main { grid-template-columns: 220px 1fr 340px; } }
     @@media (max-width: 991.98px) { .pos-main { grid-template-columns: 1fr; } }
     .pos-panel {
@@ -93,6 +108,8 @@
     .pos-product-card {
         border-color: rgba(var(--pos-accent-rgb), .10);
     }
+
+    .pos-toast-container { z-index: 2000; }
 </style>
 
 <div class="container-fluid py-2 pos-shell">
@@ -127,11 +144,11 @@
 
     @if (TempData["SuccessMessage"] != null)
     {
-        <div class="alert alert-success mt-2 mb-0">@TempData["SuccessMessage"]</div>
+        <div class="d-none" id="posInitSuccessMsg">@TempData["SuccessMessage"]</div>
     }
     @if (TempData["ErrorMessage"] != null)
     {
-        <div class="alert alert-danger mt-2 mb-0">@TempData["ErrorMessage"]</div>
+        <div class="d-none" id="posInitErrorMsg">@TempData["ErrorMessage"]</div>
     }
 
     <div class="pos-main mt-3">
@@ -145,7 +162,10 @@
         <div class="pos-panel" id="posLeftPanel">
             <div class="pos-panel-header d-flex justify-content-between align-items-center">
                 <div class="fw-semibold">All Categories</div>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="posClearFilters"><i class="fas fa-times"></i></button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="posClearFilters" title="Clear filters"><i class="fas fa-times"></i></button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="posToggleCategories" title="Hide categories"><i class="fas fa-angle-double-left"></i></button>
+                </div>
             </div>
             <div class="pos-panel-body p-0">
                 <div class="list-group list-group-flush pos-scroll" id="posCategoryList"></div>
@@ -155,7 +175,12 @@
         <!-- Products -->
         <div class="pos-panel" id="posCenterPanel">
             <div class="pos-panel-header d-flex justify-content-between align-items-center">
-                <div class="fw-semibold" id="posProductHeader">Products</div>
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-sm btn-outline-secondary" type="button" id="posShowCategories" style="display:none;">
+                        <i class="fas fa-angle-double-right me-1"></i> Categories
+                    </button>
+                    <div class="fw-semibold" id="posProductHeader">Products</div>
+                </div>
                 <button class="btn btn-sm btn-outline-secondary" type="button" id="posRefreshBtn" @(hasOrder ? "" : "disabled")>
                     <i class="fas fa-sync-alt me-1"></i> Refresh
                 </button>
@@ -425,6 +450,16 @@
     </div>
 </div>
 
+<div class="toast-container position-fixed top-0 end-0 p-3 pos-toast-container">
+    <div id="posToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+            <strong class="me-auto">POS</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body" id="posToastBody"></div>
+    </div>
+</div>
+
 <!-- Print confirmation popup (shown after order is completed) -->
 <div class="modal fade" id="posPrintModal" tabindex="-1" aria-labelledby="posPrintModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -458,6 +493,27 @@
             let isLocked = false;
             let manualPayAmountOverride = false;
             let payMsgHideTimer = null;
+            let categoriesCollapsed = false;
+
+            function showToast(message, variant){
+                const toastEl = document.getElementById('posToast');
+                const bodyEl = document.getElementById('posToastBody');
+                if (!toastEl || !bodyEl) return;
+
+                bodyEl.textContent = (message || '').toString();
+
+                toastEl.classList.remove('text-bg-success', 'text-bg-danger');
+                if (variant === 'success') toastEl.classList.add('text-bg-success');
+                if (variant === 'danger') toastEl.classList.add('text-bg-danger');
+
+                if (window.bootstrap && window.bootstrap.Toast) {
+                    bootstrap.Toast.getOrCreateInstance(toastEl, { delay: 2800 }).show();
+                } else {
+                    // Minimal fallback
+                    toastEl.style.display = 'block';
+                    setTimeout(() => { toastEl.style.display = 'none'; }, 2800);
+                }
+            }
 
             // Consistent rounding helpers (match Payment/ProcessPayment page)
             function roundMoney(val) { return Math.round((val + (val >= 0 ? 0.0000001 : -0.0000001)) * 100) / 100; }
@@ -546,17 +602,51 @@
                 const left = document.getElementById('posLeftPanel');
                 const center = document.getElementById('posCenterPanel');
                 if (el) el.style.display = show ? 'block' : 'none';
-                if (left) left.style.display = show ? 'none' : '';
+                if (left) left.style.display = show ? 'none' : (categoriesCollapsed ? 'none' : '');
                 if (center) center.style.display = show ? 'none' : '';
+            }
+
+            function setCategoriesCollapsed(collapsed, persist){
+                categoriesCollapsed = !!collapsed;
+                const main = document.querySelector('.pos-main');
+                const left = document.getElementById('posLeftPanel');
+                const showBtn = document.getElementById('posShowCategories');
+                const toggleBtn = document.getElementById('posToggleCategories');
+
+                if (main) {
+                    if (categoriesCollapsed) main.classList.add('pos-left-collapsed');
+                    else main.classList.remove('pos-left-collapsed');
+                }
+                if (left) left.style.display = categoriesCollapsed ? 'none' : '';
+                if (showBtn) showBtn.style.display = categoriesCollapsed ? 'inline-flex' : 'none';
+                if (toggleBtn) {
+                    toggleBtn.title = categoriesCollapsed ? 'Show categories' : 'Hide categories';
+                    const icon = toggleBtn.querySelector('i');
+                    if (icon) icon.className = categoriesCollapsed ? 'fas fa-angle-double-right' : 'fas fa-angle-double-left';
+                }
+
+                if (persist !== false) {
+                    try { localStorage.setItem('pos_categories_collapsed', categoriesCollapsed ? '1' : '0'); } catch { }
+                }
             }
 
             // First paint: keep UI responsive while building category list
             showLoading(true);
             requestAnimationFrame(() => {
+                try {
+                    categoriesCollapsed = (localStorage.getItem('pos_categories_collapsed') === '1');
+                } catch { categoriesCollapsed = false; }
+                setCategoriesCollapsed(categoriesCollapsed, false);
                 buildCategoryList();
                 showLoading(false);
                 // Initialize payment roundoff preview on first render
                 updateRoundoffPreview();
+
+                // Convert server-side TempData banners into toasts (no sticky alerts)
+                const initSuccess = document.getElementById('posInitSuccessMsg')?.textContent?.trim();
+                const initError = document.getElementById('posInitErrorMsg')?.textContent?.trim();
+                if (initSuccess) showToast(initSuccess, 'success');
+                if (initError) showToast(initError, 'danger');
             });
 
             // create form address toggle (when order not yet created)
@@ -752,24 +842,32 @@
                 return { fullyPaid, remaining, orderNumber: data.orderNumber || orderNumber };
             }
 
-            function showPrintPopup(){
-                const modalEl = document.getElementById('posPrintModal');
-                if (window.bootstrap && modalEl) {
-                    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-                    modal.show();
-                    return;
-                }
-                // Fallback if Bootstrap modal isn't available
-                if (confirm('Payment successful. Open POS bill for printing?')) {
-                    window.open('/Payment/PrintPOS?orderId=' + orderId, '_blank');
-                }
+            function openPrintPOS(win){
+                if (!orderId) return;
+                const url = '/Payment/PrintPOS?orderId=' + orderId;
+                try {
+                    if (win && !win.closed) {
+                        win.location = url;
+                        win.focus();
+                        return;
+                    }
+                } catch { }
+                window.open(url, '_blank');
             }
 
             function showPayMsg(message, isError) {
                 const el = document.getElementById('posPaymentMsg');
                 if (!el) return;
+
+                if (!isError) {
+                    el.classList.add('d-none');
+                    el.textContent = '';
+                    showToast(message || 'Payment successful', 'success');
+                    return;
+                }
+
                 el.classList.remove('d-none');
-                el.className = isError ? 'alert alert-danger' : 'alert alert-success';
+                el.className = 'alert alert-danger';
                 el.textContent = message;
 
                 if (payMsgHideTimer) {
@@ -990,6 +1088,13 @@
                 }
                 if (!validatePaymentFields()) return;
 
+                // If the order becomes fully paid, we auto-open PrintPOS.
+                // Pre-open the window on the click gesture to avoid popup blockers.
+                let printWin = null;
+                try {
+                    printWin = window.open('about:blank', '_blank');
+                } catch { printWin = null; }
+
                 const token = getToken();
                 const pm = document.getElementById('posPaymentMethod')?.value;
                 const amount = document.getElementById('posPayAmount')?.value;
@@ -1051,6 +1156,7 @@
                     if (!res.ok) {
                         const msg = (data && data.message) ? data.message : 'Payment failed';
                         showPayMsg(msg, true);
+                        try { if (printWin && !printWin.closed) printWin.close(); } catch { }
                         return;
                     }
 
@@ -1058,13 +1164,17 @@
                         showPayMsg(data.message || 'Payment successful', false);
                         const state = await refresh();
                         if (state && state.fullyPaid) {
-                            showPrintPopup();
+                            openPrintPOS(printWin);
+                        } else {
+                            try { if (printWin && !printWin.closed) printWin.close(); } catch { }
                         }
                     } else {
                         showPayMsg((data && data.message) ? data.message : 'Payment not completed', true);
+                        try { if (printWin && !printWin.closed) printWin.close(); } catch { }
                     }
                 } catch (e) {
                     showPayMsg('Payment error: ' + (e && e.message ? e.message : e), true);
+                    try { if (printWin && !printWin.closed) printWin.close(); } catch { }
                 }
             }
 
@@ -1139,6 +1249,12 @@
             });
 
             document.getElementById('posSearch')?.addEventListener('input', applyFilters);
+            document.getElementById('posToggleCategories')?.addEventListener('click', function(){
+                setCategoriesCollapsed(!categoriesCollapsed, true);
+            });
+            document.getElementById('posShowCategories')?.addEventListener('click', function(){
+                setCategoriesCollapsed(false, true);
+            });
             document.getElementById('posClearFilters')?.addEventListener('click', function(){
                 selectedCategory = 'all';
                 document.getElementById('posSearch').value = '';
