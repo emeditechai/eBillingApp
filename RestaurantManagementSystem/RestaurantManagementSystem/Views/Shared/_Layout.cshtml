@@ -297,6 +297,56 @@
         });
     </script>
     <script>
+        (function () {
+            function getFullscreenElement() {
+                return document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+            }
+
+            function requestFullscreen(el) {
+                const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+                return fn ? fn.call(el) : null;
+            }
+
+            function exitFullscreen() {
+                const fn = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+                return fn ? fn.call(document) : null;
+            }
+
+            function updateFullscreenIcon(btn) {
+                const isFs = !!getFullscreenElement();
+                const icon = btn ? btn.querySelector('i') : null;
+                if (icon) {
+                    icon.classList.remove('fa-expand', 'fa-compress');
+                    icon.classList.add(isFs ? 'fa-compress' : 'fa-expand');
+                }
+                if (btn) {
+                    btn.title = isFs ? 'Exit full screen' : 'Full screen';
+                    btn.setAttribute('aria-label', btn.title);
+                }
+            }
+
+            document.addEventListener('DOMContentLoaded', function () {
+                const btn = document.getElementById('appFullscreenToggle');
+                if (!btn) return;
+
+                updateFullscreenIcon(btn);
+
+                btn.addEventListener('click', function (e) {
+                    e.preventDefault();
+
+                    if (getFullscreenElement()) {
+                        exitFullscreen();
+                    } else {
+                        requestFullscreen(document.documentElement);
+                    }
+                });
+
+                document.addEventListener('fullscreenchange', function () { updateFullscreenIcon(btn); });
+                document.addEventListener('webkitfullscreenchange', function () { updateFullscreenIcon(btn); });
+            });
+        })();
+    </script>
+    <script>
         document.addEventListener('DOMContentLoaded', function () {
             const body = document.body;
             const modalEl = document.getElementById('roleSelectionModal');
