@@ -260,7 +260,15 @@
                     <div class="row g-2">
                         <div class="col-12">
                             <label class="form-label">Order Type</label>
-                            <select class="form-select" name="OrderType" id="posOrderType">
+                            <div class="btn-group w-100" role="group" aria-label="Order Type">
+                                <button type="button" class="btn btn-outline-primary active" data-order-type="1" id="posOrderTypeTakeout">
+                                    <i class="fas fa-bag-shopping me-1"></i> Takeout
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" data-order-type="2" id="posOrderTypeDelivery">
+                                    <i class="fas fa-truck me-1"></i> Delivery
+                                </button>
+                            </div>
+                            <select class="form-select d-none" name="OrderType" id="posOrderType">
                                 <option value="1" selected>Takeout</option>
                                 <option value="2">Delivery</option>
                             </select>
@@ -653,12 +661,41 @@
             const $type = document.getElementById('posOrderType');
             const $addr = document.getElementById('posAddressWrap');
             if ($type && $addr) {
+                const $tabTakeout = document.getElementById('posOrderTypeTakeout');
+                const $tabDelivery = document.getElementById('posOrderTypeDelivery');
+
+                const syncTabsFromSelect = () => {
+                    const v = String($type.value || '1');
+                    const isTakeout = v === '1';
+                    if ($tabTakeout) {
+                        $tabTakeout.classList.toggle('active', isTakeout);
+                        $tabTakeout.classList.toggle('btn-primary', isTakeout);
+                        $tabTakeout.classList.toggle('btn-outline-primary', !isTakeout);
+                    }
+                    if ($tabDelivery) {
+                        $tabDelivery.classList.toggle('active', !isTakeout);
+                        $tabDelivery.classList.toggle('btn-primary', !isTakeout);
+                        $tabDelivery.classList.toggle('btn-outline-primary', isTakeout);
+                    }
+                };
+
+                const setType = (val) => {
+                    $type.value = String(val);
+                    $type.dispatchEvent(new Event('change'));
+                };
+
+                $tabTakeout?.addEventListener('click', () => setType('1'));
+                $tabDelivery?.addEventListener('click', () => setType('2'));
+
                 const toggle = () => {
                     if ($type.value === '2') $addr.classList.remove('d-none');
                     else $addr.classList.add('d-none');
 
                     // Update displayed catalog prices to match type selection
                     applyCatalogPrices(parseInt($type.value || '1'));
+
+                    // Keep tabs in sync
+                    syncTabsFromSelect();
                 };
                 $type.addEventListener('change', toggle);
                 toggle();
