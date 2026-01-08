@@ -19,8 +19,8 @@ namespace RestaurantManagementSystem.Controllers
         private readonly IMemoryCache _cache;
         // Align cache lifetime with typical login session length
         private static readonly TimeSpan AllowedOrderTypesCacheDuration = TimeSpan.FromHours(12);
-        // Keep POS catalog cache short to reflect availability changes quickly
-        private static readonly TimeSpan PosMenuCacheDuration = TimeSpan.FromMinutes(5);
+        // Cache POS catalog for the duration of a login session (scoped by SessionToken)
+        private static readonly TimeSpan PosMenuCacheDuration = TimeSpan.FromHours(12);
         
         public OrderController(IConfiguration configuration, RestaurantManagementSystem.Services.UrlEncryptionService encryptionService, IMemoryCache cache)
         {
@@ -2987,7 +2987,19 @@ namespace RestaurantManagementSystem.Controllers
             // Only show Foods group to keep the catalog lean for POS and cache briefly to speed reloads.
             if (order == null) return;
 
-            const string cacheKey = "POS_MENU_FOODS";
+            // Cache is scoped per login/session so menu loads once per login.
+            var sessionToken = User?.FindFirst("SessionToken")?.Value;
+            var userId = User?.FindFirstValue(ClaimTypes.NameIdentifier);
+            var activeRoleId = User?.FindFirst("ActiveRoleId")?.Value;
+            var cacheScope = !string.IsNullOrWhiteSpace(sessionToken)
+                ? sessionToken
+                : string.Join(":", new[] { userId, activeRoleId }.Where(x => !string.IsNullOrWhiteSpace(x)));
+            if (string.IsNullOrWhiteSpace(cacheScope))
+            {
+                cacheScope = User?.Identity?.Name ?? "anon";
+            }
+
+            var cacheKey = $"POS_MENU_FOODS:{cacheScope}";
             if (_cache.TryGetValue(cacheKey, out List<MenuItem> cached) && cached != null && cached.Count > 0)
             {
                 order.AvailableMenuItems = cached.Select(mi => new MenuItem
