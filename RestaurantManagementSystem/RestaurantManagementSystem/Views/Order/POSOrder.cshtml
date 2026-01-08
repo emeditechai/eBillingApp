@@ -78,9 +78,30 @@
     .pos-product-card { cursor: pointer; }
     .pos-product-img { width: 100%; height: 110px; object-fit: cover; background: var(--bs-light); }
     .pos-img-wrap { position: relative; }
+    .pos-img-skeleton {
+        position: absolute;
+        inset: 0;
+        background: var(--bs-light);
+        border-bottom: 1px solid var(--pos-border-soft);
+    }
     .pos-product-img-fallback { width: 100%; height: 110px; background: var(--bs-light); }
     .pos-cart-item { padding: .65rem .75rem; }
     .pos-disabled { opacity: .65; pointer-events: none; }
+
+    .pos-added-highlight {
+        outline: 2px solid rgba(var(--pos-accent-rgb), .40);
+        outline-offset: 2px;
+        border-radius: .5rem;
+    }
+
+    @@media (min-width: 992px) {
+        #posRightPanel {
+            position: sticky;
+            top: 90px;
+            align-self: start;
+            height: fit-content;
+        }
+    }
     .pos-loading {
         position: sticky;
         top: 0;
@@ -180,10 +201,14 @@
                         <i class="fas fa-angle-double-right me-1"></i> Categories
                     </button>
                     <div class="fw-semibold" id="posProductHeader">Products</div>
+                    <div class="text-muted small" id="posVisibleCount"></div>
                 </div>
-                <button class="btn btn-sm btn-outline-secondary" type="button" id="posRefreshBtn" @(hasOrder ? "" : "disabled")>
-                    <i class="fas fa-sync-alt me-1"></i> Refresh
-                </button>
+                <div class="d-flex align-items-center gap-2">
+                    <div class="text-muted small" id="posLastSynced"></div>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" id="posRefreshBtn" @(hasOrder ? "" : "disabled")>
+                        <i class="fas fa-sync-alt me-1"></i> Refresh
+                    </button>
+                </div>
             </div>
             <div class="pos-panel-body pos-scroll">
                 @if (!catalog.Any())
@@ -192,7 +217,7 @@
                 }
                 else
                 {
-                    <div class="row row-cols-2 row-cols-md-3 row-cols-xl-4 g-3" id="posProductGrid">
+                    <div class="row row-cols-2 row-cols-md-3 row-cols-xl-4 row-cols-xxl-5 g-3" id="posProductGrid">
                         @foreach (var mi in catalog)
                         {
                             var catId = mi.CategoryId;
@@ -215,7 +240,8 @@
                                         <div class="pos-img-wrap">
                                             @if (!string.IsNullOrWhiteSpace(img))
                                             {
-                                                <img src="@img" class="pos-product-img" alt="@displayName" onerror="this.style.display='none'; this.parentElement && this.parentElement.querySelector('.pos-product-img-fallback') && this.parentElement.querySelector('.pos-product-img-fallback').classList.remove('d-none');" />
+                                                <div class="pos-img-skeleton"></div>
+                                                <img src="@img" class="pos-product-img" loading="lazy" decoding="async" alt="@displayName" onload="this.parentElement && this.parentElement.querySelector('.pos-img-skeleton') && this.parentElement.querySelector('.pos-img-skeleton').classList.add('d-none');" onerror="this.style.display='none'; this.parentElement && this.parentElement.querySelector('.pos-img-skeleton') && this.parentElement.querySelector('.pos-img-skeleton').classList.add('d-none'); this.parentElement && this.parentElement.querySelector('.pos-product-img-fallback') && this.parentElement.querySelector('.pos-product-img-fallback').classList.remove('d-none');" />
                                             }
                                             <div class="pos-product-img-fallback d-flex align-items-center justify-content-center text-muted @((!string.IsNullOrWhiteSpace(img)) ? "d-none" : "")">
                                                 <i class="fas fa-utensils"></i>
@@ -234,6 +260,7 @@
                             </div>
                         }
                     </div>
+                    <div class="text-muted mt-3 d-none" id="posNoResults">No products found.</div>
                     @if (!hasOrder)
                     {
                         <div class="alert alert-info mt-3 mb-0">
@@ -406,6 +433,7 @@
                         <div class="col-6">
                             <label class="form-label">Amount</label>
                             <input class="form-control" id="posPayAmount" type="number" step="0.01" min="0" value="@Model.Payment.RemainingAmount.ToString("F2")" />
+                            <div class="invalid-feedback" id="posPayAmountErr"></div>
                         </div>
                         <div class="col-6">
                             <label class="form-label">Tip</label>
@@ -422,10 +450,12 @@
                         <div class="col-12" id="posRefWrap">
                             <label class="form-label">Reference / UTR</label>
                             <input class="form-control" id="posPayRef" />
+                            <div class="invalid-feedback" id="posPayRefErr"></div>
                         </div>
                         <div class="col-6" id="posCardLast4Wrap">
                             <label class="form-label">Card Last 4</label>
                             <input class="form-control" id="posCardLast4" maxlength="4" />
+                            <div class="invalid-feedback" id="posCardLast4Err"></div>
                         </div>
                         <div class="col-6" id="posCardTypeWrap">
                             <label class="form-label">Card Type</label>
@@ -502,6 +532,8 @@
             let manualPayAmountOverride = false;
             let payMsgHideTimer = null;
             let categoriesCollapsed = false;
+            let lastAddedMenuItemId = 0;
+            let lastAddedAt = 0;
 
             function showToast(message, variant){
                 const toastEl = document.getElementById('posToast');
@@ -520,6 +552,49 @@
                     // Minimal fallback
                     toastEl.style.display = 'block';
                     setTimeout(() => { toastEl.style.display = 'none'; }, 2800);
+                }
+            }
+
+            function escapeHtml(str){
+                return String(str || '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            let undoToastToken = 0;
+            function showUndoToast(message, onUndo){
+                const toastEl = document.getElementById('posToast');
+                const bodyEl = document.getElementById('posToastBody');
+                if (!toastEl || !bodyEl) return;
+
+                const token = ++undoToastToken;
+                const safeMsg = escapeHtml(message);
+                bodyEl.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center gap-2">
+                        <div class="me-2">${safeMsg}</div>
+                        <button type="button" class="btn btn-sm btn-light" id="posUndoBtn">Undo</button>
+                    </div>
+                `;
+
+                toastEl.classList.remove('text-bg-success', 'text-bg-danger');
+                toastEl.classList.add('text-bg-success');
+
+                const btn = bodyEl.querySelector('#posUndoBtn');
+                if (btn) {
+                    btn.addEventListener('click', () => {
+                        if (token !== undoToastToken) return;
+                        try { onUndo && onUndo(); } catch { }
+                        if (window.bootstrap && window.bootstrap.Toast) {
+                            bootstrap.Toast.getOrCreateInstance(toastEl).hide();
+                        }
+                    }, { once: true });
+                }
+
+                if (window.bootstrap && window.bootstrap.Toast) {
+                    bootstrap.Toast.getOrCreateInstance(toastEl, { delay: 5000 }).show();
                 }
             }
 
@@ -711,13 +786,26 @@
 
             function applyFilters(){
                 const search = (document.getElementById('posSearch')?.value || '').trim().toLowerCase();
-                document.querySelectorAll('.pos-product').forEach(el => {
+                const products = Array.from(document.querySelectorAll('.pos-product'));
+                let visible = 0;
+                products.forEach(el => {
                     const cat = el.getAttribute('data-category');
                     const name = (el.getAttribute('data-name') || '').toLowerCase();
                     const matchesCat = (selectedCategory === 'all') || (String(cat) === String(selectedCategory));
                     const matchesSearch = !search || name.includes(search);
-                    el.style.display = (matchesCat && matchesSearch) ? '' : 'none';
+                    const ok = (matchesCat && matchesSearch);
+                    el.style.display = ok ? '' : 'none';
+                    if (ok) visible++;
                 });
+
+                const countEl = document.getElementById('posVisibleCount');
+                if (countEl) {
+                    const total = products.length;
+                    const filtering = !!search || (selectedCategory !== 'all');
+                    countEl.textContent = filtering ? (`Showing ${visible} of ${total}`) : (`${total} items`);
+                }
+                const emptyEl = document.getElementById('posNoResults');
+                if (emptyEl) emptyEl.classList.toggle('d-none', visible !== 0);
             }
 
             function applyCatalogPrices(orderType){
@@ -837,6 +925,7 @@
                             row.className = 'list-group-item pos-cart-item';
                             row.setAttribute('data-id', String(it.orderItemId));
                             row.setAttribute('data-notes', it.specialInstructions || '');
+                            row.setAttribute('data-menu-item-id', String(it.menuItemId || '0'));
                             row.innerHTML = `
                                 <div class="d-flex justify-content-between">
                                     <div class="fw-semibold text-truncate">${it.name}</div>
@@ -852,6 +941,11 @@
                                     <button type="button" class="btn btn-sm btn-outline-danger pos-remove"><i class="fas fa-trash"></i></button>
                                 </div>
                             `;
+
+                            if ((it.menuItemId || 0) && (it.menuItemId === lastAddedMenuItemId) && (Date.now() - lastAddedAt < 4000)) {
+                                row.classList.add('pos-added-highlight');
+                                setTimeout(() => row.classList.remove('pos-added-highlight'), 1400);
+                            }
                             cart.appendChild(row);
                         });
                     }
@@ -875,6 +969,16 @@
                 updatePrintButton(fullyPaid);
 
                 setOrderStateBadge(orderId ? (fullyPaid ? 'PAID' : 'OPEN') : 'NEW');
+
+                const synced = document.getElementById('posLastSynced');
+                if (synced) {
+                    try {
+                        const t = new Date();
+                        synced.textContent = 'Synced ' + t.toLocaleTimeString();
+                    } catch {
+                        synced.textContent = '';
+                    }
+                }
 
                 return { fullyPaid, remaining, orderNumber: data.orderNumber || orderNumber };
             }
@@ -1086,11 +1190,53 @@
             }
 
             function validatePaymentFields(){
+                const clearInvalid = (inputId, errId) => {
+                    const el = document.getElementById(inputId);
+                    const err = document.getElementById(errId);
+                    if (el) el.classList.remove('is-invalid');
+                    if (err) err.textContent = '';
+                };
+                const setInvalid = (inputId, errId, msg) => {
+                    const el = document.getElementById(inputId);
+                    const err = document.getElementById(errId);
+                    if (el) el.classList.add('is-invalid');
+                    if (err) err.textContent = msg || 'Invalid';
+                };
+
+                clearInvalid('posPayAmount', 'posPayAmountErr');
+                clearInvalid('posPayRef', 'posPayRefErr');
+                clearInvalid('posCardLast4', 'posCardLast4Err');
+
                 const select = document.getElementById('posPaymentMethod');
                 const methodValue = (select?.value || '').trim();
                 if (!methodValue) {
                     showPayMsg('Select a payment method.', true);
                     return false;
+                }
+
+                const remaining = parseMoneyText(document.getElementById('posRemaining')?.textContent);
+                if (remaining <= 0.001) {
+                    showPayMsg('Nothing to pay. Remaining is already ₹0.00.', true);
+                    return false;
+                }
+
+                const methodTextForAmt = (getSelectedPaymentText() || '').toLowerCase();
+                if (!methodTextForAmt.includes('complementary')) {
+                    const amountVal = parseFloat(document.getElementById('posPayAmount')?.value || '0');
+                    if (!isFinite(amountVal) || amountVal <= 0) {
+                        setInvalid('posPayAmount', 'posPayAmountErr', 'Enter a valid amount.');
+                        document.getElementById('posPayAmount')?.focus();
+                        showPayMsg('Enter a valid amount.', true);
+                        return false;
+                    }
+
+                    const diff = roundMoney(amountVal - remaining);
+                    if (Math.abs(diff) > 0.50) {
+                        setInvalid('posPayAmount', 'posPayAmountErr', 'Amount must be within ₹0.50 of Remaining (round off).');
+                        document.getElementById('posPayAmount')?.focus();
+                        showPayMsg('Amount should be within ₹0.50 of Remaining (round off). For partial payments, use Split Payment.', true);
+                        return false;
+                    }
                 }
 
                 const methodText = getSelectedPaymentText().toLowerCase();
@@ -1103,6 +1249,7 @@
                 if (isCard) {
                     if (!/^[0-9]{4}$/.test(last4)) {
                         showPayMsg('Card Last 4 is mandatory for Card payments.', true);
+                        setInvalid('posCardLast4', 'posCardLast4Err', 'Enter 4 digits.');
                         document.getElementById('posCardLast4')?.focus();
                         return false;
                     }
@@ -1110,6 +1257,7 @@
                 if (isUpi) {
                     if (!ref) {
                         showPayMsg('Reference / UTR is mandatory for UPI payments.', true);
+                        setInvalid('posPayRef', 'posPayRefErr', 'Reference / UTR is required.');
                         document.getElementById('posPayRef')?.focus();
                         return false;
                     }
@@ -1228,9 +1376,37 @@
                 const data = await res.json();
                 if (data && data.success) {
                     await refresh();
+                    return true;
                 } else {
                     alert(data && data.message ? data.message : 'Remove failed');
+                    return false;
                 }
+            }
+
+            async function addItem(menuItemId, qty, notes){
+                if (!orderId) {
+                    alert('Create an order first.');
+                    return false;
+                }
+                const token = getToken();
+                const items = [{ OrderItemId: -1, MenuItemId: menuItemId, Quantity: qty || 1, SpecialInstructions: notes || '', IsNew: true, TempId: -1 }];
+                const res = await fetch('/Order/UpdateMultipleOrderItems?orderId=' + orderId, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify(items)
+                });
+                const data = await res.json();
+                if (data && data.success) {
+                    lastAddedMenuItemId = menuItemId;
+                    lastAddedAt = Date.now();
+                    await refresh();
+                    return true;
+                }
+                alert(data && data.message ? data.message : 'Add failed');
+                return false;
             }
 
             async function updateItem(orderItemId, qty, notes){
@@ -1269,6 +1445,8 @@
                 });
                 const data = await res.json();
                 if (data && data.success) {
+                    lastAddedMenuItemId = menuItemId;
+                    lastAddedAt = Date.now();
                     await refresh();
                 } else {
                     alert(data && data.message ? data.message : 'Add failed');
@@ -1344,7 +1522,15 @@
                 if (!id) return;
 
                 if (e.target.closest('.pos-remove')) {
-                    removeItem(id);
+                    (async () => {
+                        const menuItemId = parseInt(row.getAttribute('data-menu-item-id') || '0') || 0;
+                        const qty = parseInt(row.querySelector('.pos-qty')?.textContent || '1') || 1;
+                        const name = (row.querySelector('.fw-semibold')?.textContent || 'Item').trim();
+                        const ok = await removeItem(id);
+                        if (ok && menuItemId > 0) {
+                            showUndoToast('Removed: ' + name, () => addItem(menuItemId, qty, notes));
+                        }
+                    })();
                     return;
                 }
                 if (e.target.closest('.pos-qty-plus')) {
@@ -1356,6 +1542,41 @@
                     const q = parseInt(row.querySelector('.pos-qty')?.textContent || '1');
                     if (q > 1) updateItem(id, q - 1, notes);
                     return;
+                }
+            });
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', function(e){
+                const t = e.target;
+                const isTyping = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+
+                if (e.key === '/' && !isTyping) {
+                    e.preventDefault();
+                    document.getElementById('posSearch')?.focus();
+                    return;
+                }
+
+                if (e.key === 'Escape') {
+                    const searchEl = document.getElementById('posSearch');
+                    const hadSearch = !!(searchEl && searchEl.value);
+                    const hadCat = selectedCategory !== 'all';
+                    if (hadSearch || hadCat) {
+                        selectedCategory = 'all';
+                        if (searchEl) searchEl.value = '';
+                        document.querySelectorAll('#posCategoryList [data-category]').forEach(x => x.classList.remove('active'));
+                        document.querySelector('#posCategoryList [data-category="all"]')?.classList.add('active');
+                        applyFilters();
+                        e.preventDefault();
+                    }
+                    return;
+                }
+
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    const payBtn = document.getElementById('posPayBtn');
+                    if (payBtn && !payBtn.disabled) {
+                        e.preventDefault();
+                        payNow();
+                    }
                 }
             });
 
