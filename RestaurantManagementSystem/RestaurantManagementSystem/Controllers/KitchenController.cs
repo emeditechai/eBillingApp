@@ -173,6 +173,7 @@ namespace RestaurantManagementSystem.Controllers
                 connection.Open();
                 
                 // Get ticket details
+                var itemsNeedingInstructionHydration = new List<KitchenTicketItem>();
                 using (var command = new Microsoft.Data.SqlClient.SqlCommand("GetKitchenTicketDetails", connection))
                 {
                     command.CommandType = CommandType.StoredProcedure;
@@ -241,6 +242,10 @@ namespace RestaurantManagementSystem.Controllers
                             };
                             
                             viewModel.Items.Add(item);
+                            if (string.IsNullOrWhiteSpace(item.Notes) && string.IsNullOrWhiteSpace(item.SpecialInstructions))
+                            {
+                                itemsNeedingInstructionHydration.Add(item);
+                            }
                         }
                         
                         // Read modifiers for each item
@@ -258,35 +263,24 @@ namespace RestaurantManagementSystem.Controllers
                             }
                         }
                         
-                        // If some items are missing SpecialInstructions/Notes in the ticket row (older DB/migration differences),
-                        // try to fetch them from the original OrderItems row as a safe fallback so kitchen can always see instructions.
-                        foreach (var itm in viewModel.Items)
-                        {
-                            if (string.IsNullOrWhiteSpace(itm.Notes) && string.IsNullOrWhiteSpace(itm.SpecialInstructions))
-                            {
-                                try
-                                {
-                                    using (var noteCmd = new SqlCommand("SELECT SpecialInstructions FROM OrderItems WHERE Id = @OrderItemId", connection))
-                                    {
-                                        noteCmd.Parameters.AddWithValue("@OrderItemId", itm.OrderItemId);
-                                        var noteObj = noteCmd.ExecuteScalar();
-                                        if (noteObj != null && noteObj != DBNull.Value)
-                                        {
-                                            var noteText = noteObj.ToString();
-                                            if (!string.IsNullOrWhiteSpace(noteText))
-                                            {
-                                                // populate SpecialInstructions so the view shows it (we prefer Notes but fall back to SpecialInstructions)
-                                                itm.SpecialInstructions = noteText;
-                                            }
-                                        }
-                                    }
-                                }
-                                catch
-                                {
-                                    // Ignore failures here - this is a best-effort fallback.
-                                }
-                            }
-                        }
+                    }
+                }
+
+                if (itemsNeedingInstructionHydration.Count > 0)
+                {
+                    HydrateMissingKitchenItemNotes(itemsNeedingInstructionHydration, connection);
+                }
+
+                // Attach existing comments for each ticket item so the kitchen can review context inline.
+                foreach (var itm in viewModel.Items)
+                {
+                    try
+                    {
+                        itm.Comments = LoadKitchenComments(viewModel.Ticket?.OrderId ?? 0, itm.OrderItemId, itm.Id);
+                    }
+                    catch
+                    {
+                        // Ignore comment load failures to keep the page resilient.
                     }
                 }
                 
@@ -417,6 +411,142 @@ namespace RestaurantManagementSystem.Controllers
             }
             
             return View(viewModel);
+        }
+
+        private List<KitchenItemComment> LoadKitchenComments(int orderId, int orderItemId, int kitchenTicketItemId)
+        {
+            var comments = new List<KitchenItemComment>();
+            if (!TableExists("KitchenItemComments")) return comments;
+
+            using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+            {
+                connection.Open();
+                using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    SELECT Id, OrderId, OrderItemId, KitchenTicketId, KitchenTicketItemId, CommentText, CreatedByUserId, CreatedByName, CreatedAt
+                    FROM dbo.KitchenItemComments
+                    WHERE OrderItemId = @OrderItemId AND KitchenTicketItemId = @KitchenTicketItemId
+                    ORDER BY CreatedAt", connection))
+                {
+                    cmd.Parameters.AddWithValue("@OrderItemId", orderItemId);
+                    cmd.Parameters.AddWithValue("@KitchenTicketItemId", kitchenTicketItemId);
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            comments.Add(new KitchenItemComment
+                            {
+                                Id = reader.GetInt32(0),
+                                OrderId = reader.GetInt32(1),
+                                OrderItemId = reader.GetInt32(2),
+                                KitchenTicketId = reader.IsDBNull(3) ? (int?)null : reader.GetInt32(3),
+                                KitchenTicketItemId = reader.IsDBNull(4) ? (int?)null : reader.GetInt32(4),
+                                CommentText = reader.GetString(5),
+                                CreatedByUserId = reader.IsDBNull(6) ? (int?)null : reader.GetInt32(6),
+                                CreatedByName = reader.IsDBNull(7) ? null : reader.GetString(7),
+                                CreatedAt = reader.GetDateTime(8)
+                            });
+                        }
+                    }
+                }
+            }
+
+            return comments;
+        }
+
+        private void HydrateMissingKitchenItemNotes(List<KitchenTicketItem> items, Microsoft.Data.SqlClient.SqlConnection connection)
+        {
+            if (items == null || items.Count == 0) return;
+
+            try
+            {
+                var distinctIds = items
+                    .Where(i => string.IsNullOrWhiteSpace(i.Notes) && string.IsNullOrWhiteSpace(i.SpecialInstructions))
+                    .Select(i => i.OrderItemId)
+                    .Distinct()
+                    .ToList();
+
+                if (distinctIds.Count == 0) return;
+
+                var parameterNames = distinctIds.Select((_, index) => "@OrderItemId" + index).ToList();
+                var sql = $"SELECT Id, SpecialInstructions FROM OrderItems WHERE Id IN ({string.Join(",", parameterNames)})";
+
+                using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(sql, connection))
+                {
+                    for (int i = 0; i < distinctIds.Count; i++)
+                    {
+                        cmd.Parameters.AddWithValue(parameterNames[i], distinctIds[i]);
+                    }
+
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        var noteMap = new Dictionary<int, string>();
+                        while (reader.Read())
+                        {
+                            var noteText = reader["SpecialInstructions"]?.ToString();
+                            if (!string.IsNullOrWhiteSpace(noteText))
+                            {
+                                noteMap[reader.GetInt32(0)] = noteText;
+                            }
+                        }
+
+                        if (noteMap.Count > 0)
+                        {
+                            foreach (var itm in items)
+                            {
+                                if (noteMap.TryGetValue(itm.OrderItemId, out var note))
+                                {
+                                    itm.SpecialInstructions = note;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore failures so the kitchen screen keeps working even if fallback query fails.
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult AddKitchenItemComment(KitchenItemCommentInputModel input)
+        {
+            if (!ModelState.IsValid)
+            {
+                TempData["ErrorMessage"] = "Comment text is required.";
+                return RedirectToAction("TicketDetails", new { id = input.KitchenTicketId });
+            }
+
+            try
+            {
+                using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    EnsureKitchenItemCommentsTable(connection);
+
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        INSERT INTO dbo.KitchenItemComments (OrderId, OrderItemId, KitchenTicketId, KitchenTicketItemId, CommentText, CreatedByUserId, CreatedByName)
+                        VALUES (@OrderId, @OrderItemId, @KitchenTicketId, @KitchenTicketItemId, @CommentText, @CreatedByUserId, @CreatedByName)
+                    ", connection))
+                    {
+                        cmd.Parameters.AddWithValue("@OrderId", input.OrderId);
+                        cmd.Parameters.AddWithValue("@OrderItemId", input.OrderItemId);
+                        cmd.Parameters.AddWithValue("@KitchenTicketId", input.KitchenTicketId);
+                        cmd.Parameters.AddWithValue("@KitchenTicketItemId", input.KitchenTicketItemId);
+                        cmd.Parameters.AddWithValue("@CommentText", input.CommentText?.Trim());
+                        cmd.Parameters.AddWithValue("@CreatedByUserId", GetCurrentUserId());
+                        cmd.Parameters.AddWithValue("@CreatedByName", HttpContext?.User?.Identity?.Name ?? "Kitchen");
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                TempData["ErrorMessage"] = "Unable to add comment: " + ex.Message;
+            }
+
+            return RedirectToAction("TicketDetails", new { id = input.KitchenTicketId });
         }
         
         // POST: Kitchen/SaveStation
@@ -980,6 +1110,64 @@ namespace RestaurantManagementSystem.Controllers
             }
             
             return stats;
+        }
+
+        private int GetCurrentUserId()
+        {
+            try
+            {
+                var claim = HttpContext?.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+                if (claim != null && int.TryParse(claim.Value, out int uid)) return uid;
+            }
+            catch { }
+            return 1;
+        }
+
+        private void EnsureKitchenItemCommentsTable(Microsoft.Data.SqlClient.SqlConnection connection)
+        {
+            using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                IF OBJECT_ID('dbo.KitchenItemComments','U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.KitchenItemComments
+                    (
+                        Id INT IDENTITY(1,1) PRIMARY KEY,
+                        OrderId INT NOT NULL,
+                        OrderItemId INT NOT NULL,
+                        KitchenTicketId INT NULL,
+                        KitchenTicketItemId INT NULL,
+                        CommentText NVARCHAR(1000) NOT NULL,
+                        CreatedByUserId INT NULL,
+                        CreatedByName NVARCHAR(150) NULL,
+                        CreatedAt DATETIME2 NOT NULL CONSTRAINT DF_KitchenItemComments_CreatedAt DEFAULT (SYSUTCDATETIME())
+                    );
+
+                    CREATE INDEX IX_KitchenItemComments_OrderItemId
+                        ON dbo.KitchenItemComments (OrderItemId);
+
+                    CREATE INDEX IX_KitchenItemComments_KitchenTicketItemId
+                        ON dbo.KitchenItemComments (KitchenTicketItemId);
+                END", connection))
+            {
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        private bool TableExists(string tableName)
+        {
+            try
+            {
+                using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand("SELECT CASE WHEN OBJECT_ID(@T,'U') IS NOT NULL THEN 1 ELSE 0 END", connection))
+                    {
+                        cmd.Parameters.AddWithValue("@T", tableName);
+                        return Convert.ToInt32(cmd.ExecuteScalar()) == 1;
+                    }
+                }
+            }
+            catch { }
+            return false;
         }
     }
 }

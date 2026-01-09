@@ -146,6 +146,20 @@ namespace RestaurantManagementSystem.Models
         
         // Navigation properties
         public List<string> Modifiers { get; set; } = new List<string>();
+        public List<KitchenItemComment> Comments { get; set; } = new List<KitchenItemComment>();
+    }
+    
+    public class KitchenItemComment
+    {
+        public int Id { get; set; }
+        public int OrderId { get; set; }
+        public int OrderItemId { get; set; }
+        public int? KitchenTicketId { get; set; }
+        public int? KitchenTicketItemId { get; set; }
+        public string CommentText { get; set; }
+        public int? CreatedByUserId { get; set; }
+        public string CreatedByName { get; set; }
+        public DateTime CreatedAt { get; set; }
     }
     
     public class KitchenDashboardStats

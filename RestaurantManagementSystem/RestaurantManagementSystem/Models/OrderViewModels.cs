@@ -191,6 +191,7 @@ namespace RestaurantManagementSystem.Models
         public DateTime? DeliveryTime { get; set; }
         
         public List<OrderItemModifierViewModel> Modifiers { get; set; } = new List<OrderItemModifierViewModel>();
+        public List<KitchenItemComment> KitchenComments { get; set; } = new List<KitchenItemComment>();
     }
     
     public class OrderItemModifierViewModel
@@ -232,6 +233,7 @@ namespace RestaurantManagementSystem.Models
         public DateTime? CompletionTime { get; set; }
         public string Notes { get; set; }
         public List<string> Modifiers { get; set; } = new List<string>();
+        public List<KitchenItemComment> Comments { get; set; } = new List<KitchenItemComment>();
     }
     
     public class AddOrderItemViewModel

@@ -4048,6 +4048,44 @@ namespace RestaurantManagementSystem.Controllers
             // Return the base name as fallback
             return baseTableName;
         }
+        private List<KitchenItemComment> LoadKitchenComments(int orderId)
+        {
+            var comments = new List<KitchenItemComment>();
+            if (!TableExists("KitchenItemComments")) return comments;
+
+            using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+            {
+                connection.Open();
+                using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                    SELECT Id, OrderId, OrderItemId, KitchenTicketId, KitchenTicketItemId, CommentText, CreatedByUserId, CreatedByName, CreatedAt
+                    FROM dbo.KitchenItemComments
+                    WHERE OrderId = @OrderId
+                    ORDER BY CreatedAt", connection))
+                {
+                    cmd.Parameters.AddWithValue("@OrderId", orderId);
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            comments.Add(new KitchenItemComment
+                            {
+                                Id = reader.GetInt32(0),
+                                OrderId = reader.GetInt32(1),
+                                OrderItemId = reader.GetInt32(2),
+                                KitchenTicketId = reader.IsDBNull(3) ? (int?)null : reader.GetInt32(3),
+                                KitchenTicketItemId = reader.IsDBNull(4) ? (int?)null : reader.GetInt32(4),
+                                CommentText = reader.GetString(5),
+                                CreatedByUserId = reader.IsDBNull(6) ? (int?)null : reader.GetInt32(6),
+                                CreatedByName = reader.IsDBNull(7) ? null : reader.GetString(7),
+                                CreatedAt = reader.GetDateTime(8)
+                            });
+                        }
+                    }
+                }
+            }
+
+            return comments;
+        }
 
         // Helper to get merged table display name for an order
         private string GetMergedTableDisplayName(int orderId, string existingTableName)
@@ -4409,6 +4447,23 @@ namespace RestaurantManagementSystem.Controllers
                         }
                     }
                 }
+
+            }
+            var kitchenComments = LoadKitchenComments(order.Id);
+            var commentsByOrderItem = kitchenComments
+                .GroupBy(c => c.OrderItemId)
+                .ToDictionary(g => g.Key, g => g.OrderBy(c => c.CreatedAt).ToList());
+            var commentsByTicketItem = kitchenComments
+                .Where(c => c.KitchenTicketItemId.HasValue)
+                .GroupBy(c => c.KitchenTicketItemId!.Value)
+                .ToDictionary(g => g.Key, g => g.OrderBy(c => c.CreatedAt).ToList());
+
+            foreach (var item in order.Items)
+            {
+                if (commentsByOrderItem.TryGetValue(item.Id, out var list))
+                {
+                    item.KitchenComments = list;
+                }
             }
                 
             // Get order item modifiers using separate connections for each item
@@ -4614,6 +4669,10 @@ namespace RestaurantManagementSystem.Controllers
                                     Notes = reader.IsDBNull(8) ? null : reader.GetString(8),
                                     Modifiers = new List<string>()
                                 };
+                                if (commentsByTicketItem.TryGetValue(ticketItem.Id, out var ticketComments))
+                                {
+                                    ticketItem.Comments = ticketComments;
+                                }
                                 
                                 // Get modifiers for this ticket item using a separate connection
                                 string orderItemModifiersTable = GetCorrectTableName("OrderItemModifiers", "OrderItem_Modifiers");

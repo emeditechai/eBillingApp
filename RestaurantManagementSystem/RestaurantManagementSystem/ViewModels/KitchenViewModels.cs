@@ -101,4 +101,23 @@ namespace RestaurantManagementSystem.ViewModels
         public int ItemId { get; set; }
         public int Status { get; set; }
     }
+
+    public class KitchenItemCommentInputModel
+    {
+        [Required]
+        public int KitchenTicketId { get; set; }
+
+        [Required]
+        public int KitchenTicketItemId { get; set; }
+
+        [Required]
+        public int OrderId { get; set; }
+
+        [Required]
+        public int OrderItemId { get; set; }
+
+        [Required]
+        [StringLength(1000)]
+        public string CommentText { get; set; }
+    }
 }

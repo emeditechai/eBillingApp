@@ -238,6 +238,24 @@
                   <div class="mt-1">
                     <input type="text" class="form-control form-control-sm item-note" value="@it.SpecialInstructions" placeholder="Note" @(isEditableLine ? "" : "disabled") />
                   </div>
+                  @if (it.KitchenComments?.Any() == true)
+                  {
+                    <div class="mt-2 small">
+                      <div class="fw-semibold text-muted">Kitchen Comments</div>
+                      <ul class="list-unstyled mb-0">
+                        @foreach (var c in it.KitchenComments.OrderByDescending(c => c.CreatedAt).Take(5))
+                        {
+                          <li class="border rounded p-2 mb-1 bg-light">
+                            <div class="d-flex justify-content-between">
+                              <span class="fw-semibold">@(string.IsNullOrWhiteSpace(c.CreatedByName) ? "Kitchen" : c.CreatedByName)</span>
+                              <span class="text-muted" style="font-size:.75rem;">@c.CreatedAt.ToLocalTime().ToString("g")</span>
+                            </div>
+                            <div>@Html.Raw(System.Net.WebUtility.HtmlEncode(c.CommentText).Replace("\r\n", "<br/>").Replace("\n", "<br/>"))</div>
+                          </li>
+                        }
+                      </ul>
+                    </div>
+                  }
                 </td>
                 <td class="text-center"><input type="number" class="form-control form-control-sm item-qty" value="@it.Quantity" min="1" @(isEditableLine ? "" : "disabled") /></td>
                 <td class="text-end">₹@it.UnitPrice.ToString("F2")</td>

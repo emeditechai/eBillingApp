@@ -179,6 +179,36 @@
                                                     }
                                                 </div>
                                             }
+                                            @if (item.Comments?.Any() == true)
+                                            {
+                                                <div class="mt-2 small">
+                                                    <div class="fw-semibold text-muted">Comments</div>
+                                                    <ul class="list-unstyled mb-0">
+                                                        @foreach (var c in item.Comments.OrderBy(c => c.CreatedAt))
+                                                        {
+                                                            <li class="border rounded p-2 mb-1 bg-light">
+                                                                <div class="fw-semibold">@(string.IsNullOrWhiteSpace(c.CreatedByName) ? "Kitchen" : c.CreatedByName)</div>
+                                                                <div>@Html.Raw(System.Net.WebUtility.HtmlEncode(c.CommentText).Replace("\r\n", "<br/>").Replace("\n", "<br/>"))</div>
+                                                                <div class="text-muted" style="font-size:.8rem;">@c.CreatedAt.ToLocalTime().ToString("g")</div>
+                                                            </li>
+                                                        }
+                                                    </ul>
+                                                </div>
+                                            }
+                                            @if (Model.CanUpdateStatus)
+                                            {
+                                                <form asp-action="AddKitchenItemComment" method="post" class="mt-2">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="KitchenTicketId" value="@Model.Ticket.Id" />
+                                                    <input type="hidden" name="KitchenTicketItemId" value="@item.Id" />
+                                                    <input type="hidden" name="OrderId" value="@Model.Ticket.OrderId" />
+                                                    <input type="hidden" name="OrderItemId" value="@item.OrderItemId" />
+                                                    <div class="input-group input-group-sm">
+                                                        <input type="text" name="CommentText" class="form-control" placeholder="Add comment…" maxlength="1000" required />
+                                                        <button class="btn btn-primary" type="submit"><i class="fas fa-paper-plane"></i></button>
+                                                    </div>
+                                                </form>
+                                            }
                                             @* Show kitchen/order-attached note if present *@
                                             @* Former Notes block removed - combined above to ensure visibility and safety *@
                                         </td>
