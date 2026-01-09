@@ -86,6 +86,11 @@
     }
     .pos-product-img-fallback { width: 100%; height: 110px; background: var(--bs-light); }
     .pos-cart-item { padding: .65rem .75rem; }
+    .pos-qty-input-group { width: 130px; }
+    .pos-qty-input-group .form-control {
+        text-align: center;
+        padding: .15rem .25rem;
+    }
     .pos-disabled { opacity: .65; pointer-events: none; }
 
     .pos-added-highlight {
@@ -356,17 +361,24 @@
                             {
                                 foreach (var it in Model.Order.Items.Where(x => x.Status != 5))
                                 {
-                                    <div class="list-group-item pos-cart-item" data-id="@it.Id" data-notes="@it.SpecialInstructions">
+                                    <div class="list-group-item pos-cart-item" data-id="@it.Id" data-menu-item-id="@Convert.ToInt32(it.MenuItemId)" data-notes="@it.SpecialInstructions">
                                         <div class="d-flex justify-content-between">
                                             <div class="fw-semibold text-truncate">@(string.IsNullOrWhiteSpace(it.Name) ? it.MenuItemName : it.Name)</div>
                                             <div class="fw-semibold">₹@it.Subtotal.ToString("F2")</div>
                                         </div>
                                         <div class="d-flex justify-content-between align-items-center mt-2">
                                             <div class="small text-muted">₹@it.UnitPrice.ToString("F2")</div>
-                                            <div class="btn-group" role="group" aria-label="Quantity">
-                                                <button type="button" class="btn btn-sm btn-outline-secondary pos-qty-minus">-</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary disabled"><span class="pos-qty">@it.Quantity</span></button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary pos-qty-plus">+</button>
+                                            <div class="input-group input-group-sm pos-qty-input-group" role="group" aria-label="Quantity">
+                                                <button type="button" class="btn btn-outline-secondary pos-qty-minus">-</button>
+                                                <input type="number"
+                                                       class="form-control form-control-sm text-center pos-qty-input"
+                                                       value="@it.Quantity"
+                                                       min="1"
+                                                       step="1"
+                                                       inputmode="numeric"
+                                                       pattern="[0-9]*"
+                                                       aria-label="Quantity" />
+                                                <button type="button" class="btn btn-outline-secondary pos-qty-plus">+</button>
                                             </div>
                                             <button type="button" class="btn btn-sm btn-outline-danger pos-remove"><i class="fas fa-trash"></i></button>
                                         </div>
@@ -534,6 +546,36 @@
             let categoriesCollapsed = false;
             let lastAddedMenuItemId = 0;
             let lastAddedAt = 0;
+            const MAX_POS_QTY = 999;
+
+            function normalizeQtyValue(val){
+                let qty = parseInt(val, 10);
+                if (!Number.isFinite(qty) || qty < 1) qty = 1;
+                if (qty > MAX_POS_QTY) qty = MAX_POS_QTY;
+                return qty;
+            }
+
+            function getQtyInput(row){
+                return row ? row.querySelector('.pos-qty-input') : null;
+            }
+
+            function readQtyFromRow(row){
+                const input = getQtyInput(row);
+                if (!input) return 1;
+                const qty = normalizeQtyValue(input.value);
+                input.value = qty;
+                return qty;
+            }
+
+            function commitQtyInput(row, input){
+                if (!row || !input) return;
+                const id = parseInt(row.getAttribute('data-id') || '0');
+                if (!id) return;
+                const qty = normalizeQtyValue(input.value);
+                input.value = qty;
+                const notes = row.getAttribute('data-notes') || '';
+                updateItem(id, qty, notes);
+            }
 
             function showToast(message, variant){
                 const toastEl = document.getElementById('posToast');
@@ -933,10 +975,10 @@
                                 </div>
                                 <div class="d-flex justify-content-between align-items-center mt-2">
                                     <div class="small text-muted">₹${(+it.unitPrice).toFixed(2)}</div>
-                                    <div class="btn-group" role="group" aria-label="Quantity">
-                                        <button type="button" class="btn btn-sm btn-outline-secondary pos-qty-minus">-</button>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary disabled"><span class="pos-qty">${it.quantity}</span></button>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary pos-qty-plus">+</button>
+                                    <div class="input-group input-group-sm pos-qty-input-group" role="group" aria-label="Quantity">
+                                        <button type="button" class="btn btn-outline-secondary pos-qty-minus">-</button>
+                                        <input type="number" class="form-control form-control-sm text-center pos-qty-input" value="${it.quantity}" min="1" step="1" inputmode="numeric" pattern="[0-9]*" aria-label="Quantity" />
+                                        <button type="button" class="btn btn-outline-secondary pos-qty-plus">+</button>
                                     </div>
                                     <button type="button" class="btn btn-sm btn-outline-danger pos-remove"><i class="fas fa-trash"></i></button>
                                 </div>
@@ -1514,7 +1556,8 @@
             });
 
             // Cart controls
-            document.getElementById('posCartItems')?.addEventListener('click', function(e){
+            const cartEl = document.getElementById('posCartItems');
+            cartEl?.addEventListener('click', function(e){
                 const row = e.target.closest('.pos-cart-item');
                 if (!row) return;
                 const id = parseInt(row.getAttribute('data-id') || '0');
@@ -1524,7 +1567,7 @@
                 if (e.target.closest('.pos-remove')) {
                     (async () => {
                         const menuItemId = parseInt(row.getAttribute('data-menu-item-id') || '0') || 0;
-                        const qty = parseInt(row.querySelector('.pos-qty')?.textContent || '1') || 1;
+                        const qty = readQtyFromRow(row);
                         const name = (row.querySelector('.fw-semibold')?.textContent || 'Item').trim();
                         const ok = await removeItem(id);
                         if (ok && menuItemId > 0) {
@@ -1534,15 +1577,39 @@
                     return;
                 }
                 if (e.target.closest('.pos-qty-plus')) {
-                    const q = parseInt(row.querySelector('.pos-qty')?.textContent || '1');
-                    updateItem(id, q + 1, notes);
+                    const current = readQtyFromRow(row);
+                    const next = normalizeQtyValue(current + 1);
+                    const input = getQtyInput(row);
+                    if (input) input.value = next;
+                    updateItem(id, next, notes);
                     return;
                 }
                 if (e.target.closest('.pos-qty-minus')) {
-                    const q = parseInt(row.querySelector('.pos-qty')?.textContent || '1');
-                    if (q > 1) updateItem(id, q - 1, notes);
+                    const current = readQtyFromRow(row);
+                    if (current > 1) {
+                        const next = current - 1;
+                        const input = getQtyInput(row);
+                        if (input) input.value = next;
+                        updateItem(id, next, notes);
+                    }
                     return;
                 }
+            });
+            cartEl?.addEventListener('change', function(e){
+                const input = e.target.closest('.pos-qty-input');
+                if (!input) return;
+                const row = input.closest('.pos-cart-item');
+                if (!row) return;
+                commitQtyInput(row, input);
+            });
+            cartEl?.addEventListener('keydown', function(e){
+                if (e.key !== 'Enter') return;
+                const input = e.target.closest('.pos-qty-input');
+                if (!input) return;
+                e.preventDefault();
+                const row = input.closest('.pos-cart-item');
+                if (!row) return;
+                commitQtyInput(row, input);
             });
 
             // Keyboard shortcuts
