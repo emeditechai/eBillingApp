@@ -75,7 +75,8 @@
     }
     .pos-panel-body { padding: .75rem .9rem; }
     .pos-scroll { overflow: auto; max-height: calc(100vh - 170px); }
-    .pos-product-card { cursor: pointer; }
+    .pos-product-card { cursor: pointer; transition: transform .2s ease, box-shadow .2s ease; }
+    .pos-product-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(15, 23, 42, .12); }
     .pos-product-img { width: 100%; height: 110px; object-fit: cover; background: var(--bs-light); }
     .pos-img-wrap { position: relative; }
     .pos-img-skeleton {
@@ -85,6 +86,22 @@
         border-bottom: 1px solid var(--pos-border-soft);
     }
     .pos-product-img-fallback { width: 100%; height: 110px; background: var(--bs-light); }
+    .pos-product-badge {
+        position: absolute;
+        top: .65rem;
+        right: .65rem;
+        padding: .15rem .45rem;
+        border-radius: 999px;
+        font-size: .65rem;
+        font-weight: 600;
+        color: #fff;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        background: rgba(var(--pos-accent-rgb), .9);
+        box-shadow: 0 4px 8px rgba(15, 23, 42, .18);
+    }
+    .pos-product-badge.value { background: linear-gradient(120deg, #38bdf8, #0ea5e9); }
+    .pos-product-badge.premium { background: linear-gradient(120deg, #fb923c, #f97316); }
     .pos-cart-item { padding: .65rem .75rem; }
     .pos-qty-input-group { width: 130px; }
     .pos-qty-input-group .form-control {
@@ -93,10 +110,152 @@
     }
     .pos-disabled { opacity: .65; pointer-events: none; }
 
+    .pos-summary-compact {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: .45rem;
+        background: linear-gradient(120deg, rgba(var(--pos-accent-rgb), .05), rgba(var(--pos-accent-rgb), 0));
+        border: 1px solid var(--pos-border);
+        border-radius: .9rem;
+        padding: .45rem .65rem;
+    }
+    .pos-summary-compact .compact-pill {
+        background: #fff;
+        border-radius: 999px;
+        padding: .25rem .65rem;
+        display: flex;
+        flex-direction: column;
+        min-width: 90px;
+        border: 1px solid rgba(15,23,42,.08);
+    }
+    .pos-summary-compact .compact-label {
+        text-transform: uppercase;
+        font-size: .6rem;
+        letter-spacing: .08em;
+        color: #94a3b8;
+    }
+    .pos-summary-compact .compact-value {
+        font-weight: 600;
+        color: #0f172a;
+        line-height: 1.2;
+    }
+    .pos-items-badge {
+        background: rgba(var(--pos-accent-rgb), .12) !important;
+        color: #0f172a;
+    }
+
+    .pos-search-shell { flex: 1 1 auto; max-width: 540px; }
+    .pos-search-input {
+        border-radius: 999px !important;
+        background: #f1f5f9;
+        padding: .35rem .6rem;
+        border: 1px solid rgba(15,23,42,.08);
+    }
+    .pos-search-input .input-group-text {
+        border: none;
+        background: transparent;
+        color: #475569;
+    }
+    .pos-search-input input {
+        border: none;
+        background: transparent;
+        font-weight: 500;
+    }
+    .pos-search-input input:focus { box-shadow: none; }
+    .pos-search-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .45rem;
+        margin-top: .35rem;
+    }
+    .pos-filter-chip {
+        border: 1px solid rgba(15,23,42,.08);
+        border-radius: 999px;
+        padding: .15rem .8rem;
+        font-size: .75rem;
+        background: #fff;
+        color: #475569;
+        transition: all .15s ease;
+    }
+    .pos-filter-chip.active,
+    .pos-filter-chip:hover {
+        background: rgba(var(--pos-accent-rgb), .12);
+        border-color: rgba(var(--pos-accent-rgb), .4);
+        color: #0f172a;
+    }
+
     .pos-added-highlight {
         outline: 2px solid rgba(var(--pos-accent-rgb), .40);
         outline-offset: 2px;
         border-radius: .5rem;
+        animation: posPulse 1.2s ease;
+    }
+
+    @@keyframes posPulse {
+        0% { box-shadow: 0 0 0 0 rgba(var(--pos-accent-rgb), .35); }
+        70% { box-shadow: 0 0 0 10px rgba(var(--pos-accent-rgb), 0); }
+        100% { box-shadow: 0 0 0 0 rgba(var(--pos-accent-rgb), 0); }
+    }
+
+    .pos-category-pill .badge { margin-left: auto; }
+    #posCategoryList .list-group-item {
+        border: none;
+        border-radius: 999px;
+        margin: .2rem .4rem;
+        padding: .45rem .9rem;
+        display: flex;
+        align-items: center;
+        gap: .45rem;
+        background: rgba(15,23,42,.03);
+    }
+    #posCategoryList .list-group-item.active {
+        background-color: rgba(var(--pos-accent-rgb), .18);
+        border-color: transparent;
+        color: #0f172a;
+        box-shadow: inset 0 0 0 1px rgba(var(--pos-accent-rgb), .25);
+    }
+    #posCategoryList .list-group-item i { color: #64748b; }
+    #posCategoryList .badge {
+        background-color: rgba(var(--pos-accent-rgb), .22) !important;
+        color: #0f172a;
+    }
+
+    .pos-right-tabs .nav-link {
+        border-radius: 999px;
+        font-weight: 600;
+        color: #475569;
+        border: 1px solid transparent;
+    }
+    .pos-right-tabs .nav-link.active {
+        background: rgba(var(--pos-accent-rgb), .14);
+        color: #0f172a;
+        border-color: rgba(var(--pos-accent-rgb), .3);
+    }
+    .pos-tab-pane { min-height: 200px; }
+    .pos-details-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: .85rem;
+    }
+    .pos-details-grid .detail-card {
+        border: 1px solid rgba(15,23,42,.08);
+        border-radius: .9rem;
+        padding: .65rem;
+        background: #fff;
+    }
+    .pos-details-grid .detail-label {
+        text-transform: uppercase;
+        font-size: .65rem;
+        letter-spacing: .05em;
+        color: #94a3b8;
+        margin-bottom: .2rem;
+    }
+    .pos-details-grid .detail-value {
+        font-weight: 600;
+        color: #0f172a;
+        font-size: .95rem;
+        word-break: break-word;
     }
 
     @@media (min-width: 992px) {
@@ -121,16 +280,7 @@
         );
     }
 
-    /* Subtle “premium” accents without new colors */
-    #posCategoryList .list-group-item.active {
-        background-color: rgba(var(--pos-accent-rgb), .14);
-        border-color: rgba(var(--pos-accent-rgb), .18);
-        color: var(--bs-body-color);
-    }
-    #posCategoryList .badge {
-        background-color: rgba(var(--pos-accent-rgb), .22) !important;
-        color: var(--bs-body-color);
-    }
+    /* Subtle accents keep palette cohesive */
     .pos-product-card {
         border-color: rgba(var(--pos-accent-rgb), .10);
     }
@@ -155,9 +305,16 @@
                 }
             </div>
             <div class="flex-grow-1"></div>
-            <div class="input-group" style="max-width: 520px;">
-                <span class="input-group-text"><i class="fas fa-search"></i></span>
-                <input class="form-control" id="posSearch" placeholder="Search products..." autocomplete="off" />
+            <div class="pos-search-shell ms-2">
+                <div class="input-group pos-search-input">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input class="form-control" id="posSearch" placeholder="Search products..." autocomplete="off" />
+                </div>
+                <div class="pos-search-chips" id="posSearchChips">
+                    <button type="button" class="pos-filter-chip active" data-chip="all">All items</button>
+                    <button type="button" class="pos-filter-chip" data-chip="value">Value picks</button>
+                    <button type="button" class="pos-filter-chip" data-chip="premium">Signature</button>
+                </div>
             </div>
                 <button class="btn btn-primary ms-2" type="button" id="posNewOrderBtn" style="display:@(hasOrder ? "inline-flex" : "none")">
                     <i class="fas fa-plus-circle me-1"></i> Next Order
@@ -232,6 +389,12 @@
                             var takeoutPrice = mi.TakeoutPrice;
                             var deliveryPrice = mi.DeliveryPrice;
                             var img = mi.ImagePath;
+                            var vibeTags = new List<string>();
+                            if (basePrice <= 65m) { vibeTags.Add("value"); }
+                            if (basePrice >= 120m) { vibeTags.Add("premium"); }
+                            var tagsAttr = string.Join(' ', vibeTags);
+                            var badgeLabel = vibeTags.Contains("premium") ? "Signature" : (vibeTags.Contains("value") ? "Value" : string.Empty);
+                            var badgeClass = vibeTags.Contains("premium") ? "premium" : (vibeTags.Contains("value") ? "value" : string.Empty);
 
                             <div class="col pos-product" 
                                  data-category="@catId"
@@ -240,9 +403,14 @@
                                  data-price="@basePrice"
                                  data-takeout-price="@(takeoutPrice.HasValue ? takeoutPrice.Value.ToString("F2") : "")"
                                  data-delivery-price="@(deliveryPrice.HasValue ? deliveryPrice.Value.ToString("F2") : "")"
-                                 data-id="@mi.Id">
+                                 data-id="@mi.Id"
+                                 data-tags="@tagsAttr">
                                 <div class="card h-100 shadow-sm pos-product-card" role="button" tabindex="0">
                                         <div class="pos-img-wrap">
+                                            @if (!string.IsNullOrEmpty(badgeLabel))
+                                            {
+                                                <span class="pos-product-badge @badgeClass">@badgeLabel</span>
+                                            }
                                             @if (!string.IsNullOrWhiteSpace(img))
                                             {
                                                 <div class="pos-img-skeleton"></div>
@@ -281,6 +449,7 @@
             <div class="pos-panel-header d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center gap-2">
                     <div class="fw-semibold">Current Order</div>
+                    <span class="badge pos-items-badge" id="posItemCountBadge">0 items</span>
                     <span class="badge bg-secondary" id="posOrderStateBadge">@((hasOrder && Model?.Order?.IsFullyPaid == true) ? "PAID" : (hasOrder ? "OPEN" : "NEW"))</span>
                 </div>
                 <button class="btn btn-sm btn-outline-secondary" type="button" id="posPayBtnTop" @(hasOrder ? "" : "disabled")>
@@ -288,6 +457,24 @@
                 </button>
             </div>
             <div class="pos-panel-body">
+                <div class="pos-summary-compact mb-2" id="posSummaryCompact">
+                    <div class="compact-pill">
+                        <span class="compact-label">Order</span>
+                        <span class="compact-value" id="posSummaryOrderMini">@((hasOrder && !string.IsNullOrWhiteSpace(Model?.OrderNumber)) ? Model.OrderNumber : "—")</span>
+                    </div>
+                    <div class="compact-pill">
+                        <span class="compact-label">Type</span>
+                        <span class="compact-value" id="posSummaryTypeMini">@((hasOrder ? Model.Order?.OrderTypeDisplay : "Takeout / Delivery"))</span>
+                    </div>
+                    <div class="compact-pill">
+                        <span class="compact-label">Remaining</span>
+                        <span class="compact-value text-success">₹<span id="posSummaryRemainingMini">@((hasOrder ? Model.Order?.RemainingAmount.ToString("F2") : "0.00"))</span></span>
+                    </div>
+                    <div class="compact-pill">
+                        <span class="compact-label">Items</span>
+                        <span class="compact-value" id="posSummaryItemCountMini">0</span>
+                    </div>
+                </div>
                 <form asp-action="CreatePOSOrder" method="post" autocomplete="off" id="posCreateForm" style="display:@(hasOrder ? "none" : "block")">
                     <div class="row g-2">
                         <div class="col-12">
@@ -339,161 +526,196 @@
 
                 <div id="posActiveOrder" style="display:@(hasOrder ? "block" : "none")">
                     <input type="hidden" id="posOrderId" value="@orderId" />
+                    <ul class="nav nav-pills pos-right-tabs" id="posRightTabs">
+                        <li class="nav-item">
+                            <button type="button" class="nav-link active" data-target="#posCartTab">Cart & Payment</button>
+                        </li>
+                        <li class="nav-item">
+                            <button type="button" class="nav-link" data-target="#posDetailsTab">Details</button>
+                        </li>
+                    </ul>
+                    <div class="tab-content mt-3">
+                        <div class="tab-pane fade show active pos-tab-pane" id="posCartTab">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div class="text-muted small">Order Type</div>
+                                    <div class="fw-semibold" id="posOrderTypeDisplay">@Model.Order?.OrderTypeDisplay</div>
+                                </div>
+                                <div class="text-end">
+                                    <div class="text-muted small">Remaining</div>
+                                    <div class="fw-bold text-success">₹<span id="posRemaining">@(Model.Order?.RemainingAmount.ToString("F2") ?? "0.00")</span></div>
+                                    <div class="text-muted small mt-2">Payable (Rounded)</div>
+                                    <div class="fw-semibold">₹<span id="posPayableTop">@((Model.Order != null) ? Math.Round(Model.Order.TotalAmount, 0, MidpointRounding.AwayFromZero).ToString("F2") : "0.00")</span></div>
+                                    <div class="text-muted small">Round Off</div>
+                                    <div>₹<span id="posBillRoundoffTop">@((Model.Order != null) ? Math.Round(Math.Round(Model.Order.TotalAmount, 0, MidpointRounding.AwayFromZero) - Model.Order.TotalAmount, 2, MidpointRounding.AwayFromZero).ToString("F2") : "0.00")</span></div>
+                                </div>
+                            </div>
 
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <div class="text-muted small">Order Type</div>
-                            <div class="fw-semibold" id="posOrderTypeDisplay">@Model.Order?.OrderTypeDisplay</div>
-                        </div>
-                        <div class="text-end">
-                            <div class="text-muted small">Remaining</div>
-                            <div class="fw-bold text-success">₹<span id="posRemaining">@(Model.Order?.RemainingAmount.ToString("F2") ?? "0.00")</span></div>
-                            <div class="text-muted small mt-2">Payable (Rounded)</div>
-                            <div class="fw-semibold">₹<span id="posPayableTop">@((Model.Order != null) ? Math.Round(Model.Order.TotalAmount, 0, MidpointRounding.AwayFromZero).ToString("F2") : "0.00")</span></div>
-                            <div class="text-muted small">Round Off</div>
-                            <div>₹<span id="posBillRoundoffTop">@((Model.Order != null) ? Math.Round(Math.Round(Model.Order.TotalAmount, 0, MidpointRounding.AwayFromZero) - Model.Order.TotalAmount, 2, MidpointRounding.AwayFromZero).ToString("F2") : "0.00")</span></div>
-                        </div>
-                    </div>
-
-                    <div class="mt-3">
-                        <div class="list-group" id="posCartItems">
-                            @if (Model.Order?.Items != null && Model.Order.Items.Any(i => i.Status != 5))
-                            {
-                                foreach (var it in Model.Order.Items.Where(x => x.Status != 5))
-                                {
-                                    <div class="list-group-item pos-cart-item" data-id="@it.Id" data-menu-item-id="@Convert.ToInt32(it.MenuItemId)" data-notes="@it.SpecialInstructions">
-                                        <div class="d-flex justify-content-between">
-                                            <div class="fw-semibold text-truncate">@(string.IsNullOrWhiteSpace(it.Name) ? it.MenuItemName : it.Name)</div>
-                                            <div class="fw-semibold">₹@it.Subtotal.ToString("F2")</div>
-                                        </div>
-                                        <div class="d-flex justify-content-between align-items-center mt-2">
-                                            <div class="small text-muted">₹@it.UnitPrice.ToString("F2")</div>
-                                            <div class="input-group input-group-sm pos-qty-input-group" role="group" aria-label="Quantity">
-                                                <button type="button" class="btn btn-outline-secondary pos-qty-minus">-</button>
-                                                <input type="number"
-                                                       class="form-control form-control-sm text-center pos-qty-input"
-                                                       value="@it.Quantity"
-                                                       min="1"
-                                                       step="1"
-                                                       inputmode="numeric"
-                                                       pattern="[0-9]*"
-                                                       aria-label="Quantity" />
-                                                <button type="button" class="btn btn-outline-secondary pos-qty-plus">+</button>
+                            <div class="mt-3">
+                                <div class="list-group" id="posCartItems">
+                                    @if (Model.Order?.Items != null && Model.Order.Items.Any(i => i.Status != 5))
+                                    {
+                                        foreach (var it in Model.Order.Items.Where(x => x.Status != 5))
+                                        {
+                                            <div class="list-group-item pos-cart-item" data-id="@it.Id" data-menu-item-id="@Convert.ToInt32(it.MenuItemId)" data-notes="@it.SpecialInstructions">
+                                                <div class="d-flex justify-content-between">
+                                                    <div class="fw-semibold text-truncate">@(string.IsNullOrWhiteSpace(it.Name) ? it.MenuItemName : it.Name)</div>
+                                                    <div class="fw-semibold">₹@it.Subtotal.ToString("F2")</div>
+                                                </div>
+                                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                                    <div class="small text-muted">₹@it.UnitPrice.ToString("F2")</div>
+                                                    <div class="input-group input-group-sm pos-qty-input-group" role="group" aria-label="Quantity">
+                                                        <button type="button" class="btn btn-outline-secondary pos-qty-minus">-</button>
+                                                        <input type="number"
+                                                               class="form-control form-control-sm text-center pos-qty-input"
+                                                               value="@it.Quantity"
+                                                               min="1"
+                                                               step="1"
+                                                               inputmode="numeric"
+                                                               pattern="[0-9]*"
+                                                               aria-label="Quantity" />
+                                                        <button type="button" class="btn btn-outline-secondary pos-qty-plus">+</button>
+                                                    </div>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger pos-remove"><i class="fas fa-trash"></i></button>
+                                                </div>
                                             </div>
-                                            <button type="button" class="btn btn-sm btn-outline-danger pos-remove"><i class="fas fa-trash"></i></button>
-                                        </div>
-                                    </div>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <div class="list-group-item text-muted">No items added yet.</div>
+                                    }
+                                </div>
+                            </div>
+
+                            <hr class="my-3" />
+
+                            <div class="d-flex justify-content-between">
+                                <div class="text-muted">Subtotal</div>
+                                <div>₹<span id="posSubtotal">@(Model.Order?.Subtotal.ToString("F2") ?? "0.00")</span></div>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <div class="text-muted">GST</div>
+                                <div>₹<span id="posTax">@(Model.Order?.TaxAmount.ToString("F2") ?? "0.00")</span></div>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <div class="text-muted">Discount</div>
+                                <div>-₹<span id="posDiscount">@(Model.Order?.DiscountAmount.ToString("F2") ?? "0.00")</span></div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-2">
+                                <div class="fw-semibold">Total</div>
+                                <div class="fw-semibold">₹<span id="posTotal">@(Model.Order?.TotalAmount.ToString("F2") ?? "0.00")</span></div>
+                            </div>
+
+                            <div class="d-flex justify-content-between mt-2">
+                                <div class="text-muted">Payable (Rounded)</div>
+                                <div>₹<span id="posPayableTotal">@((Model.Order != null) ? Math.Round(Model.Order.TotalAmount, 0, MidpointRounding.AwayFromZero).ToString("F2") : "0.00")</span></div>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <div class="text-muted">Round Off</div>
+                                <div>₹<span id="posBillRoundoff">@((Model.Order != null) ? Math.Round(Math.Round(Model.Order.TotalAmount, 0, MidpointRounding.AwayFromZero) - Model.Order.TotalAmount, 2, MidpointRounding.AwayFromZero).ToString("F2") : "0.00")</span></div>
+                            </div>
+
+                            <hr class="my-3" />
+
+                            <div class="fw-semibold mb-2">Payment Method</div>
+                            <div id="posPaymentMsg" class="d-none"></div>
+
+                            <div class="d-flex flex-wrap gap-2" id="posPaymentButtons">
+                                @foreach (var pm in Model.Payment.AvailablePaymentMethods)
+                                {
+                                    var active = pm.Value == Model.Payment.PaymentMethodId.ToString();
+                                    <button type="button" class="btn btn-sm @(active ? "btn-primary" : "btn-outline-primary") pos-pay-method" data-method="@pm.Value">
+                                        @pm.Text
+                                    </button>
                                 }
-                            }
-                            else
-                            {
-                                <div class="list-group-item text-muted">No items added yet.</div>
-                            }
-                        </div>
-                    </div>
-
-                    <hr class="my-3" />
-
-                    <div class="d-flex justify-content-between">
-                        <div class="text-muted">Subtotal</div>
-                        <div>₹<span id="posSubtotal">@(Model.Order?.Subtotal.ToString("F2") ?? "0.00")</span></div>
-                    </div>
-                    <div class="d-flex justify-content-between">
-                        <div class="text-muted">GST</div>
-                        <div>₹<span id="posTax">@(Model.Order?.TaxAmount.ToString("F2") ?? "0.00")</span></div>
-                    </div>
-                    <div class="d-flex justify-content-between">
-                        <div class="text-muted">Discount</div>
-                        <div>-₹<span id="posDiscount">@(Model.Order?.DiscountAmount.ToString("F2") ?? "0.00")</span></div>
-                    </div>
-                    <div class="d-flex justify-content-between mt-2">
-                        <div class="fw-semibold">Total</div>
-                        <div class="fw-semibold">₹<span id="posTotal">@(Model.Order?.TotalAmount.ToString("F2") ?? "0.00")</span></div>
-                    </div>
-
-                    <div class="d-flex justify-content-between mt-2">
-                        <div class="text-muted">Payable (Rounded)</div>
-                        <div>₹<span id="posPayableTotal">@((Model.Order != null) ? Math.Round(Model.Order.TotalAmount, 0, MidpointRounding.AwayFromZero).ToString("F2") : "0.00")</span></div>
-                    </div>
-                    <div class="d-flex justify-content-between">
-                        <div class="text-muted">Round Off</div>
-                        <div>₹<span id="posBillRoundoff">@((Model.Order != null) ? Math.Round(Math.Round(Model.Order.TotalAmount, 0, MidpointRounding.AwayFromZero) - Model.Order.TotalAmount, 2, MidpointRounding.AwayFromZero).ToString("F2") : "0.00")</span></div>
-                    </div>
-
-                    <hr class="my-3" />
-
-                    <div class="fw-semibold mb-2">Payment Method</div>
-                    <div id="posPaymentMsg" class="d-none"></div>
-
-                    <div class="d-flex flex-wrap gap-2" id="posPaymentButtons">
-                        @foreach (var pm in Model.Payment.AvailablePaymentMethods)
-                        {
-                            var active = pm.Value == Model.Payment.PaymentMethodId.ToString();
-                            <button type="button" class="btn btn-sm @(active ? "btn-primary" : "btn-outline-primary") pos-pay-method" data-method="@pm.Value">
-                                @pm.Text
-                            </button>
-                        }
-                    </div>
-                    <select class="form-select d-none" id="posPaymentMethod">
-                        @foreach (var pm in Model.Payment.AvailablePaymentMethods)
-                        {
-                            <option value="@pm.Value" selected="@(pm.Value == Model.Payment.PaymentMethodId.ToString() ? "selected" : null)">@pm.Text</option>
-                        }
-                    </select>
-
-                    <div class="row g-2 mt-2">
-                        <div class="col-6">
-                            <label class="form-label">Amount</label>
-                            <input class="form-control" id="posPayAmount" type="number" step="0.01" min="0" value="@Model.Payment.RemainingAmount.ToString("F2")" />
-                            <div class="invalid-feedback" id="posPayAmountErr"></div>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label">Tip</label>
-                            <input class="form-control" id="posPayTip" type="number" step="0.01" min="0" value="0.00" />
-                        </div>
-                    </div>
-
-                    <div class="d-flex justify-content-between mt-2">
-                        <div class="text-muted">Round Off</div>
-                        <div>₹<span id="posRoundoff">0.00</span></div>
-                    </div>
-
-                    <div class="row g-2 mt-1">
-                        <div class="col-12" id="posRefWrap">
-                            <label class="form-label">Reference / UTR</label>
-                            <input class="form-control" id="posPayRef" />
-                            <div class="invalid-feedback" id="posPayRefErr"></div>
-                        </div>
-                        <div class="col-6" id="posCardLast4Wrap">
-                            <label class="form-label">Card Last 4</label>
-                            <input class="form-control" id="posCardLast4" maxlength="4" />
-                            <div class="invalid-feedback" id="posCardLast4Err"></div>
-                        </div>
-                        <div class="col-6" id="posCardTypeWrap">
-                            <label class="form-label">Card Type</label>
-                            <select class="form-select" id="posCardType">
-                                <option value="">Select...</option>
-                                <option value="VISA">Visa</option>
-                                <option value="MASTERCARD">MasterCard</option>
-                                <option value="AMEX">American Express</option>
-                                <option value="DISCOVER">Discover</option>
-                                <option value="OTHER">Other</option>
+                            </div>
+                            <select class="form-select d-none" id="posPaymentMethod">
+                                @foreach (var pm in Model.Payment.AvailablePaymentMethods)
+                                {
+                                    <option value="@pm.Value" selected="@(pm.Value == Model.Payment.PaymentMethodId.ToString() ? "selected" : null)">@pm.Text</option>
+                                }
                             </select>
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">Notes</label>
-                            <input class="form-control" id="posPayNotes" />
-                        </div>
-                    </div>
 
-                    <div class="d-grid mt-3">
-                        <button class="btn btn-success" type="button" id="posPayBtn">
-                            Complete Payment
-                        </button>
+                            <div class="row g-2 mt-2">
+                                <div class="col-6">
+                                    <label class="form-label">Amount</label>
+                                    <input class="form-control" id="posPayAmount" type="number" step="0.01" min="0" value="@Model.Payment.RemainingAmount.ToString("F2")" />
+                                    <div class="invalid-feedback" id="posPayAmountErr"></div>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label">Tip</label>
+                                    <input class="form-control" id="posPayTip" type="number" step="0.01" min="0" value="0.00" />
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between mt-2">
+                                <div class="text-muted">Round Off</div>
+                                <div>₹<span id="posRoundoff">0.00</span></div>
+                            </div>
+
+                            <div class="row g-2 mt-1">
+                                <div class="col-12" id="posRefWrap">
+                                    <label class="form-label">Reference / UTR</label>
+                                    <input class="form-control" id="posPayRef" />
+                                    <div class="invalid-feedback" id="posPayRefErr"></div>
+                                </div>
+                                <div class="col-6" id="posCardLast4Wrap">
+                                    <label class="form-label">Card Last 4</label>
+                                    <input class="form-control" id="posCardLast4" maxlength="4" />
+                                    <div class="invalid-feedback" id="posCardLast4Err"></div>
+                                </div>
+                                <div class="col-6" id="posCardTypeWrap">
+                                    <label class="form-label">Card Type</label>
+                                    <select class="form-select" id="posCardType">
+                                        <option value="">Select...</option>
+                                        <option value="VISA">Visa</option>
+                                        <option value="MASTERCARD">MasterCard</option>
+                                        <option value="AMEX">American Express</option>
+                                        <option value="DISCOVER">Discover</option>
+                                        <option value="OTHER">Other</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Notes</label>
+                                    <input class="form-control" id="posPayNotes" />
+                                </div>
+                            </div>
+
+                            <div class="d-grid mt-3">
+                                <button class="btn btn-success" type="button" id="posPayBtn">
+                                    Complete Payment
+                                </button>
+                            </div>
+                            <a class="btn btn-outline-dark w-100 mt-2" id="posPrintBtn" target="_blank" style="display:@((hasOrder && Model.Order?.IsFullyPaid == true) ? "block" : "none")" href="@(hasOrder ? Url.Action("PrintPOS", "Payment", new { orderId = orderId }) : "#")">
+                                <i class="fas fa-print me-1"></i> Print POS Bill
+                            </a>
+                        </div>
+                        <div class="tab-pane fade pos-tab-pane" id="posDetailsTab">
+                            <div class="pos-details-grid">
+                                <div class="detail-card">
+                                    <div class="detail-label">Customer</div>
+                                    <div class="detail-value" id="posDetailsCustomerName">@(!string.IsNullOrWhiteSpace(Model?.Order?.CustomerName) ? Model.Order.CustomerName : "—")</div>
+                                </div>
+                                <div class="detail-card">
+                                    <div class="detail-label">Phone</div>
+                                    <div class="detail-value" id="posDetailsCustomerPhone">@(!string.IsNullOrWhiteSpace(Model?.Order?.CustomerPhone) ? Model.Order.CustomerPhone : "—")</div>
+                                </div>
+                                <div class="detail-card">
+                                    <div class="detail-label">Email</div>
+                                    <div class="detail-value" id="posDetailsCustomerEmail">@(!string.IsNullOrWhiteSpace(Model?.Order?.CustomerEmailId) ? Model.Order.CustomerEmailId : "—")</div>
+                                </div>
+                                <div class="detail-card">
+                                    <div class="detail-label">Order Notes</div>
+                                    <div class="detail-value" id="posDetailsNotes">@(!string.IsNullOrWhiteSpace(Model?.Order?.SpecialInstructions) ? Model.Order.SpecialInstructions : "—")</div>
+                                </div>
+                                <div class="detail-card">
+                                    <div class="detail-label">Delivery Address</div>
+                                    <div class="detail-value" id="posDetailsAddress">@(!string.IsNullOrWhiteSpace(Model?.Order?.CustomerAddress) ? Model.Order.CustomerAddress : "—")</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <a class="btn btn-outline-dark w-100 mt-2" id="posPrintBtn" target="_blank" style="display:@((hasOrder && Model.Order?.IsFullyPaid == true) ? "block" : "none")" href="@(hasOrder ? Url.Action("PrintPOS", "Payment", new { orderId = orderId }) : "#")">
-                        <i class="fas fa-print me-1"></i> Print POS Bill
-                    </a>
                 </div>
             </div>
         </div>
@@ -546,6 +768,56 @@
             let categoriesCollapsed = false;
             let lastAddedMenuItemId = 0;
             let lastAddedAt = 0;
+            const priceFilters = {
+                all: null,
+                value: { tag: 'value' },
+                premium: { tag: 'premium' }
+            };
+            let activePriceFilterKey = 'all';
+            const summaryEls = {
+                order: document.getElementById('posSummaryOrderMini'),
+                type: document.getElementById('posSummaryTypeMini'),
+                remaining: document.getElementById('posSummaryRemainingMini')
+            };
+            const itemCountEls = {
+                badge: document.getElementById('posItemCountBadge'),
+                compact: document.getElementById('posSummaryItemCountMini')
+            };
+            const detailEls = {
+                customer: document.getElementById('posDetailsCustomerName'),
+                phone: document.getElementById('posDetailsCustomerPhone'),
+                email: document.getElementById('posDetailsCustomerEmail'),
+                address: document.getElementById('posDetailsAddress'),
+                notes: document.getElementById('posDetailsNotes')
+            };
+
+            function updateOrderSummary(orderNum, orderTypeName, remainingValue){
+                const orderText = orderNum && orderNum.trim() ? orderNum : '—';
+                const typeText = orderTypeName && orderTypeName.trim() ? orderTypeName : 'Takeout / Delivery';
+                const remainingText = (isFinite(remainingValue) ? Number(remainingValue) : 0).toFixed(2);
+                if (summaryEls.order) summaryEls.order.textContent = orderText;
+                if (summaryEls.type) summaryEls.type.textContent = typeText;
+                if (summaryEls.remaining) summaryEls.remaining.textContent = remainingText;
+            }
+
+            function updateItemCount(count){
+                const safe = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
+                const label = safe === 1 ? 'item' : 'items';
+                if (itemCountEls.badge) itemCountEls.badge.textContent = `${safe} ${label}`;
+                if (itemCountEls.compact) itemCountEls.compact.textContent = String(safe);
+            }
+
+            function updateDetailsPanel(data){
+                if (detailEls.customer) detailEls.customer.textContent = data?.customerName?.trim() || '—';
+                if (detailEls.phone) detailEls.phone.textContent = data?.customerPhone?.trim() || '—';
+                if (detailEls.email) detailEls.email.textContent = data?.customerEmail?.trim() || '—';
+                if (detailEls.address) detailEls.address.textContent = data?.customerAddress?.trim() || '—';
+                if (detailEls.notes) detailEls.notes.textContent = data?.specialInstructions?.trim() || '—';
+            }
+
+            function resetDetailsPanel(){
+                updateDetailsPanel({});
+            }
             const MAX_POS_QTY = 999;
 
             function normalizeQtyValue(val){
@@ -682,6 +954,7 @@
             function buildCategoryList(){
                 const list = document.getElementById('posCategoryList');
                 if (!list) return;
+                list.classList.add('pos-category-pill');
                 const products = Array.from(document.querySelectorAll('.pos-product'));
                 const counts = new Map();
                 products.forEach(p => {
@@ -700,12 +973,24 @@
                     .sort((a,b) => (a.name || '').localeCompare(b.name || ''));
 
                 list.innerHTML = '';
+                const iconMap = {
+                    all: 'fas fa-layer-group text-primary',
+                    beverage: 'fas fa-mug-hot text-warning',
+                    breads: 'fas fa-bread-slice text-secondary',
+                    chinese: 'fas fa-bowl-food text-danger',
+                    continental: 'fas fa-plate-wheat text-success',
+                    indian: 'fas fa-utensils text-primary',
+                    dessert: 'fas fa-ice-cream text-danger',
+                    starter: 'fas fa-seedling text-success',
+                    default: 'fas fa-circle text-muted'
+                };
 
                 const allBtn = document.createElement('button');
                 allBtn.type = 'button';
                 allBtn.className = 'list-group-item list-group-item-action active';
                 allBtn.setAttribute('data-category', 'all');
-                allBtn.innerHTML = 'All <span class="badge bg-secondary float-end">' + total + '</span>';
+                const allIcon = `<i class="${iconMap.all}"></i>`;
+                allBtn.innerHTML = `${allIcon}<span>All</span><span class="badge bg-secondary ms-auto">${total}</span>`;
                 list.appendChild(allBtn);
 
                 entries.forEach(e => {
@@ -713,11 +998,9 @@
                     btn.type = 'button';
                     btn.className = 'list-group-item list-group-item-action';
                     btn.setAttribute('data-category', e.id);
-                    btn.textContent = e.name;
-                    const badge = document.createElement('span');
-                    badge.className = 'badge bg-secondary float-end';
-                    badge.textContent = String(e.count);
-                    btn.appendChild(badge);
+                    const iconKey = (e.name || '').toLowerCase();
+                    const iconClass = iconMap[iconKey] || iconMap.default;
+                    btn.innerHTML = `<i class="${iconClass}"></i><span>${e.name}</span><span class="badge bg-secondary ms-auto">${e.count}</span>`;
                     list.appendChild(btn);
                 });
             }
@@ -830,12 +1113,23 @@
                 const search = (document.getElementById('posSearch')?.value || '').trim().toLowerCase();
                 const products = Array.from(document.querySelectorAll('.pos-product'));
                 let visible = 0;
+                const priceFilter = priceFilters[activePriceFilterKey] || null;
                 products.forEach(el => {
                     const cat = el.getAttribute('data-category');
                     const name = (el.getAttribute('data-name') || '').toLowerCase();
                     const matchesCat = (selectedCategory === 'all') || (String(cat) === String(selectedCategory));
                     const matchesSearch = !search || name.includes(search);
-                    const ok = (matchesCat && matchesSearch);
+                    let matchesPrice = true;
+                    if (priceFilter) {
+                        const basePrice = parseFloat(el.getAttribute('data-price') || '0') || 0;
+                        if (typeof priceFilter.min === 'number' && basePrice < priceFilter.min) matchesPrice = false;
+                        if (typeof priceFilter.max === 'number' && basePrice > priceFilter.max) matchesPrice = false;
+                        if (priceFilter.tag) {
+                            const tags = (el.getAttribute('data-tags') || '').split(' ').filter(Boolean);
+                            matchesPrice = matchesPrice && tags.includes(priceFilter.tag);
+                        }
+                    }
+                    const ok = (matchesCat && matchesSearch && matchesPrice);
                     el.style.display = ok ? '' : 'none';
                     if (ok) visible++;
                 });
@@ -843,11 +1137,20 @@
                 const countEl = document.getElementById('posVisibleCount');
                 if (countEl) {
                     const total = products.length;
-                    const filtering = !!search || (selectedCategory !== 'all');
+                    const filtering = !!search || (selectedCategory !== 'all') || activePriceFilterKey !== 'all';
                     countEl.textContent = filtering ? (`Showing ${visible} of ${total}`) : (`${total} items`);
                 }
                 const emptyEl = document.getElementById('posNoResults');
                 if (emptyEl) emptyEl.classList.toggle('d-none', visible !== 0);
+            }
+
+            function setPriceFilter(key){
+                activePriceFilterKey = priceFilters[key] ? key : 'all';
+                document.querySelectorAll('.pos-filter-chip').forEach(chip => {
+                    const chipKey = chip.getAttribute('data-chip') || 'all';
+                    chip.classList.toggle('active', chipKey === activePriceFilterKey);
+                });
+                applyFilters();
             }
 
             function applyCatalogPrices(orderType){
@@ -908,6 +1211,7 @@
                 if (roTop) roTop.textContent = '0.00';
                 const cart = document.getElementById('posCartItems');
                 if (cart) cart.innerHTML = '<div class="list-group-item text-muted">No items added yet.</div>';
+                updateItemCount(0);
             }
 
             async function refresh(){
@@ -951,11 +1255,21 @@
 
                 // Default POS payments to rounded rupee amount with roundoff preview
                 updateRoundoffPreview(remainingUi);
+                updateOrderSummary(orderNumber, getOrderTypeName(parseInt(data.orderType || '1')), remainingUi);
+                updateDetailsPanel({
+                    customerName: data.customerName,
+                    customerPhone: data.customerPhone,
+                    customerEmail: data.customerEmail,
+                    customerAddress: data.customerAddress,
+                    specialInstructions: data.specialInstructions
+                });
 
                 const cart = document.getElementById('posCartItems');
+                const items = (data.items || []).filter(x => x && x.orderItemId);
+                const qtyTotal = items.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+                updateItemCount(qtyTotal);
                 if (cart) {
                     cart.innerHTML = '';
-                    const items = (data.items || []).filter(x => x && x.orderItemId);
                     if (!items.length) {
                         const empty = document.createElement('div');
                         empty.className = 'list-group-item text-muted';
@@ -992,6 +1306,8 @@
                         });
                     }
                 }
+
+                applyFilters();
 
                 // Keep payment amount aligned to remaining (professional roundoff behavior):
                 // default Amount to nearest rupee (unless cashier manually overrides).
@@ -1168,6 +1484,8 @@
                 setOrderStateBadge('NEW');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
                 document.getElementById('posSearch')?.focus();
+                updateOrderSummary('—', 'Takeout / Delivery', 0);
+                resetDetailsPanel();
             }
 
             async function submitCreateForm(e){
@@ -1215,6 +1533,14 @@
                     document.getElementById('posOrderId')?.setAttribute('value', String(orderId));
                     const typeDisplay = document.getElementById('posOrderTypeDisplay');
                     if (typeDisplay) typeDisplay.textContent = getOrderTypeName(orderType);
+                    updateOrderSummary(orderNumber, getOrderTypeName(orderType), 0);
+                    updateDetailsPanel({
+                        customerName: formData.get('CustomerName')?.toString() || '',
+                        customerPhone: formData.get('CustomerPhone')?.toString() || '',
+                        customerEmail: formData.get('CustomerEmailId')?.toString() || '',
+                        customerAddress: formData.get('CustomerAddress')?.toString() || '',
+                        specialInstructions: formData.get('SpecialInstructions')?.toString() || ''
+                    });
 
                     applyCatalogPrices(orderType);
                     toggleOrderSections(true);
@@ -1506,6 +1832,12 @@
             });
 
             document.getElementById('posSearch')?.addEventListener('input', applyFilters);
+            document.getElementById('posSearchChips')?.addEventListener('click', function(e){
+                const chip = e.target.closest('.pos-filter-chip');
+                if (!chip) return;
+                const key = chip.getAttribute('data-chip') || 'all';
+                setPriceFilter(key);
+            });
             document.getElementById('posToggleCategories')?.addEventListener('click', function(){
                 setCategoriesCollapsed(!categoriesCollapsed, true);
             });
@@ -1514,7 +1846,8 @@
             });
             document.getElementById('posClearFilters')?.addEventListener('click', function(){
                 selectedCategory = 'all';
-                document.getElementById('posSearch').value = '';
+                const searchInput = document.getElementById('posSearch');
+                if (searchInput) searchInput.value = '';
                 document.querySelectorAll('#posCategoryList [data-category]').forEach(x => x.classList.remove('active'));
                 document.querySelector('#posCategoryList [data-category="all"]')?.classList.add('active');
                 applyFilters();
@@ -1534,6 +1867,22 @@
             });
             document.getElementById('posPayBtnTop')?.addEventListener('click', function(){
                 document.getElementById('posPayBtn')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+            document.getElementById('posRightTabs')?.addEventListener('click', function(e){
+                const btn = e.target.closest('.nav-link');
+                if (!btn || btn.classList.contains('active')) return;
+                const target = btn.getAttribute('data-target');
+                document.querySelectorAll('#posRightTabs .nav-link').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                document.querySelectorAll('.tab-pane.pos-tab-pane').forEach(pane => {
+                    pane.classList.remove('show', 'active');
+                    pane.classList.add('fade');
+                });
+                const pane = document.querySelector(target);
+                if (pane) {
+                    pane.classList.add('show', 'active');
+                    pane.classList.remove('fade');
+                }
             });
 
             // Print popup action
@@ -1666,9 +2015,14 @@
                 updatePaymentFieldVisibility();
             });
 
-            applyFilters();
+            setPriceFilter(activePriceFilterKey);
             toggleOrderSections(!!orderId);
             updateTopBarSubtitle();
+            const initialType = document.getElementById('posOrderTypeDisplay')?.textContent || getOrderTypeName(parseInt(document.getElementById('posOrderType')?.value || '1'));
+            const initialRemaining = parseFloat(document.getElementById('posSummaryRemainingMini')?.textContent || '0') || 0;
+            updateOrderSummary(orderNumber, initialType, initialRemaining);
+            const initialItemCount = parseInt(document.getElementById('posSummaryItemCountMini')?.textContent || '0', 10) || 0;
+            updateItemCount(initialItemCount);
             updatePrintButton(!!(orderId && initialFullyPaid === 'true'));
             setOrderStateBadge(orderId ? (initialFullyPaid === 'true' ? 'PAID' : 'OPEN') : 'NEW');
             updatePaymentFieldVisibility();

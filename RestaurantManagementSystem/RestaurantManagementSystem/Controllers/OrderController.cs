@@ -126,6 +126,11 @@ namespace RestaurantManagementSystem.Controllers
                     totalAmount = order.TotalAmount,
                     paidAmount = order.PaidAmount,
                     remainingAmount = order.RemainingAmount,
+                    customerName = order.CustomerName,
+                    customerPhone = order.CustomerPhone,
+                    customerEmail = order.CustomerEmailId,
+                    customerAddress = order.CustomerAddress,
+                    specialInstructions = order.SpecialInstructions,
                     items = order.Items?.Where(i => i.Status != 5).Select(i => new
                     {
                         orderItemId = i.Id,
