@@ -1,5 +1,8 @@
 @model IReadOnlyCollection<RestaurantManagementSystem.Models.Authorization.NavigationMenuNode>
 @{
+    bool IsHomeNode(RestaurantManagementSystem.Models.Authorization.NavigationMenuNode node)
+        => string.Equals(node.DisplayName, "Home", StringComparison.OrdinalIgnoreCase);
+
     string ResolveUrl(RestaurantManagementSystem.Models.Authorization.NavigationMenuNode node)
     {
         if (!string.IsNullOrWhiteSpace(node.CustomUrl))
@@ -204,12 +207,19 @@
         {
             var url = ResolveUrl(root);
             <li class="nav-item">
-                <a class="nav-link text-white" href="@url" target="@(root.OpenInNewTab ? "_blank" : "_self")">
+                <a class="nav-link text-white" href="@url" target="@(root.OpenInNewTab ? "_blank" : "_self")" aria-label="@(IsHomeNode(root) ? "Home" : null)" title="@(IsHomeNode(root) ? "Home" : null)">
                     @if (!string.IsNullOrWhiteSpace(root.IconCss))
                     {
                         <i class="@root.IconCss"></i>
                     }
-                    @root.DisplayName
+                    @if (!IsHomeNode(root))
+                    {
+                        @root.DisplayName
+                    }
+                    else
+                    {
+                        <span class="visually-hidden">Home</span>
+                    }
                     @if (!string.IsNullOrWhiteSpace(root.ShortcutHint))
                     {
                         <span class="hotkey-badge ms-2">@root.ShortcutHint</span>
@@ -222,12 +232,19 @@
             var dropdownId = $"nav-{root.Code}";
             var orderedChildren = root.Children.OrderBy(c => c.DisplayOrder).ThenBy(c => c.DisplayName).ToList();
             <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle text-white" href="#" id="@dropdownId" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <a class="nav-link dropdown-toggle text-white" href="#" id="@dropdownId" role="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="@(IsHomeNode(root) ? "Home" : null)" title="@(IsHomeNode(root) ? "Home" : null)">
                     @if (!string.IsNullOrWhiteSpace(root.IconCss))
                     {
                         <i class="@root.IconCss"></i>
                     }
-                    @root.DisplayName
+                    @if (!IsHomeNode(root))
+                    {
+                        @root.DisplayName
+                    }
+                    else
+                    {
+                        <span class="visually-hidden">Home</span>
+                    }
                 </a>
                 <ul class="dropdown-menu shadow-lg" aria-labelledby="@dropdownId" style="border-top: 2px solid @DropdownAccent(root);">
                     @for (var i = 0; i < orderedChildren.Count; i++)
@@ -235,13 +252,20 @@
                         var child = orderedChildren[i];
                         var url = ResolveUrl(child);
                         <li>
-                            <a class="dropdown-item d-flex justify-content-between align-items-center" href="@url" target="@(child.OpenInNewTab ? "_blank" : "_self")">
+                            <a class="dropdown-item d-flex justify-content-between align-items-center" href="@url" target="@(child.OpenInNewTab ? "_blank" : "_self")" aria-label="@(IsHomeNode(child) ? "Home" : null)" title="@(IsHomeNode(child) ? "Home" : null)">
                                 <span>
                                     @if (!string.IsNullOrWhiteSpace(child.IconCss))
                                     {
                                         <i class="@child.IconCss"></i>
                                     }
-                                    @child.DisplayName
+                                    @if (!IsHomeNode(child))
+                                    {
+                                        @child.DisplayName
+                                    }
+                                    else
+                                    {
+                                        <span class="visually-hidden">Home</span>
+                                    }
                                 </span>
                                 @if (!string.IsNullOrWhiteSpace(child.ShortcutHint))
                                 {
