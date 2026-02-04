@@ -22,7 +22,7 @@
     <!-- Search and Filter Controls -->
     <div class="controls-section">
         <div class="row g-2">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <input type="text" id="menuItemSearch" class="form-control form-control-sm" placeholder="🔍 Search menu items...">
             </div>
             <div class="col-md-2">
@@ -30,9 +30,17 @@
                     <option value="all">All Categories</option>
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <select id="subCategoryFilter" class="form-select form-select-sm">
                     <option value="all">All SubCategories</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select id="priceTypeFilter" class="form-select form-select-sm" title="Select price type">
+                    <option value="base">Base Price</option>
+                    <option value="takeout">Takeout Price</option>
+                    <option value="delivery">Delivery Price</option>
+                    <option value="roomService">Room Service Price</option>
                 </select>
             </div>
             <div class="col-md-3">

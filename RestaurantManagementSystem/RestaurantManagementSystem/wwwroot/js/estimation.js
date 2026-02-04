@@ -2,6 +2,7 @@
 $(document).ready(function() {
     let menuData = [];
     let allSubCategories = [];
+    let priceType = (localStorage.getItem('estimationPriceType') || 'base');
     // Persist selected quantities across pagination/filtering
     const selectedQuantities = {}; // keyed by PLU (or name if PLU missing)
     
@@ -12,10 +13,62 @@ $(document).ready(function() {
     $('#menuItemSearch').on('input', debounce(filterItems, 300));
     $('#categoryFilter').on('change', onCategoryChange);
     $('#subCategoryFilter').on('change', filterItems);
+    $('#priceTypeFilter').on('change', onPriceTypeChange);
     $('#estimateBtn').on('click', generateEstimate);
     $('#clearEstimateBtn').on('click', clearEstimate);
     $('#printEstimateBtn').on('click', printEstimate);
     $(document).on('change', '.qty-input', validateQuantity);
+
+    // Initialize persisted price type selection
+    if ($('#priceTypeFilter').length) {
+        $('#priceTypeFilter').val(priceType);
+    }
+
+    function normalizeNullableNumber(v) {
+        if (v === null || v === undefined || v === '') return null;
+        const n = parseFloat(v);
+        return Number.isFinite(n) ? n : null;
+    }
+
+    function priceTypeLabel() {
+        switch (priceType) {
+            case 'takeout': return 'Takeout';
+            case 'delivery': return 'Delivery';
+            case 'roomService': return 'Room Service';
+            default: return 'Base';
+        }
+    }
+
+    function getSelectedUnitPrice(menuItem) {
+        if (!menuItem) return 0;
+        const base = normalizeNullableNumber(menuItem.basePrice);
+        const takeout = normalizeNullableNumber(menuItem.takeoutPrice);
+        const delivery = normalizeNullableNumber(menuItem.deliveryPrice);
+        const roomService = normalizeNullableNumber(menuItem.roomServicePrice);
+
+        let chosen = null;
+        switch (priceType) {
+            case 'takeout': chosen = takeout; break;
+            case 'delivery': chosen = delivery; break;
+            case 'roomService': chosen = roomService; break;
+            default: chosen = base; break;
+        }
+        // Fallback to base if selected price isn't provided
+        const finalPrice = (chosen === null) ? (base === null ? 0 : base) : chosen;
+        return Number.isFinite(finalPrice) ? finalPrice : 0;
+    }
+
+    function onPriceTypeChange() {
+        const newType = $('#priceTypeFilter').val() || 'base';
+        priceType = newType;
+        localStorage.setItem('estimationPriceType', priceType);
+
+        // Re-render menu list + recompute estimate if visible
+        filterItems();
+        if ($('.estimation-section').is(':visible')) {
+            generateEstimate(true);
+        }
+    }
     
     function debounce(func, wait) {
         let timeout;
@@ -49,7 +102,10 @@ $(document).ready(function() {
                         name: item.name || '',
                         category: item.category || 'Uncategorized',
                         subCategory: item.subCategory || '',
-                        price: parseFloat(item.price) || 0,
+                        basePrice: normalizeNullableNumber(item.price) ?? 0,
+                        takeoutPrice: normalizeNullableNumber(item.takeoutPrice),
+                        deliveryPrice: normalizeNullableNumber(item.deliveryPrice),
+                        roomServicePrice: normalizeNullableNumber(item.roomServicePrice),
                         categoryId: item.categoryId,
                         subCategoryId: item.subCategoryId,
                         isAvailable: item.isAvailable
@@ -99,13 +155,15 @@ $(document).ready(function() {
                 ? item.subCategory
                 : '-';
 
+            const displayPrice = getSelectedUnitPrice(item);
+
             const key = item.plu || item.name;
             const currentQty = selectedQuantities[key] || 0;
 
             tbody.append(`
-                <tr data-price="${item.price}" data-plu="${item.plu}">
+                <tr data-plu="${item.plu}" data-base-price="${item.basePrice}" data-takeout-price="${item.takeoutPrice ?? ''}" data-delivery-price="${item.deliveryPrice ?? ''}" data-roomservice-price="${item.roomServicePrice ?? ''}">
                     <td>${item.name}</td>
-                    <td>₹${item.price.toFixed(2)}</td>
+                    <td>₹${displayPrice.toFixed(2)}</td>
                     <td>${item.category}</td>
                     <td>${subCategoryDisplay}</td>
                     <td>${item.plu}</td>
@@ -180,7 +238,7 @@ $(document).ready(function() {
         renderMenuItems(filtered);
     }
     
-    function generateEstimate() {
+    function generateEstimate(silent = false) {
         const items = [];
         let total = 0;
         
@@ -192,17 +250,17 @@ $(document).ready(function() {
                 const menuItem = menuData.find(mi => (mi.plu && mi.plu === key) || mi.name === key);
                 if (!menuItem) continue;
                 const name = menuItem.name;
-                const price = parseFloat(menuItem.price) || 0;
+                const price = getSelectedUnitPrice(menuItem);
                 const subtotal = qty * price;
                 items.push({name, price, qty, subtotal});
                 total += subtotal;
             }
         }
         
-        renderEstimation(items, total);
+        renderEstimation(items, total, silent);
     }
     
-    function renderEstimation(items, total) {
+    function renderEstimation(items, total, silent = false) {
         const tbody = $('#estimationTableBody');
         tbody.empty();
         
@@ -236,11 +294,13 @@ $(document).ready(function() {
         $('#subtotalValue').text(`₹${total.toFixed(2)}`);
         $('#gstValue').text(`₹0.00`); // keep element for layout but show zero
         $('#grandTotalValue').text(`₹${grand.toFixed(2)}`);
-        $('#estimateMeta').text(`${items.length} item(s) • Updated ${new Date().toLocaleTimeString()}`);
+        $('#estimateMeta').text(`${items.length} item(s) • ${priceTypeLabel()} price • Updated ${new Date().toLocaleTimeString()}`);
         
         $('.estimation-section').show();
         $('#printEstimateBtn, #clearEstimateBtn').show();
-        showToast('Estimate generated successfully', 'success');
+        if (!silent) {
+            showToast('Estimate generated successfully', 'success');
+        }
     }
     
     function clearEstimate() {
@@ -295,7 +355,7 @@ $(document).ready(function() {
             <div class='doc-header'>
                 <h2>Restaurant Management System</h2>
                 <h3>ORDER ESTIMATE</h3>
-                <div class='meta'>Estimate #: ${estimateNo} | Date: ${date.toLocaleDateString()} | ${meta}</div>
+                <div class='meta'>Estimate #: ${estimateNo} | Date: ${date.toLocaleDateString()} | Price Type: ${priceTypeLabel()} | ${meta}</div>
             </div>
             <table><thead><tr><th>Item</th><th class='text-right'>Unit Price</th><th class='text-center'>Qty</th><th class='text-right'>Amount</th></tr></thead><tbody>${rowsHtml}</tbody></table>
             <div class='totals'>
@@ -329,11 +389,11 @@ $(document).ready(function() {
     }
     
     function showLoading() {
-        $('#menuItemsTableBody').html('<tr><td colspan="5" class="text-center"><div class="loading-spinner mx-auto"></div></td></tr>');
+        $('#menuItemsTableBody').html('<tr><td colspan="6" class="text-center"><div class="loading-spinner mx-auto"></div></td></tr>');
     }
     
     function showError(msg) {
-        $('#menuItemsTableBody').html(`<tr><td colspan="5" class="text-center text-danger">${msg}</td></tr>`);
+        $('#menuItemsTableBody').html(`<tr><td colspan="6" class="text-center text-danger">${msg}</td></tr>`);
     }
     
     function showToast(message, type = 'info') {
