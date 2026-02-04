@@ -880,7 +880,12 @@ END", connection))
 
                                         if (paymentStatus == 1) // Approved
                                         {
-                                            TempData["SuccessMessage"] = "Payment processed successfully.";
+                                            // For POS/AJAX flows, return JSON and avoid persisting TempData banners
+                                            // (otherwise the success banner can show up on the next full-page navigation).
+                                            if (!wantsJson)
+                                            {
+                                                TempData["SuccessMessage"] = "Payment processed successfully.";
+                                            }
                                             // If approved, attempt to mark order as completed when fully paid
                                             try
                                             {
