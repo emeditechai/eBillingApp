@@ -96,6 +96,26 @@
     @@media (min-width: 992px) {
       #mobileStickyTotals { display: none; }
     }
+
+    /* Order Details action bar alignment */
+    #orderPrimaryActions { align-items: center; }
+    #orderPrimaryActions .btn,
+    #orderPrimaryActions a.btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      white-space: nowrap;
+      min-height: 32px;
+    }
+    #orderPrimaryActions .btn .badge,
+    #orderPrimaryActions a.btn .badge { line-height: 1; }
+    #orderPrimaryActions .action-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      white-space: nowrap;
+    }
+    #orderPrimaryActions #orderSaveState { white-space: nowrap; }
   </style>
 }
 @{
@@ -172,7 +192,7 @@
               </button>
             </div>
         </form>
-        <div class="ms-auto d-flex flex-wrap align-items-end justify-content-end gap-2" id="orderPrimaryActions">
+        <div class="ms-auto d-flex flex-wrap align-items-center justify-content-end gap-2" id="orderPrimaryActions">
           <div class="btn-group" role="group" aria-label="Kitchen actions">
             <button type="button" id="fireItemsBtn" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#fireItemsModal">
               <i class="fas @fireButtonIcon"></i> @fireButtonLabel <span class="badge bg-warning text-dark" style="font-size: 0.65rem;">Ctrl+F</span>
@@ -181,19 +201,18 @@
             <a asp-action="KOTBill" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-info @(hasKOT ? "" : "btn-disabled")" title="@kotPrintLabel" target="_blank" rel="noopener noreferrer" aria-disabled="@(hasKOT? "false" : "true")"> <i class="fas fa-print"></i> @kotPrintLabel</a>
           </div>
 
-          <div class="d-flex flex-column align-items-end">
-            <div class="btn-group" role="group" aria-label="Order actions">
-              <button id="saveOrderBtn" class="btn btn-sm btn-primary" disabled="@(isFullyPaid ? "disabled" : null)">
-                <i class="fas fa-save"></i> Save <span class="badge bg-light text-dark" style="font-size: 0.65rem;">Ctrl+S</span>
-              </button>
-              <a id="paymentBtn" asp-controller="Payment" asp-action="Index" asp-route-id="@Model.Id" asp-route-fromBar="@(isBarOrder ? "true" : null)" class="@paymentClass" aria-disabled="@(isFullyPaid ? "true" : null)" tabindex="@(isFullyPaid ? "-1" : null)">
-                <i class="fas fa-credit-card"></i> Payment <span class="badge bg-light text-dark" style="font-size: 0.65rem;">Ctrl+P</span>
-              </a>
-            </div>
-            <div class="d-flex align-items-center gap-2 mt-1">
-              <span id="orderSaveState" class="small text-muted">Saved @Model.UpdatedAt.ToString("t")</span>
-              <span id="paymentRequirementsMsg" class="small text-danger d-none"></span>
-            </div>
+          <div class="btn-group" role="group" aria-label="Order actions">
+            <button id="saveOrderBtn" class="btn btn-sm btn-primary" disabled="@(isFullyPaid ? "disabled" : null)">
+              <i class="fas fa-save"></i> Save <span class="badge bg-light text-dark" style="font-size: 0.65rem;">Ctrl+S</span>
+            </button>
+            <a id="paymentBtn" asp-controller="Payment" asp-action="Index" asp-route-id="@Model.Id" asp-route-fromBar="@(isBarOrder ? "true" : null)" class="@paymentClass" aria-disabled="@(isFullyPaid ? "true" : null)" tabindex="@(isFullyPaid ? "-1" : null)">
+              <i class="fas fa-credit-card"></i> Payment <span class="badge bg-light text-dark" style="font-size: 0.65rem;">Ctrl+P</span>
+            </a>
+          </div>
+
+          <div class="action-meta">
+            <span id="orderSaveState" class="small text-muted">Saved @Model.UpdatedAt.ToString("t")</span>
+            <span id="paymentRequirementsMsg" class="small text-danger d-none"></span>
           </div>
 
           <div class="btn-group" role="group" aria-label="Navigation">
