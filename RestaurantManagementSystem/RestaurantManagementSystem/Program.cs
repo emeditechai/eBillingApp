@@ -56,6 +56,7 @@ namespace RestaurantManagementSystem
             builder.Services.AddScoped<AdminSetupService>();
             builder.Services.AddScoped<PasswordResetTool>();
             builder.Services.AddScoped<UrlEncryptionService>();
+            builder.Services.AddScoped<IEmailSender, DatabaseEmailSender>();
             builder.Services.AddScoped<IDayClosingService, DayClosingService>();
             // Hosted service for non-blocking admin initialization
             builder.Services.AddHostedService<AdminInitializationHostedService>();
