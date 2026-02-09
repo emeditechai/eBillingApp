@@ -1,0 +1,63 @@
+@model IEnumerable<RestaurantManagementSystem.Models.CounterMaster>
+@{
+    ViewData["Title"] = "Counter Master";
+}
+
+<h2 class="mb-4">Counter Master</h2>
+
+<a class="btn btn-success mb-3" asp-controller="Master" asp-action="CounterForm">
+    <i class="bi bi-plus-circle"></i> Add New
+</a>
+
+@if (TempData["ResultMessage"] != null)
+{
+    <div class="alert alert-info">@TempData["ResultMessage"]</div>
+}
+
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Counter Code</th>
+            <th>Counter Name</th>
+            <th>Status</th>
+            <th style="width: 260px;">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>@item.CounterCode</td>
+                <td>@item.CounterName</td>
+                <td>
+                    @if (item.IsActive)
+                    {
+                        <span class="badge bg-success">Active</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary">Deactive</span>
+                    }
+                </td>
+                <td>
+                    <a class="btn btn-info btn-sm" asp-controller="Master" asp-action="CounterForm" asp-route-id="@item.Id" asp-route-isView="true">View</a>
+                    <a class="btn btn-primary btn-sm" asp-controller="Master" asp-action="CounterForm" asp-route-id="@item.Id">Edit</a>
+
+                    <form class="d-inline" asp-controller="Master" asp-action="SetCounterStatus" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@item.Id" />
+                        <input type="hidden" name="isActive" value="@(!item.IsActive)" />
+                        @if (item.IsActive)
+                        {
+                            <button type="submit" class="btn btn-warning btn-sm">Deactivate</button>
+                        }
+                        else
+                        {
+                            <button type="submit" class="btn btn-success btn-sm">Activate</button>
+                        }
+                    </form>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

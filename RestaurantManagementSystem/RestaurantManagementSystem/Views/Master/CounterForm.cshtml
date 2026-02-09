@@ -1,0 +1,48 @@
+@model RestaurantManagementSystem.Models.CounterMaster
+@{
+    ViewData["Title"] = Model.Id == 0 ? "Add Counter" : "Edit Counter";
+}
+
+<h2 class="mb-4">@ViewData["Title"]</h2>
+
+<form asp-action="CounterForm" asp-controller="Master" method="post">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="Id" />
+
+    <div class="mb-3">
+        <label asp-for="CounterCode" class="form-label"></label>
+        <input asp-for="CounterCode" class="form-control" autocomplete="off" />
+        <span asp-validation-for="CounterCode" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="CounterName" class="form-label"></label>
+        <input asp-for="CounterName" class="form-control" autocomplete="off" />
+        <span asp-validation-for="CounterName" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3 form-check">
+        <input asp-for="IsActive" class="form-check-input" />
+        <label asp-for="IsActive" class="form-check-label"></label>
+    </div>
+
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="@Url.Action("CounterList", "Master")" class="btn btn-secondary">Back</a>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        $(document).ready(function () {
+            var isView = '@ViewBag.IsView' === 'True';
+            if (isView) {
+                $('#CounterCode').prop('disabled', true);
+                $('#CounterName').prop('disabled', true);
+                $('#IsActive').prop('disabled', true);
+                $('button[type=submit]').prop('disabled', true).addClass('disabled');
+            }
+        });
+    </script>
+}
