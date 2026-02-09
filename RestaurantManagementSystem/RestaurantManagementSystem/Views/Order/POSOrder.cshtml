@@ -6,6 +6,12 @@
     var catalog = Model?.Order?.AvailableMenuItems ?? new List<RestaurantManagementSystem.Models.MenuItem>();
     // Keep server-side work minimal; category list is hydrated client-side from catalog DOM.
     var categories = new List<dynamic>();
+
+    var posSelectedCounterDisplay = (ViewBag.PosSelectedCounterDisplay as string) ?? string.Empty;
+    var posRequireCounterSelection = (ViewBag.PosRequireCounterSelection is bool req) && req;
+    var posIsCounterRequired = (ViewBag.PosIsCounterRequired is bool cr) && cr;
+    var posCounters = (ViewBag.PosCounters as IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>)
+        ?? Enumerable.Empty<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
 }
 
 <style>
@@ -294,6 +300,17 @@
     <div class="pos-topbar">
         <div class="d-flex align-items-center gap-2">
             <div class="fw-bold">@ViewData["Title"]</div>
+            @if (posIsCounterRequired)
+            {
+                <span class="badge bg-light text-dark border" id="posCounterBadge" title="Selected counter">
+                    <i class="fas fa-cash-register me-1 text-primary"></i>
+                    <span class="text-muted">Counter:</span>
+                    <span class="fw-semibold" id="posCounterName">@(!string.IsNullOrWhiteSpace(posSelectedCounterDisplay) ? posSelectedCounterDisplay : "Not selected")</span>
+                </span>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="posChangeCounterBtn">
+                    Change
+                </button>
+            }
             <div class="text-muted small" id="posTopSubtitle">
                 @if (hasOrder)
                 {
@@ -332,6 +349,46 @@
     @if (TempData["ErrorMessage"] != null)
     {
         <div class="d-none" id="posInitErrorMsg">@TempData["ErrorMessage"]</div>
+    }
+
+    @if (posIsCounterRequired)
+    {
+        <!-- Counter Selection Modal (blocks until selection, if required) -->
+        <div class="modal fade" id="posCounterModal" tabindex="-1" aria-labelledby="posCounterModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="posCounterModalLabel">Select Counter</h5>
+                    </div>
+                    <div class="modal-body">
+                        @if (!posCounters.Any())
+                        {
+                            <div class="alert alert-warning mb-0">
+                                No active counters found. Please add counters in Counter Master.
+                            </div>
+                        }
+                        else
+                        {
+                            <label class="form-label">Counter</label>
+                            <select class="form-select" id="posCounterSelect">
+                                <option value="">-- Select Counter --</option>
+                                @foreach (var c in posCounters)
+                                {
+                                    <option value="@c.Value">@c.Text</option>
+                                }
+                            </select>
+                            <div class="form-text">Choose the counter to continue.</div>
+                            <div class="alert alert-danger d-none mt-2" id="posCounterErr"></div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" id="posCounterContinueBtn" @(!posCounters.Any() ? "disabled" : "")>
+                            Continue
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     }
 
     <div class="pos-main mt-3">
@@ -758,6 +815,7 @@
 
     <script>
         (function(){
+            const requireCounterSelection = @((posRequireCounterSelection) ? "true" : "false");
             let orderId = @((orderId ?? 0));
             let orderNumber = '@(Model?.OrderNumber ?? string.Empty)';
             const initialFullyPaid = @((Model?.Order?.IsFullyPaid == true) ? "true" : "false");
@@ -791,6 +849,93 @@
                 notes: document.getElementById('posDetailsNotes')
             };
 
+            const counterModalEl = document.getElementById('posCounterModal');
+            const counterSelectEl = document.getElementById('posCounterSelect');
+            const counterContinueBtn = document.getElementById('posCounterContinueBtn');
+            const counterChangeBtn = document.getElementById('posChangeCounterBtn');
+            const counterNameEl = document.getElementById('posCounterName');
+            const counterErrEl = document.getElementById('posCounterErr');
+            let counterModal = null;
+
+            function getAntiForgeryToken(){
+                return document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+            }
+
+            function showCounterError(msg){
+                if (!counterErrEl) return;
+                counterErrEl.textContent = msg || 'Please select a counter.';
+                counterErrEl.classList.remove('d-none');
+            }
+
+            function clearCounterError(){
+                if (!counterErrEl) return;
+                counterErrEl.textContent = '';
+                counterErrEl.classList.add('d-none');
+            }
+
+            function openCounterModal(force){
+                if (!counterModalEl || typeof bootstrap === 'undefined') return;
+                if (!counterModal) {
+                    counterModal = new bootstrap.Modal(counterModalEl, {
+                        backdrop: (force ? 'static' : true),
+                        keyboard: !force
+                    });
+                }
+                counterModal.show();
+            }
+
+            async function setCounter(counterId){
+                const token = getAntiForgeryToken();
+                const res = await fetch('/Order/SetPOSCounter', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                        'RequestVerificationToken': token
+                    },
+                    body: `counterId=${encodeURIComponent(counterId)}`
+                });
+
+                if (!res.ok) {
+                    let msg = 'Failed to set counter.';
+                    try {
+                        const data = await res.json();
+                        msg = data?.message || msg;
+                    } catch { }
+                    throw new Error(msg);
+                }
+
+                const data = await res.json();
+                if (!data?.success) throw new Error(data?.message || 'Failed to set counter.');
+                return data;
+            }
+
+            async function onContinueCounter(){
+                clearCounterError();
+                const counterId = counterSelectEl?.value;
+                if (!counterId) {
+                    showCounterError('Please select a counter to continue.');
+                    return;
+                }
+
+                if (counterContinueBtn) {
+                    counterContinueBtn.disabled = true;
+                    counterContinueBtn.textContent = 'Saving...';
+                }
+
+                try {
+                    const data = await setCounter(counterId);
+                    if (counterNameEl) counterNameEl.textContent = data.display || 'Selected';
+                    if (counterModal) counterModal.hide();
+                } catch (e) {
+                    showCounterError(e?.message || 'Failed to set counter.');
+                } finally {
+                    if (counterContinueBtn) {
+                        counterContinueBtn.disabled = false;
+                        counterContinueBtn.textContent = 'Continue';
+                    }
+                }
+            }
+
             function updateOrderSummary(orderNum, orderTypeName, remainingValue){
                 const orderText = orderNum && orderNum.trim() ? orderNum : '—';
                 const typeText = orderTypeName && orderTypeName.trim() ? orderTypeName : 'Takeout / Delivery';
@@ -799,6 +944,21 @@
                 if (summaryEls.type) summaryEls.type.textContent = typeText;
                 if (summaryEls.remaining) summaryEls.remaining.textContent = remainingText;
             }
+
+            // Counter selection bootstrapping
+            document.addEventListener('DOMContentLoaded', function(){
+                if (counterContinueBtn) counterContinueBtn.addEventListener('click', onContinueCounter);
+                if (counterChangeBtn) counterChangeBtn.addEventListener('click', function(){
+                    clearCounterError();
+                    openCounterModal(false);
+                });
+
+                if (requireCounterSelection === true || requireCounterSelection === 'true') {
+                    // Force selection before continuing
+                    clearCounterError();
+                    openCounterModal(true);
+                }
+            });
 
             function updateItemCount(count){
                 const safe = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;

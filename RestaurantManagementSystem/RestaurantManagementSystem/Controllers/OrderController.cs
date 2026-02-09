@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Memory;
 using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Filters;
@@ -13,6 +14,12 @@ namespace RestaurantManagementSystem.Controllers
     [Authorize]
     public partial class OrderController : Controller
     {
+        private const string PosSelectedCounterIdSessionKey = "POS.SelectedCounterId";
+        private const string PosSelectedCounterDisplaySessionKey = "POS.SelectedCounterDisplay";
+
+        private const string IsCounterRequiredCacheKey = "RestaurantSettings.IsCounterRequired";
+        private static readonly TimeSpan CounterRequiredCacheDuration = TimeSpan.FromMinutes(2);
+
         private readonly IConfiguration _configuration;
         private readonly string _connectionString;
         private readonly RestaurantManagementSystem.Services.UrlEncryptionService _encryptionService;
@@ -28,6 +35,72 @@ namespace RestaurantManagementSystem.Controllers
             _connectionString = _configuration.GetConnectionString("DefaultConnection");
             _encryptionService = encryptionService;
             _cache = cache;
+        }
+
+        private bool GetIsCounterRequiredForPos()
+        {
+            try
+            {
+                if (_cache != null && _cache.TryGetValue(IsCounterRequiredCacheKey, out bool cached))
+                {
+                    return cached;
+                }
+            }
+            catch
+            {
+                // ignore cache failures
+            }
+
+            bool isRequired = false;
+            try
+            {
+                using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+IF OBJECT_ID('dbo.RestaurantSettings','U') IS NULL
+BEGIN
+    SELECT CAST(0 AS bit);
+END
+ELSE
+BEGIN
+    SELECT TOP 1
+        CASE
+            WHEN COL_LENGTH('dbo.RestaurantSettings','IsCounterRequired') IS NULL THEN CAST(0 AS bit)
+            ELSE CAST(ISNULL(IsCounterRequired, 0) AS bit)
+        END
+    FROM dbo.RestaurantSettings
+    ORDER BY Id DESC;
+END", connection))
+                    {
+                        var val = cmd.ExecuteScalar();
+                        if (val != null && val != DBNull.Value)
+                        {
+                            isRequired = Convert.ToBoolean(val);
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // If anything fails (missing table/column, DB down), default to not required so we don't break POS.
+                isRequired = false;
+            }
+
+            try
+            {
+                _cache?.Set(IsCounterRequiredCacheKey, isRequired, new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = CounterRequiredCacheDuration,
+                    SlidingExpiration = CounterRequiredCacheDuration
+                });
+            }
+            catch
+            {
+                // ignore cache failures
+            }
+
+            return isRequired;
         }
 
         private List<int> GetAllowedOrderTypeIdsFromSettings()
@@ -2568,6 +2641,50 @@ namespace RestaurantManagementSystem.Controllers
         {
             ViewData["Title"] = "POS Order";
 
+            var isCounterRequired = GetIsCounterRequiredForPos();
+
+            // Defaults (no counter UI unless explicitly required)
+            ViewBag.PosIsCounterRequired = isCounterRequired;
+            ViewBag.PosRequireCounterSelection = false;
+            ViewBag.PosCounters = new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+            ViewBag.PosSelectedCounterId = 0;
+            ViewBag.PosSelectedCounterDisplay = string.Empty;
+
+            if (isCounterRequired)
+            {
+                // Load counters for selection modal + selected counter display
+                var activeCounters = GetActiveCountersSelectList();
+                var selectedCounterId = HttpContext?.Session?.GetInt32(PosSelectedCounterIdSessionKey);
+                var selectedCounterDisplay = HttpContext?.Session?.GetString(PosSelectedCounterDisplaySessionKey);
+
+                // If counter is required but session counter is no longer valid/active, clear it.
+                if (selectedCounterId.HasValue && selectedCounterId.Value > 0)
+                {
+                    var stillActive = activeCounters.Any(x => x.Value == selectedCounterId.Value.ToString());
+                    if (!stillActive)
+                    {
+                        try
+                        {
+                            HttpContext?.Session?.Remove(PosSelectedCounterIdSessionKey);
+                            HttpContext?.Session?.Remove(PosSelectedCounterDisplaySessionKey);
+                        }
+                        catch { }
+                        selectedCounterId = null;
+                        selectedCounterDisplay = null;
+                    }
+                }
+
+                if (selectedCounterId.HasValue && string.IsNullOrWhiteSpace(selectedCounterDisplay))
+                {
+                    selectedCounterDisplay = activeCounters.FirstOrDefault(x => x.Value == selectedCounterId.Value.ToString())?.Text;
+                }
+
+                ViewBag.PosCounters = activeCounters;
+                ViewBag.PosSelectedCounterId = selectedCounterId ?? 0;
+                ViewBag.PosSelectedCounterDisplay = selectedCounterDisplay ?? string.Empty;
+                ViewBag.PosRequireCounterSelection = (!selectedCounterId.HasValue || selectedCounterId.Value <= 0);
+            }
+
             var page = new RestaurantManagementSystem.Models.PosOrderPageViewModel();
 
             // Always load menu catalog for POS UI (even before an order is created)
@@ -2604,6 +2721,98 @@ namespace RestaurantManagementSystem.Controllers
             }
 
             return View("POSOrder", page);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [RequirePermission("NAV_ORDERS_CREATE", PermissionAction.Add)]
+        public IActionResult SetPOSCounter(int counterId)
+        {
+            if (counterId <= 0) return BadRequest(new { success = false, message = "Invalid counter." });
+
+            try
+            {
+                using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        SELECT TOP 1 Id, CounterCode, CounterName, IsActive
+                        FROM dbo.Counters
+                        WHERE Id = @Id", connection))
+                    {
+                        cmd.Parameters.AddWithValue("@Id", counterId);
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            if (!reader.Read())
+                            {
+                                return NotFound(new { success = false, message = "Counter not found." });
+                            }
+
+                            var isActiveOrd = reader.GetOrdinal("IsActive");
+                            var isActive = !reader.IsDBNull(isActiveOrd) && reader.GetBoolean(isActiveOrd);
+                            if (!isActive)
+                            {
+                                return BadRequest(new { success = false, message = "Selected counter is inactive." });
+                            }
+
+                            var id = reader.GetInt32(reader.GetOrdinal("Id"));
+                            var code = reader.IsDBNull(reader.GetOrdinal("CounterCode")) ? string.Empty : reader.GetString(reader.GetOrdinal("CounterCode"));
+                            var name = reader.IsDBNull(reader.GetOrdinal("CounterName")) ? string.Empty : reader.GetString(reader.GetOrdinal("CounterName"));
+                            var display = $"{code}-{name}".Trim('-');
+
+                            HttpContext.Session.SetInt32(PosSelectedCounterIdSessionKey, id);
+                            HttpContext.Session.SetString(PosSelectedCounterDisplaySessionKey, display);
+
+                            return Json(new { success = true, counterId = id, display });
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                return StatusCode(500, new { success = false, message = "Failed to set counter." });
+            }
+        }
+
+        private List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> GetActiveCountersSelectList()
+        {
+            var list = new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+            try
+            {
+                using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        SELECT Id, CounterCode, CounterName
+                        FROM dbo.Counters
+                        WHERE IsActive = 1
+                        ORDER BY CounterCode", connection))
+                    {
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                var id = reader.GetInt32(0);
+                                var code = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+                                var name = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
+                                var display = $"{code}-{name}".Trim('-');
+
+                                list.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem
+                                {
+                                    Value = id.ToString(),
+                                    Text = display
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // If counters table doesn't exist yet or any error, return empty list.
+            }
+
+            return list;
         }
 
         private void LoadPosPaymentSetup(RestaurantManagementSystem.Models.PosOrderPageViewModel page, OrderViewModel order)
@@ -2697,6 +2906,16 @@ namespace RestaurantManagementSystem.Controllers
             if (model == null)
             {
                 return BadRequest("Invalid request.");
+            }
+
+            // Enforce counter selection when Restaurant Settings requires it
+            if (GetIsCounterRequiredForPos())
+            {
+                var selectedCounterId = HttpContext?.Session?.GetInt32(PosSelectedCounterIdSessionKey);
+                if (!selectedCounterId.HasValue || selectedCounterId.Value <= 0)
+                {
+                    ModelState.AddModelError(string.Empty, "Please select a counter to continue.");
+                }
             }
 
             if (model.OrderType != 1 && model.OrderType != 2)
@@ -2847,6 +3066,16 @@ namespace RestaurantManagementSystem.Controllers
             if (model == null)
             {
                 return Json(new { success = false, message = "Invalid request." });
+            }
+
+            // Enforce counter selection when Restaurant Settings requires it
+            if (GetIsCounterRequiredForPos())
+            {
+                var selectedCounterId = HttpContext?.Session?.GetInt32(PosSelectedCounterIdSessionKey);
+                if (!selectedCounterId.HasValue || selectedCounterId.Value <= 0)
+                {
+                    return Json(new { success = false, message = "Please select a counter to continue." });
+                }
             }
 
             if (model.OrderType != 1 && model.OrderType != 2)

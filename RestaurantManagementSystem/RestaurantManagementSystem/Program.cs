@@ -23,6 +23,17 @@ namespace RestaurantManagementSystem
             builder.Services.AddMemoryCache();
             builder.Services.AddHttpContextAccessor();
 
+            // Session storage (used for POS counter selection and other per-user state)
+            builder.Services.AddDistributedMemoryCache();
+            builder.Services.AddSession(options =>
+            {
+                options.IdleTimeout = TimeSpan.FromHours(12);
+                options.Cookie.HttpOnly = true;
+                options.Cookie.IsEssential = true;
+                options.Cookie.SameSite = SameSiteMode.Lax;
+                options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            });
+
             // Add authentication services
             builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
                 .AddCookie(options =>
@@ -96,6 +107,9 @@ namespace RestaurantManagementSystem
             app.UseHttpsRedirection();
             app.UseStaticFiles();
             app.UseRouting();
+
+            app.UseSession();
+
             app.UseMiddleware<DatabaseColumnFixMiddleware>();
             app.UseAuthentication();
             app.UseAuthorization();

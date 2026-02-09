@@ -140,6 +140,10 @@ namespace RestaurantManagementSystem.Controllers
 
                 // Bust cache so Order/Create sees changes immediately for all users
                 _cache.Set(OrderTypeHelper.AllowedOrderTypesCacheVersionKey, Guid.NewGuid().ToString("N"));
+
+                // Bust POS counter required cache so POSOrder reflects changes immediately
+                _cache.Remove("RestaurantSettings.IsCounterRequired");
+                _cache.Set("RestaurantSettings.IsCounterRequired", settings.IsCounterRequired);
                 
                 TempData["SuccessMessage"] = "Restaurant settings updated successfully.";
                 return RedirectToAction(nameof(Index));
