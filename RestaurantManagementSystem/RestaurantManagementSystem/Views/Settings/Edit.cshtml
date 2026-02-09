@@ -339,6 +339,19 @@
                                             <div class="help-text">When enabled, KOT (Kitchen Order Ticket) bills will be printed as part of order processing</div>
                                         </div>
                                     </div>
+                                    <div class="col-md-4">
+                                        <div class="form-group mb-3">
+                                            <label asp-for="IsCounterRequired" class="control-label"></label>
+                                            <div class="form-check form-switch">
+                                                <input asp-for="IsCounterRequired" class="form-check-input" type="checkbox" id="isCounterRequired">
+                                                <label class="form-check-label" for="isCounterRequired">
+                                                    Counter required
+                                                </label>
+                                            </div>
+                                            <span asp-validation-for="IsCounterRequired" class="field-validation-error"></span>
+                                            <div class="help-text">When enabled, counter selection will be required where applicable</div>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="row">
                                     <div class="col-md-4">

@@ -20,6 +20,7 @@ BEGIN
         [LogoPath] NVARCHAR(200) NULL,
         [CurrencySymbol] NVARCHAR(50) NOT NULL DEFAULT N'₹',
         [DefaultGSTPercentage] DECIMAL(5,2) NOT NULL DEFAULT 5.00,
+        [IsCounterRequired] BIT NOT NULL DEFAULT(0),
         [CreatedAt] DATETIME NOT NULL DEFAULT GETDATE(),
         [UpdatedAt] DATETIME NOT NULL DEFAULT GETDATE()
     );
