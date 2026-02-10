@@ -8,6 +8,7 @@
     var categories = new List<dynamic>();
 
     var posSelectedCounterDisplay = (ViewBag.PosSelectedCounterDisplay as string) ?? string.Empty;
+    var posSelectedCounterId = (ViewBag.PosSelectedCounterId is int cid) ? cid : 0;
     var posRequireCounterSelection = (ViewBag.PosRequireCounterSelection is bool req) && req;
     var posIsCounterRequired = (ViewBag.PosIsCounterRequired is bool cr) && cr;
     var posCounters = (ViewBag.PosCounters as IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>)
@@ -533,6 +534,7 @@
                     </div>
                 </div>
                 <form asp-action="CreatePOSOrder" method="post" autocomplete="off" id="posCreateForm" style="display:@(hasOrder ? "none" : "block")">
+                    <input type="hidden" name="SelectedCounterId" id="posSelectedCounterId" value="@(posSelectedCounterId > 0 ? posSelectedCounterId.ToString() : string.Empty)" />
                     <div class="row g-2">
                         <div class="col-12">
                             <label class="form-label">Order Type</label>
@@ -855,6 +857,8 @@
             const counterChangeBtn = document.getElementById('posChangeCounterBtn');
             const counterNameEl = document.getElementById('posCounterName');
             const counterErrEl = document.getElementById('posCounterErr');
+            const selectedCounterIdEl = document.getElementById('posSelectedCounterId');
+            let currentCounterId = parseInt(selectedCounterIdEl?.value || '0', 10) || 0;
             let counterModal = null;
 
             function getAntiForgeryToken(){
@@ -925,6 +929,8 @@
                 try {
                     const data = await setCounter(counterId);
                     if (counterNameEl) counterNameEl.textContent = data.display || 'Selected';
+                    currentCounterId = parseInt(data.counterId || counterId || '0', 10) || 0;
+                    if (selectedCounterIdEl) selectedCounterIdEl.value = currentCounterId ? String(currentCounterId) : '';
                     if (counterModal) counterModal.hide();
                 } catch (e) {
                     showCounterError(e?.message || 'Failed to set counter.');
@@ -1624,6 +1630,12 @@
                 const form = document.getElementById('posCreateForm');
                 if (!form) return;
                 form.reset();
+
+                // Preserve counter selection across "Next Order" reset
+                if (selectedCounterIdEl) {
+                    selectedCounterIdEl.value = currentCounterId ? String(currentCounterId) : '';
+                }
+
                 if ($type) {
                     $type.value = '1';
                     $type.dispatchEvent(new Event('change'));
@@ -1669,7 +1681,7 @@
                     payload.set(key, typeof value === 'string' ? value : value.toString());
                 });
 
-                try {
+                const doCreate = async () => {
                     const res = await fetch('/Order/CreatePOSOrderAjax', {
                         method: 'POST',
                         headers: {
@@ -1680,8 +1692,28 @@
                         },
                         body: payload.toString()
                     });
-
                     const data = await res.json().catch(() => null);
+                    return { res, data };
+                };
+
+                try {
+                    let attempt = 0;
+                    let result = await doCreate();
+                    attempt++;
+
+                    // If the server says counter wasn't selected but the UI has one,
+                    // re-hydrate session and retry once.
+                    if ((!result.res.ok || !result.data || !result.data.success)
+                        && posIsCounterRequired
+                        && currentCounterId > 0
+                        && (result.data?.message || '').toString().toLowerCase().includes('select a counter')) {
+                        try { await setCounter(currentCounterId); } catch { }
+                        result = await doCreate();
+                        attempt++;
+                    }
+
+                    const res = result.res;
+                    const data = result.data;
                     if (!res.ok || !data || !data.success) {
                         const msg = (data && data.message) ? data.message : 'Unable to create order.';
                         showCreateMsg(msg, true);

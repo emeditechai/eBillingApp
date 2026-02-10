@@ -2815,6 +2815,63 @@ END", connection))
             return list;
         }
 
+        private bool TryHydrateAndStorePosCounter(int counterId, out int storedCounterId, out string storedDisplay)
+        {
+            storedCounterId = 0;
+            storedDisplay = string.Empty;
+
+            if (counterId <= 0) return false;
+
+            try
+            {
+                using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        IF OBJECT_ID('dbo.Counters','U') IS NULL
+                        BEGIN
+                            SELECT CAST(NULL AS int) AS Id, CAST(NULL AS nvarchar(50)) AS CounterCode, CAST(NULL AS nvarchar(100)) AS CounterName, CAST(0 AS bit) AS IsActive;
+                        END
+                        ELSE
+                        BEGIN
+                            SELECT TOP 1 Id, CounterCode, CounterName, ISNULL(IsActive, 1) AS IsActive
+                            FROM dbo.Counters
+                            WHERE Id = @Id;
+                        END", connection))
+                    {
+                        cmd.Parameters.AddWithValue("@Id", counterId);
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            if (!reader.Read()) return false;
+
+                            var idOrd = reader.GetOrdinal("Id");
+                            if (reader.IsDBNull(idOrd)) return false;
+
+                            var isActiveOrd = reader.GetOrdinal("IsActive");
+                            var isActive = !reader.IsDBNull(isActiveOrd) && reader.GetBoolean(isActiveOrd);
+                            if (!isActive) return false;
+
+                            var id = reader.GetInt32(idOrd);
+                            var code = reader.IsDBNull(reader.GetOrdinal("CounterCode")) ? string.Empty : reader.GetString(reader.GetOrdinal("CounterCode"));
+                            var name = reader.IsDBNull(reader.GetOrdinal("CounterName")) ? string.Empty : reader.GetString(reader.GetOrdinal("CounterName"));
+                            var display = $"{code}-{name}".Trim('-');
+
+                            HttpContext?.Session?.SetInt32(PosSelectedCounterIdSessionKey, id);
+                            HttpContext?.Session?.SetString(PosSelectedCounterDisplaySessionKey, display);
+
+                            storedCounterId = id;
+                            storedDisplay = display;
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private void LoadPosPaymentSetup(RestaurantManagementSystem.Models.PosOrderPageViewModel page, OrderViewModel order)
         {
             if (page == null || order == null) return;
@@ -2908,10 +2965,22 @@ END", connection))
                 return BadRequest("Invalid request.");
             }
 
+            var isCounterRequired = GetIsCounterRequiredForPos();
+            int? selectedCounterId = null;
+
             // Enforce counter selection when Restaurant Settings requires it
-            if (GetIsCounterRequiredForPos())
+            if (isCounterRequired)
             {
-                var selectedCounterId = HttpContext?.Session?.GetInt32(PosSelectedCounterIdSessionKey);
+                selectedCounterId = HttpContext?.Session?.GetInt32(PosSelectedCounterIdSessionKey);
+                if (!selectedCounterId.HasValue || selectedCounterId.Value <= 0)
+                {
+                    if (model?.SelectedCounterId.HasValue == true && model.SelectedCounterId.Value > 0
+                        && TryHydrateAndStorePosCounter(model.SelectedCounterId.Value, out var storedId, out _))
+                    {
+                        selectedCounterId = storedId;
+                    }
+                }
+
                 if (!selectedCounterId.HasValue || selectedCounterId.Value <= 0)
                 {
                     ModelState.AddModelError(string.Empty, "Please select a counter to continue.");
@@ -2995,6 +3064,57 @@ END", connection))
                             }
                             catch { /* non-fatal */ }
 
+                            // Persist selected CounterId for POS-created orders (schema-safe, POS-only)
+                            try
+                            {
+                                if (isCounterRequired && selectedCounterId.HasValue && selectedCounterId.Value > 0)
+                                {
+                                    // Ensure a counter column exists on Orders (prefer CounterID)
+                                    try
+                                    {
+                                        using (var ensureCounterColCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                            IF COL_LENGTH('dbo.Orders','CounterID') IS NULL AND COL_LENGTH('dbo.Orders','CounterId') IS NULL
+                                            BEGIN
+                                                ALTER TABLE dbo.Orders ADD CounterID int NULL;
+                                            END", connection, transaction))
+                                        {
+                                            ensureCounterColCmd.ExecuteNonQuery();
+                                        }
+                                    }
+                                    catch { /* non-fatal */ }
+
+                                    using (var setCounterCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                        IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'CounterID')
+                                        BEGIN
+                                            IF OBJECT_ID('dbo.Counters','U') IS NULL
+                                            BEGIN
+                                                UPDATE dbo.Orders SET CounterID = @CounterId WHERE Id = @OrderId;
+                                            END
+                                            ELSE IF EXISTS (SELECT 1 FROM dbo.Counters WHERE Id = @CounterId AND ISNULL(IsActive, 1) = 1)
+                                            BEGIN
+                                                UPDATE dbo.Orders SET CounterID = @CounterId WHERE Id = @OrderId;
+                                            END
+                                        END
+                                        ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'CounterId')
+                                        BEGIN
+                                            IF OBJECT_ID('dbo.Counters','U') IS NULL
+                                            BEGIN
+                                                UPDATE dbo.Orders SET CounterId = @CounterId WHERE Id = @OrderId;
+                                            END
+                                            ELSE IF EXISTS (SELECT 1 FROM dbo.Counters WHERE Id = @CounterId AND ISNULL(IsActive, 1) = 1)
+                                            BEGIN
+                                                UPDATE dbo.Orders SET CounterId = @CounterId WHERE Id = @OrderId;
+                                            END
+                                        END", connection, transaction))
+                                    {
+                                        setCounterCmd.Parameters.AddWithValue("@CounterId", selectedCounterId.Value);
+                                        setCounterCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                        setCounterCmd.ExecuteNonQuery();
+                                    }
+                                }
+                            }
+                            catch { /* non-fatal */ }
+
                             // For POS Takeout/Delivery, default to Foods context (schema-safe)
                             try
                             {
@@ -3068,10 +3188,22 @@ END", connection))
                 return Json(new { success = false, message = "Invalid request." });
             }
 
+            var isCounterRequired = GetIsCounterRequiredForPos();
+            int? selectedCounterId = null;
+
             // Enforce counter selection when Restaurant Settings requires it
-            if (GetIsCounterRequiredForPos())
+            if (isCounterRequired)
             {
-                var selectedCounterId = HttpContext?.Session?.GetInt32(PosSelectedCounterIdSessionKey);
+                selectedCounterId = HttpContext?.Session?.GetInt32(PosSelectedCounterIdSessionKey);
+                if (!selectedCounterId.HasValue || selectedCounterId.Value <= 0)
+                {
+                    if (model?.SelectedCounterId.HasValue == true && model.SelectedCounterId.Value > 0
+                        && TryHydrateAndStorePosCounter(model.SelectedCounterId.Value, out var storedId, out _))
+                    {
+                        selectedCounterId = storedId;
+                    }
+                }
+
                 if (!selectedCounterId.HasValue || selectedCounterId.Value <= 0)
                 {
                     return Json(new { success = false, message = "Please select a counter to continue." });
@@ -3151,6 +3283,57 @@ END", connection))
                                     setCashierCmd.Parameters.AddWithValue("@CashierId", GetCurrentUserId());
                                     setCashierCmd.Parameters.AddWithValue("@OrderId", orderId);
                                     setCashierCmd.ExecuteNonQuery();
+                                }
+                            }
+                            catch { /* non-fatal */ }
+
+                            // Persist selected CounterId for POS-created orders (schema-safe, POS-only)
+                            try
+                            {
+                                if (isCounterRequired && selectedCounterId.HasValue && selectedCounterId.Value > 0)
+                                {
+                                    // Ensure a counter column exists on Orders (prefer CounterID)
+                                    try
+                                    {
+                                        using (var ensureCounterColCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                            IF COL_LENGTH('dbo.Orders','CounterID') IS NULL AND COL_LENGTH('dbo.Orders','CounterId') IS NULL
+                                            BEGIN
+                                                ALTER TABLE dbo.Orders ADD CounterID int NULL;
+                                            END", connection, transaction))
+                                        {
+                                            ensureCounterColCmd.ExecuteNonQuery();
+                                        }
+                                    }
+                                    catch { /* non-fatal */ }
+
+                                    using (var setCounterCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                        IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'CounterID')
+                                        BEGIN
+                                            IF OBJECT_ID('dbo.Counters','U') IS NULL
+                                            BEGIN
+                                                UPDATE dbo.Orders SET CounterID = @CounterId WHERE Id = @OrderId;
+                                            END
+                                            ELSE IF EXISTS (SELECT 1 FROM dbo.Counters WHERE Id = @CounterId AND ISNULL(IsActive, 1) = 1)
+                                            BEGIN
+                                                UPDATE dbo.Orders SET CounterID = @CounterId WHERE Id = @OrderId;
+                                            END
+                                        END
+                                        ELSE IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Orders') AND name = 'CounterId')
+                                        BEGIN
+                                            IF OBJECT_ID('dbo.Counters','U') IS NULL
+                                            BEGIN
+                                                UPDATE dbo.Orders SET CounterId = @CounterId WHERE Id = @OrderId;
+                                            END
+                                            ELSE IF EXISTS (SELECT 1 FROM dbo.Counters WHERE Id = @CounterId AND ISNULL(IsActive, 1) = 1)
+                                            BEGIN
+                                                UPDATE dbo.Orders SET CounterId = @CounterId WHERE Id = @OrderId;
+                                            END
+                                        END", connection, transaction))
+                                    {
+                                        setCounterCmd.Parameters.AddWithValue("@CounterId", selectedCounterId.Value);
+                                        setCounterCmd.Parameters.AddWithValue("@OrderId", orderId);
+                                        setCounterCmd.ExecuteNonQuery();
+                                    }
                                 }
                             }
                             catch { /* non-fatal */ }

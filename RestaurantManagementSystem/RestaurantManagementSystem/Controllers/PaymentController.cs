@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using RestaurantManagementSystem.Models;
 using RestaurantManagementSystem.Services;
@@ -4814,6 +4815,220 @@ END", connection))
                     }
                 }
                 ViewBag.IsBarOrder = isBarOrder;
+
+                // POS Counter display (schema-safe; only shows if Orders has a counter column and Counters exists)
+                try
+                {
+                    string counterDisplay = string.Empty;
+                    int counterIdValue = 0;
+                    using (var connection = new SqlConnection(_connectionString))
+                    {
+                        connection.Open();
+                        // Step 1: read stored CounterId from Orders (support CounterID/CounterId)
+                        using (var idCmd = new SqlCommand(@"
+                            DECLARE @cid int = NULL;
+
+                            IF COL_LENGTH('dbo.Orders','CounterID') IS NOT NULL
+                                SELECT @cid = TRY_CONVERT(int, CounterID) FROM dbo.Orders WHERE Id = @OrderId;
+                            ELSE IF COL_LENGTH('dbo.Orders','CounterId') IS NOT NULL
+                                SELECT @cid = TRY_CONVERT(int, CounterId) FROM dbo.Orders WHERE Id = @OrderId;
+                            ELSE IF COL_LENGTH('dbo.Orders','Counter_Id') IS NOT NULL
+                                SELECT @cid = TRY_CONVERT(int, Counter_Id) FROM dbo.Orders WHERE Id = @OrderId;
+                            ELSE IF COL_LENGTH('dbo.Orders','Counter') IS NOT NULL
+                                SELECT @cid = TRY_CONVERT(int, Counter) FROM dbo.Orders WHERE Id = @OrderId;
+
+                            IF @cid IS NULL
+                            BEGIN
+                                IF COL_LENGTH('Orders','CounterID') IS NOT NULL
+                                    SELECT @cid = TRY_CONVERT(int, CounterID) FROM Orders WHERE Id = @OrderId;
+                                ELSE IF COL_LENGTH('Orders','CounterId') IS NOT NULL
+                                    SELECT @cid = TRY_CONVERT(int, CounterId) FROM Orders WHERE Id = @OrderId;
+                                ELSE IF COL_LENGTH('Orders','Counter_Id') IS NOT NULL
+                                    SELECT @cid = TRY_CONVERT(int, Counter_Id) FROM Orders WHERE Id = @OrderId;
+                                ELSE IF COL_LENGTH('Orders','Counter') IS NOT NULL
+                                    SELECT @cid = TRY_CONVERT(int, Counter) FROM Orders WHERE Id = @OrderId;
+                            END
+
+                            SELECT ISNULL(@cid, 0);", connection))
+                        {
+                            idCmd.Parameters.AddWithValue("@OrderId", orderId);
+                            var obj = idCmd.ExecuteScalar();
+                            if (obj != null && obj != DBNull.Value)
+                            {
+                                counterIdValue = Convert.ToInt32(obj);
+                            }
+                        }
+
+                        // Step 2: resolve Counter display from Counters (support PK column name variants)
+                        if (counterIdValue > 0)
+                        {
+                            using (var cmd = new SqlCommand(@"
+                                IF OBJECT_ID('dbo.Counters','U') IS NULL
+                                BEGIN
+                                    IF OBJECT_ID('Counters','U') IS NULL
+                                    BEGIN
+                                        SELECT CAST(NULL AS nvarchar(200)) AS CounterDisplay;
+                                    END
+                                    ELSE IF COL_LENGTH('Counters','Id') IS NOT NULL
+                                    BEGIN
+                                        SELECT TOP 1
+                                            LTRIM(RTRIM(
+                                                CONCAT(
+                                                    ISNULL(CounterCode, ''),
+                                                    CASE
+                                                        WHEN ISNULL(CounterCode,'') <> '' AND ISNULL(CounterName,'') <> '' THEN '-'
+                                                        ELSE ''
+                                                    END,
+                                                    ISNULL(CounterName, '')
+                                                )
+                                            )) AS CounterDisplay
+                                        FROM Counters
+                                        WHERE Id = @CounterId;
+                                    END
+                                    ELSE
+                                    BEGIN
+                                        SELECT CAST(NULL AS nvarchar(200)) AS CounterDisplay;
+                                    END
+                                END
+                                ELSE IF COL_LENGTH('dbo.Counters','Id') IS NOT NULL
+                                BEGIN
+                                    SELECT TOP 1
+                                        LTRIM(RTRIM(
+                                            CONCAT(
+                                                ISNULL(CounterCode, ''),
+                                                CASE
+                                                    WHEN ISNULL(CounterCode,'') <> '' AND ISNULL(CounterName,'') <> '' THEN '-'
+                                                    ELSE ''
+                                                END,
+                                                ISNULL(CounterName, '')
+                                            )
+                                        )) AS CounterDisplay
+                                    FROM dbo.Counters
+                                    WHERE Id = @CounterId;
+                                END
+                                ELSE IF COL_LENGTH('dbo.Counters','CounterID') IS NOT NULL
+                                BEGIN
+                                    SELECT TOP 1
+                                        LTRIM(RTRIM(
+                                            CONCAT(
+                                                ISNULL(CounterCode, ''),
+                                                CASE
+                                                    WHEN ISNULL(CounterCode,'') <> '' AND ISNULL(CounterName,'') <> '' THEN '-'
+                                                    ELSE ''
+                                                END,
+                                                ISNULL(CounterName, '')
+                                            )
+                                        )) AS CounterDisplay
+                                    FROM dbo.Counters
+                                    WHERE CounterID = @CounterId;
+                                END
+                                ELSE IF COL_LENGTH('dbo.Counters','CounterId') IS NOT NULL
+                                BEGIN
+                                    SELECT TOP 1
+                                        LTRIM(RTRIM(
+                                            CONCAT(
+                                                ISNULL(CounterCode, ''),
+                                                CASE
+                                                    WHEN ISNULL(CounterCode,'') <> '' AND ISNULL(CounterName,'') <> '' THEN '-'
+                                                    ELSE ''
+                                                END,
+                                                ISNULL(CounterName, '')
+                                            )
+                                        )) AS CounterDisplay
+                                    FROM dbo.Counters
+                                    WHERE CounterId = @CounterId;
+                                END
+                                ELSE
+                                BEGIN
+                                    SELECT CAST(NULL AS nvarchar(200)) AS CounterDisplay;
+                                END", connection))
+                            {
+                                cmd.Parameters.AddWithValue("@CounterId", counterIdValue);
+                                var obj = cmd.ExecuteScalar();
+                                if (obj != null && obj != DBNull.Value)
+                                {
+                                    counterDisplay = obj.ToString();
+                                }
+                            }
+                        }
+                    }
+
+                    // Step 3: fallback to current session (helps if an older order has no stored counter)
+                    if (counterIdValue <= 0)
+                    {
+                        try { counterIdValue = HttpContext?.Session?.GetInt32("POS.SelectedCounterId") ?? 0; } catch { /* ignore */ }
+                    }
+                    if (string.IsNullOrWhiteSpace(counterDisplay))
+                    {
+                        try { counterDisplay = HttpContext?.Session?.GetString("POS.SelectedCounterDisplay") ?? string.Empty; } catch { /* ignore */ }
+                    }
+
+                    // If we have a counter id but no display, try resolving it (session id path)
+                    if (counterIdValue > 0 && string.IsNullOrWhiteSpace(counterDisplay))
+                    {
+                        try
+                        {
+                            using (var connection = new SqlConnection(_connectionString))
+                            {
+                                connection.Open();
+                                using (var cmd = new SqlCommand(@"
+                                    IF OBJECT_ID('dbo.Counters','U') IS NOT NULL AND COL_LENGTH('dbo.Counters','Id') IS NOT NULL
+                                    BEGIN
+                                        SELECT TOP 1
+                                            LTRIM(RTRIM(
+                                                CONCAT(
+                                                    ISNULL(CounterCode, ''),
+                                                    CASE
+                                                        WHEN ISNULL(CounterCode,'') <> '' AND ISNULL(CounterName,'') <> '' THEN '-'
+                                                        ELSE ''
+                                                    END,
+                                                    ISNULL(CounterName, '')
+                                                )
+                                            )) AS CounterDisplay
+                                        FROM dbo.Counters
+                                        WHERE Id = @CounterId;
+                                    END
+                                    ELSE IF OBJECT_ID('Counters','U') IS NOT NULL AND COL_LENGTH('Counters','Id') IS NOT NULL
+                                    BEGIN
+                                        SELECT TOP 1
+                                            LTRIM(RTRIM(
+                                                CONCAT(
+                                                    ISNULL(CounterCode, ''),
+                                                    CASE
+                                                        WHEN ISNULL(CounterCode,'') <> '' AND ISNULL(CounterName,'') <> '' THEN '-'
+                                                        ELSE ''
+                                                    END,
+                                                    ISNULL(CounterName, '')
+                                                )
+                                            )) AS CounterDisplay
+                                        FROM Counters
+                                        WHERE Id = @CounterId;
+                                    END
+                                    ELSE
+                                    BEGIN
+                                        SELECT CAST(NULL AS nvarchar(200)) AS CounterDisplay;
+                                    END", connection))
+                                {
+                                    cmd.Parameters.AddWithValue("@CounterId", counterIdValue);
+                                    var obj = cmd.ExecuteScalar();
+                                    if (obj != null && obj != DBNull.Value)
+                                    {
+                                        counterDisplay = obj.ToString();
+                                    }
+                                }
+                            }
+                        }
+                        catch { /* ignore */ }
+                    }
+
+                    ViewBag.PosCounterDisplay = counterDisplay;
+                    ViewBag.PosCounterIdValue = counterIdValue;
+                }
+                catch
+                {
+                    ViewBag.PosCounterDisplay = string.Empty;
+                    ViewBag.PosCounterIdValue = 0;
+                }
                 
                 return View(model);
             }
@@ -4825,7 +5040,7 @@ END", connection))
         }
 
         // GET: Payment/PrintPOS
-    public IActionResult PrintPOS(int orderId, decimal? discount = null, string discountType = null)
+        public IActionResult PrintPOS(int orderId, decimal? discount = null, string discountType = null)
         {
             try
             {
@@ -4847,9 +5062,11 @@ END", connection))
                             pendingDisc = Math.Round(model.Subtotal * pendingDisc / 100m, 2, MidpointRounding.AwayFromZero);
                         }
                         var combinedDisc = model.DiscountAmount + pendingDisc;
+                        // Cap discount at subtotal
                         if (combinedDisc > model.Subtotal) combinedDisc = model.Subtotal;
                         var netSubtotal = model.Subtotal - combinedDisc;
 
+                        // Ensure GST percentage is set (fallback handled elsewhere too)
                         var gstPerc = model.GSTPercentage > 0 ? model.GSTPercentage : 5.0m;
                         var gstAmount = Math.Round(netSubtotal * gstPerc / 100m, 2, MidpointRounding.AwayFromZero);
                         var cgst = Math.Round(gstAmount / 2m, 2, MidpointRounding.AwayFromZero);
@@ -4866,7 +5083,7 @@ END", connection))
                     catch { /* ignore display-only failures */ }
                 }
 
-                // Get restaurant settings for bill header (reuse same logic as PrintBill)
+                // Get restaurant settings for bill header
                 RestaurantSettings settings = null;
                 using (var connection = new SqlConnection(_connectionString))
                 {
@@ -4890,10 +5107,12 @@ END", connection))
                                     Email = reader["Email"].ToString(),
                                     Website = reader["Website"].ToString(),
                                     CurrencySymbol = reader["CurrencySymbol"].ToString(),
-                                    DefaultGSTPercentage = reader["DefaultGSTPercentage"] != DBNull.Value 
-                                        ? Convert.ToDecimal(reader["DefaultGSTPercentage"]) 
+                                    DefaultGSTPercentage = reader["DefaultGSTPercentage"] != DBNull.Value
+                                        ? Convert.ToDecimal(reader["DefaultGSTPercentage"])
                                         : 0
                                 };
+                                // Read FssaiNo if present
+                                try { settings.FssaiNo = reader["FssaiNo"].ToString(); } catch { /* ignore if column missing */ }
                             }
                         }
                     }
@@ -4911,7 +5130,7 @@ END", connection))
                     PhoneNumber = "",
                     Email = ""
                 };
-                
+
                 // Check if this is a BAR order
                 bool isBarOrder = false;
                 using (var connection = new SqlConnection(_connectionString))
@@ -4937,30 +5156,36 @@ END", connection))
                     }
                 }
                 ViewBag.IsBarOrder = isBarOrder;
-                
-                // If FssaiNo wasn't present from the full SELECT (older DBs), try a lightweight read of the column
+
+                // POS Counter display (schema-safe; only shows if Orders has a counter column and Counters exists)
                 try
                 {
-                    var existing = ViewBag.RestaurantSettings as RestaurantSettings;
-                    if (existing != null && string.IsNullOrWhiteSpace(existing.FssaiNo))
+                    var resolved = ResolvePosCounterForOrder(orderId);
+                    var counterIdValue = resolved.CounterId;
+                    var counterDisplay = resolved.CounterDisplay;
+
+                    // Fallback to current session's selected counter (helps when printing in the same session)
+                    if (counterIdValue <= 0)
                     {
-                        using (var conn2 = new SqlConnection(_connectionString))
-                        {
-                            conn2.Open();
-                            using (var cmd2 = new SqlCommand("SELECT TOP 1 FssaiNo FROM dbo.RestaurantSettings WHERE FssaiNo IS NOT NULL AND LTRIM(RTRIM(FssaiNo)) <> ''", conn2))
-                            {
-                                var val = cmd2.ExecuteScalar();
-                                if (val != null && val != DBNull.Value)
-                                {
-                                    existing.FssaiNo = val.ToString();
-                                }
-                            }
-                        }
+                        try { counterIdValue = HttpContext?.Session?.GetInt32("POS.SelectedCounterId") ?? 0; } catch { /* ignore */ }
                     }
+                    if (string.IsNullOrWhiteSpace(counterDisplay))
+                    {
+                        try { counterDisplay = HttpContext?.Session?.GetString("POS.SelectedCounterDisplay") ?? string.Empty; } catch { /* ignore */ }
+                    }
+
+                    if (counterIdValue > 0 && string.IsNullOrWhiteSpace(counterDisplay))
+                    {
+                        try { counterDisplay = ResolvePosCounterDisplayById(counterIdValue); } catch { /* ignore */ }
+                    }
+
+                    ViewBag.PosCounterDisplay = counterDisplay;
+                    ViewBag.PosCounterIdValue = counterIdValue;
                 }
                 catch
                 {
-                    // ignore - column may not exist or DB user may not have permissions
+                    ViewBag.PosCounterDisplay = string.Empty;
+                    ViewBag.PosCounterIdValue = 0;
                 }
 
                 return View("PrintPOS", model);
@@ -4970,6 +5195,147 @@ END", connection))
                 TempData["ErrorMessage"] = $"Error loading POS bill for printing: {ex.Message}";
                 return RedirectToAction("Index", new { id = orderId });
             }
+        }
+
+        private (int CounterId, string CounterDisplay) ResolvePosCounterForOrder(int orderId)
+        {
+            try
+            {
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    connection.Open();
+
+                    (string ObjName, string SqlName)? FindTable(string tableName)
+                    {
+                        using (var cmd = new SqlCommand(@"
+                            SELECT TOP 1 SCHEMA_NAME(t.schema_id) AS SchemaName, t.name AS TableName
+                            FROM sys.tables t
+                            WHERE t.name = @Name
+                            ORDER BY t.schema_id;", connection))
+                        {
+                            cmd.Parameters.AddWithValue("@Name", tableName);
+                            using (var r = cmd.ExecuteReader())
+                            {
+                                if (!r.Read()) return null;
+                                var schema = r["SchemaName"]?.ToString();
+                                var name = r["TableName"]?.ToString();
+                                if (string.IsNullOrWhiteSpace(schema) || string.IsNullOrWhiteSpace(name)) return null;
+                                return ($"{schema}.{name}", $"[{schema}].[{name}]");
+                            }
+                        }
+                    }
+
+                    string? FindColumn(string tableObjName, params string[] candidates)
+                    {
+                        if (candidates == null || candidates.Length == 0) return null;
+                        var inList = string.Join(",", candidates.Select(c => $"'{c.Replace("'", "''")}'"));
+                        using (var cmd = new SqlCommand($@"
+                            SELECT TOP 1 c.name
+                            FROM sys.columns c
+                            WHERE c.object_id = OBJECT_ID(@Tbl)
+                              AND c.name IN ({inList});", connection))
+                        {
+                            cmd.Parameters.AddWithValue("@Tbl", tableObjName);
+                            var obj = cmd.ExecuteScalar();
+                            return obj == null || obj == DBNull.Value ? null : obj.ToString();
+                        }
+                    }
+
+                    var orders = FindTable("Orders");
+                    if (orders == null) return (0, string.Empty);
+
+                    var counters = FindTable("Counters");
+                    if (counters == null) return (0, string.Empty);
+
+                    var ordersIdCol = FindColumn(orders.Value.ObjName, "Id", "OrderId") ?? "Id";
+                    var ordersCounterCol = FindColumn(orders.Value.ObjName, "CounterID", "CounterId", "Counter_Id", "Counter");
+                    if (string.IsNullOrWhiteSpace(ordersCounterCol)) return (0, string.Empty);
+
+                    int counterId = 0;
+                    using (var idCmd = new SqlCommand($"SELECT ISNULL(TRY_CONVERT(int, [{ordersCounterCol}]), 0) FROM {orders.Value.SqlName} WHERE [{ordersIdCol}] = @OrderId", connection))
+                    {
+                        idCmd.Parameters.AddWithValue("@OrderId", orderId);
+                        var obj = idCmd.ExecuteScalar();
+                        if (obj != null && obj != DBNull.Value)
+                        {
+                            counterId = Convert.ToInt32(obj);
+                        }
+                    }
+
+                    if (counterId <= 0) return (0, string.Empty);
+
+                    var countersPkCol = FindColumn(counters.Value.ObjName, "Id", "CounterID", "CounterId") ?? "Id";
+                    var codeCol = FindColumn(counters.Value.ObjName, "CounterCode", "Code") ?? "CounterCode";
+                    var nameCol = FindColumn(counters.Value.ObjName, "CounterName", "Name") ?? "CounterName";
+
+                    string display = string.Empty;
+                    using (var dispCmd = new SqlCommand($@"
+                        SELECT TOP 1
+                            LTRIM(RTRIM(
+                                CONCAT(
+                                    ISNULL([{codeCol}], ''),
+                                    CASE WHEN ISNULL([{codeCol}], '') <> '' AND ISNULL([{nameCol}], '') <> '' THEN '-' ELSE '' END,
+                                    ISNULL([{nameCol}], '')
+                                )
+                            ))
+                        FROM {counters.Value.SqlName}
+                        WHERE [{countersPkCol}] = @CounterId;", connection))
+                    {
+                        dispCmd.Parameters.AddWithValue("@CounterId", counterId);
+                        var obj = dispCmd.ExecuteScalar();
+                        if (obj != null && obj != DBNull.Value)
+                        {
+                            display = obj.ToString();
+                        }
+                    }
+
+                    return (counterId, display ?? string.Empty);
+                }
+            }
+            catch
+            {
+                return (0, string.Empty);
+            }
+        }
+
+        private string ResolvePosCounterDisplayById(int counterId)
+        {
+            try
+            {
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (var cmd = new SqlCommand(@"
+                        IF OBJECT_ID('dbo.Counters','U') IS NOT NULL AND COL_LENGTH('dbo.Counters','Id') IS NOT NULL
+                        BEGIN
+                            SELECT TOP 1
+                                LTRIM(RTRIM(
+                                    CONCAT(
+                                        ISNULL(CounterCode, ''),
+                                        CASE WHEN ISNULL(CounterCode,'') <> '' AND ISNULL(CounterName,'') <> '' THEN '-' ELSE '' END,
+                                        ISNULL(CounterName, '')
+                                    )
+                                ))
+                            FROM dbo.Counters
+                            WHERE Id = @CounterId;
+                        END
+                        ELSE
+                        BEGIN
+                            SELECT CAST(NULL AS nvarchar(200));
+                        END", connection))
+                    {
+                        cmd.Parameters.AddWithValue("@CounterId", counterId);
+                        var obj = cmd.ExecuteScalar();
+                        if (obj != null && obj != DBNull.Value)
+                        {
+                            return obj.ToString() ?? string.Empty;
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            return string.Empty;
         }
 
         /// <summary>

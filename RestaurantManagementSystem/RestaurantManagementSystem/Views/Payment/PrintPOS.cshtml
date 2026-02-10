@@ -3,6 +3,7 @@
     Layout = null; // render standalone (remove site header/navigation)
     ViewData["Title"] = "POS Print";
     var settings = ViewBag.RestaurantSettings as RestaurantManagementSystem.Models.RestaurantSettings ?? new RestaurantManagementSystem.Models.RestaurantSettings { RestaurantName = "Restaurant Management System" };
+    var counterDisplay = (ViewBag.PosCounterDisplay as string) ?? string.Empty;
 }
 <!DOCTYPE html>
 <html>
@@ -63,6 +64,10 @@
             <div>Time: @DateTime.Now.ToString("HH:mm")</div>
             <div>Cashier: @(Model.Payments.FirstOrDefault()?.ProcessedByName ?? "biller")</div>
         </div>
+        @if (!string.IsNullOrWhiteSpace(counterDisplay))
+        {
+            <div style="margin-top:2px;">Counter: @counterDisplay</div>
+        }
         <div style="margin-top:2px;">Bill No: @Model.OrderNumber</div>
     </div>
 
@@ -136,6 +141,8 @@
         var preRemDbg = Model.RemainingAmount;
         var roundedDbg = Math.Round(preRemDbg, 0, MidpointRounding.AwayFromZero);
         var expectedDbg = Math.Round(roundedDbg - preRemDbg, 2);
+        var dbgCounterId = (ViewBag.PosCounterIdValue is int ci) ? ci : 0;
+        var dbgCounterDisplay = (ViewBag.PosCounterDisplay as string) ?? string.Empty;
         <div style="background:#fff7e6;border:1px solid #ffd59e;padding:8px;margin-top:8px;font-size:12px;">
             <strong>DEBUG</strong>
             <div>RemainingAmount: @Model.RemainingAmount</div>
@@ -144,6 +151,8 @@
             <div>TotalRoundoff (stored): @Model.TotalRoundoff</div>
             <div>ComputedRounded (AwayFromZero): @roundedDbg</div>
             <div>ComputedExpectedRoundoff: @expectedDbg</div>
+            <div>CounterId (Orders): @dbgCounterId</div>
+            <div>CounterDisplay: @dbgCounterDisplay</div>
         </div>
     }
 

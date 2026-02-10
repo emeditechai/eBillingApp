@@ -4,6 +4,10 @@ namespace RestaurantManagementSystem.Models
 {
     public class PosOrderCreateViewModel
     {
+        // POS counter selection (normally stored in session). Sent along with the request so
+        // the server can re-hydrate session if needed.
+        public int? SelectedCounterId { get; set; }
+
         [Required]
         [Range(1, 2, ErrorMessage = "POS Order supports only Takeout (1) or Delivery (2).")]
         public int OrderType { get; set; } = 1; // 1=Takeout, 2=Delivery
