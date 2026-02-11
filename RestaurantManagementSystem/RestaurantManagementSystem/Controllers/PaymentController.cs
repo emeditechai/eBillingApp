@@ -706,6 +706,70 @@ END", connection))
                             gstApplicableShare = 1.0m;
                         }
                     }
+
+                    // POS Order page uses a rounded Remaining amount (nearest rupee) for cashier UX.
+                    // That can cause the client to submit RoundoffAdjustmentAmt=0 even when the bill has roundoff.
+                    // Normalize here using canonical remaining = Order.TotalAmount - SUM(approved nominal payments)
+                    // and compute the implied roundoff as (submitted Amount - canonical remaining).
+                    // Apply only for near-settlement payments (within ±0.50) and non-Complementary methods.
+                    try
+                    {
+                        if (!string.IsNullOrWhiteSpace(paymentMethodName)
+                            && !paymentMethodName.Equals("Complementary", StringComparison.OrdinalIgnoreCase))
+                        {
+                            decimal orderTotalCanonical = 0m;
+                            decimal approvedNominal = 0m;
+                            decimal approvedRoundoff = 0m;
+
+                            using (var roundConn = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                            {
+                                roundConn.Open();
+                                using (var roundCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                                    SELECT
+                                        ISNULL(o.TotalAmount, 0) AS OrderTotal,
+                                        ISNULL((SELECT SUM(Amount + TipAmount) FROM Payments WHERE OrderId = o.Id AND Status = 1), 0) AS ApprovedNominal,
+                                        ISNULL((SELECT SUM(ISNULL(RoundoffAdjustmentAmt,0)) FROM Payments WHERE OrderId = o.Id AND Status = 1), 0) AS ApprovedRoundoff
+                                    FROM Orders o
+                                    WHERE o.Id = @OrderId", roundConn))
+                                {
+                                    roundCmd.Parameters.AddWithValue("@OrderId", model.OrderId);
+                                    using (var rr = roundCmd.ExecuteReader())
+                                    {
+                                        if (rr.Read())
+                                        {
+                                            if (!rr.IsDBNull(0)) orderTotalCanonical = rr.GetDecimal(0);
+                                            if (!rr.IsDBNull(1)) approvedNominal = rr.GetDecimal(1);
+                                            if (!rr.IsDBNull(2)) approvedRoundoff = rr.GetDecimal(2);
+                                        }
+                                    }
+                                }
+                            }
+
+                            var canonicalRemaining = Math.Round(orderTotalCanonical - approvedNominal, 2, MidpointRounding.AwayFromZero);
+                            if (canonicalRemaining < 0m) canonicalRemaining = 0m;
+
+                            var impliedRoundoff = Math.Round(model.Amount - canonicalRemaining, 2, MidpointRounding.AwayFromZero);
+
+                            var clientRoundoff = Math.Round(model.RoundoffAdjustmentAmt, 2, MidpointRounding.AwayFromZero);
+                            var clientOriginal = Math.Round(model.OriginalAmount, 2, MidpointRounding.AwayFromZero);
+
+                            var needsFix = (Math.Abs(clientRoundoff) < 0.0001m)
+                                           && (clientOriginal <= 0m || Math.Abs(clientOriginal - canonicalRemaining) > 0.01m)
+                                           && canonicalRemaining > 0m;
+
+                            // Only apply when the submitted amount is within typical POS roundoff band
+                            // relative to the canonical remaining.
+                            if (needsFix && Math.Abs(impliedRoundoff) <= 0.50m)
+                            {
+                                model.OriginalAmount = canonicalRemaining;
+                                model.RoundoffAdjustmentAmt = impliedRoundoff;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Non-fatal; never block payment due to roundoff normalization.
+                    }
                     
                     // NEW CORRECT PROCESS: Apply discount on subtotal, then recalculate GST
                     // Support optional percent discount when provided via query string from Payment Index
