@@ -292,6 +292,56 @@ END", connection))
         public IActionResult Dashboard(DateTime? fromDate = null, DateTime? toDate = null)
         {
             var model = GetOrderDashboard(fromDate, toDate);
+
+            // Counter filter options (client-side).
+            // Requirement: show ALL counters that are associated with the orders visible on the dashboard (even if inactive).
+            // Default selection: POS-selected counter stored in session (until logout).
+            var defaultCounterId = 0;
+            try { defaultCounterId = HttpContext?.Session?.GetInt32("POS.SelectedCounterId") ?? 0; } catch { defaultCounterId = 0; }
+
+            var counterOptions = new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+            try
+            {
+                var allOrders = new List<OrderSummary>();
+                if (model?.ActiveOrders != null) allOrders.AddRange(model.ActiveOrders);
+                if (model?.CancelledOrders != null) allOrders.AddRange(model.CancelledOrders);
+                if (model?.CompletedOrders != null) allOrders.AddRange(model.CompletedOrders);
+
+                var counterMap = new Dictionary<int, string>();
+                foreach (var o in allOrders)
+                {
+                    if (o?.CounterId.HasValue != true) continue;
+                    var cid = o.CounterId.Value;
+                    if (cid <= 0) continue;
+                    var disp = (o.CounterDisplay ?? string.Empty).Trim();
+                    if (string.IsNullOrWhiteSpace(disp)) disp = $"Counter #{cid}";
+                    if (!counterMap.ContainsKey(cid)) counterMap[cid] = disp;
+                }
+
+                // Ensure default counter is present in dropdown even if there are no orders yet for it.
+                if (defaultCounterId > 0 && !counterMap.ContainsKey(defaultCounterId))
+                {
+                    var sessionDisp = string.Empty;
+                    try { sessionDisp = (HttpContext?.Session?.GetString("POS.SelectedCounterDisplay") ?? string.Empty).Trim(); } catch { sessionDisp = string.Empty; }
+                    counterMap[defaultCounterId] = string.IsNullOrWhiteSpace(sessionDisp) ? $"Counter #{defaultCounterId}" : sessionDisp;
+                }
+
+                foreach (var kv in counterMap.OrderBy(k => k.Value, StringComparer.OrdinalIgnoreCase))
+                {
+                    counterOptions.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem
+                    {
+                        Value = kv.Key.ToString(),
+                        Text = kv.Value
+                    });
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+
+            ViewBag.CounterOptions = counterOptions;
+            ViewBag.DefaultCounterId = defaultCounterId;
             return View(model);
         }
         
@@ -3930,6 +3980,57 @@ END", connection))
             using (Microsoft.Data.SqlClient.SqlConnection connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
             {
                 connection.Open();
+
+                // Detect optional Orders counter column once (schema-safe)
+                string ordersCounterCol = null;
+                try
+                {
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        SELECT TOP 1 c.name
+                        FROM sys.columns c
+                        WHERE c.object_id = OBJECT_ID('dbo.Orders')
+                          AND c.name IN ('CounterID','CounterId','Counter_Id','Counter')
+                        ORDER BY CASE c.name
+                            WHEN 'CounterID' THEN 1
+                            WHEN 'CounterId' THEN 2
+                            WHEN 'Counter_Id' THEN 3
+                            WHEN 'Counter' THEN 4
+                            ELSE 99 END;", connection))
+                    {
+                        var obj = cmd.ExecuteScalar();
+                        if (obj != null && obj != DBNull.Value) ordersCounterCol = obj.ToString();
+                    }
+                }
+                catch { ordersCounterCol = null; }
+
+                // Load Counter display mapping (if table exists). Include inactive too so older orders still show.
+                var counterDisplayById = new Dictionary<int, string>();
+                try
+                {
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                        IF OBJECT_ID('dbo.Counters','U') IS NULL
+                        BEGIN
+                            SELECT CAST(NULL AS int) AS Id, CAST(NULL AS nvarchar(50)) AS CounterCode, CAST(NULL AS nvarchar(100)) AS CounterName WHERE 1=0;
+                        END
+                        ELSE
+                        BEGIN
+                            SELECT Id, CounterCode, CounterName
+                            FROM dbo.Counters;
+                        END", connection))
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            if (reader.IsDBNull(0)) continue;
+                            var id = reader.GetInt32(0);
+                            var code = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+                            var name = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
+                            var display = $"{code}-{name}".Trim('-').Trim();
+                            if (!counterDisplayById.ContainsKey(id)) counterDisplayById[id] = display;
+                        }
+                    }
+                }
+                catch { /* ignore */ }
                 
                 // Get order counts and total sales for today (exclude Bar orders)
                 var orderSummarySql = @"
@@ -3975,6 +4076,7 @@ END", connection))
                         o.OrderNumber,
                         o.OrderType,
                         o.Status,
+                        " + (string.IsNullOrWhiteSpace(ordersCounterCol) ? "CAST(NULL AS int) AS CounterId," : $"TRY_CONVERT(int, o.[{ordersCounterCol}]) AS CounterId,") + @"
                         CASE 
                             WHEN o.OrderType = 0 THEN t.TableName 
                             ELSE NULL 
@@ -4013,9 +4115,25 @@ END", connection))
                     }
                     using (Microsoft.Data.SqlClient.SqlDataReader reader = command.ExecuteReader())
                     {
+                        var ordId = reader.GetOrdinal("Id");
+                        var ordOrderNumber = reader.GetOrdinal("OrderNumber");
+                        var ordOrderType = reader.GetOrdinal("OrderType");
+                        var ordStatus = reader.GetOrdinal("Status");
+                        var ordCounterId = reader.GetOrdinal("CounterId");
+                        var ordTableName = reader.GetOrdinal("TableName");
+                        var ordGuestName = reader.GetOrdinal("GuestName");
+                        var ordRoomId = reader.GetOrdinal("RoomId");
+                        var ordHBranchId = reader.GetOrdinal("HBranchId");
+                        var ordHBookingNo = reader.GetOrdinal("HBookingNo");
+                        var ordServerName = reader.GetOrdinal("ServerName");
+                        var ordItemCount = reader.GetOrdinal("ItemCount");
+                        var ordTotalAmount = reader.GetOrdinal("TotalAmount");
+                        var ordCreatedAt = reader.GetOrdinal("CreatedAt");
+                        var ordDurationMinutes = reader.GetOrdinal("DurationMinutes");
+
                         while (reader.Read())
                         {
-                            var orderType = reader.GetInt32(2);
+                            var orderType = reader.IsDBNull(ordOrderType) ? 0 : Convert.ToInt32(reader.GetValue(ordOrderType));
                             string orderTypeDisplay = orderType switch
                             {
                                 0 => "Dine-In",
@@ -4026,7 +4144,7 @@ END", connection))
                                 _ => "Unknown"
                             };
                             
-                            var status = reader.GetInt32(3);
+                            var status = reader.IsDBNull(ordStatus) ? 0 : Convert.ToInt32(reader.GetValue(ordStatus));
                             string statusDisplay = status switch
                             {
                                 0 => "Open",
@@ -4039,25 +4157,35 @@ END", connection))
                             
                             var summary = new OrderSummary
                             {
-                                Id = reader.GetInt32(0),
-                                OrderNumber = reader.GetString(1),
+                                Id = reader.IsDBNull(ordId) ? 0 : Convert.ToInt32(reader.GetValue(ordId)),
+                                OrderNumber = reader.IsDBNull(ordOrderNumber) ? string.Empty : Convert.ToString(reader.GetValue(ordOrderNumber)),
                                 OrderType = orderType,
                                 OrderTypeDisplay = orderTypeDisplay,
                                 Status = status,
                                 StatusDisplay = statusDisplay,
-                                TableName = reader.IsDBNull(4) ? null : reader.GetString(4),
-                                GuestName = reader.IsDBNull(5) ? null : reader.GetString(5),
-                                RoomId = reader.IsDBNull(6) ? null : (int?)Convert.ToInt32(reader.GetValue(6)),
-                                HBranchId = reader.IsDBNull(7) ? null : (int?)Convert.ToInt32(reader.GetValue(7)),
-                                HBookingNo = reader.IsDBNull(8) ? null : Convert.ToString(reader.GetValue(8)),
+                                CounterId = reader.IsDBNull(ordCounterId) ? null : (int?)Convert.ToInt32(reader.GetValue(ordCounterId)),
+                                TableName = reader.IsDBNull(ordTableName) ? null : Convert.ToString(reader.GetValue(ordTableName)),
+                                GuestName = reader.IsDBNull(ordGuestName) ? null : Convert.ToString(reader.GetValue(ordGuestName)),
+                                RoomId = reader.IsDBNull(ordRoomId) ? null : (int?)Convert.ToInt32(reader.GetValue(ordRoomId)),
+                                HBranchId = reader.IsDBNull(ordHBranchId) ? null : (int?)Convert.ToInt32(reader.GetValue(ordHBranchId)),
+                                HBookingNo = reader.IsDBNull(ordHBookingNo) ? null : Convert.ToString(reader.GetValue(ordHBookingNo)),
                                 // RoomNo is resolved below (via hotel SP) when possible
                                 RoomNo = null,
-                                ServerName = reader.IsDBNull(9) ? null : reader.GetString(9),
-                                ItemCount = reader.GetInt32(10),
-                                TotalAmount = reader.GetDecimal(11),
-                                CreatedAt = reader.GetDateTime(12),
-                                Duration = TimeSpan.FromMinutes(reader.GetInt32(13))
+                                ServerName = reader.IsDBNull(ordServerName) ? null : Convert.ToString(reader.GetValue(ordServerName)),
+                                ItemCount = reader.IsDBNull(ordItemCount) ? 0 : Convert.ToInt32(reader.GetValue(ordItemCount)),
+                                TotalAmount = reader.IsDBNull(ordTotalAmount) ? 0 : reader.GetDecimal(ordTotalAmount),
+                                CreatedAt = reader.IsDBNull(ordCreatedAt) ? DateTime.MinValue : reader.GetDateTime(ordCreatedAt),
+                                Duration = TimeSpan.FromMinutes(reader.IsDBNull(ordDurationMinutes) ? 0 : Convert.ToInt32(reader.GetValue(ordDurationMinutes)))
                             };
+
+                            if (summary.CounterId.HasValue && summary.CounterId.Value > 0 && counterDisplayById.TryGetValue(summary.CounterId.Value, out var cdisp))
+                            {
+                                summary.CounterDisplay = cdisp;
+                            }
+                            else
+                            {
+                                summary.CounterDisplay = string.Empty;
+                            }
                             
                             // Override with merged table names if available
                             summary.TableName = GetMergedTableDisplayName(summary.Id, summary.TableName);
@@ -4116,6 +4244,7 @@ END", connection))
                         o.OrderNumber,
                         o.OrderType,
                         o.Status,
+                        " + (string.IsNullOrWhiteSpace(ordersCounterCol) ? "CAST(NULL AS int) AS CounterId," : $"TRY_CONVERT(int, o.[{ordersCounterCol}]) AS CounterId,") + @"
                         CASE 
                             WHEN o.OrderType = 0 THEN t.TableName 
                             ELSE NULL 
@@ -4187,14 +4316,24 @@ END", connection))
                                 OrderTypeDisplay = orderTypeDisplay,
                                 Status = 3, // Completed
                                 StatusDisplay = "Completed",
-                                TableName = reader.IsDBNull(4) ? null : reader.GetString(4),
-                                GuestName = reader.IsDBNull(5) ? null : reader.GetString(5),
-                                ServerName = reader.IsDBNull(6) ? null : reader.GetString(6),
-                                ItemCount = reader.GetInt32(7),
-                                TotalAmount = reader.GetDecimal(8),
-                                CreatedAt = reader.GetDateTime(9),
-                                Duration = TimeSpan.FromMinutes(reader.IsDBNull(10) ? 0 : reader.GetInt32(10))
+                                CounterId = reader.IsDBNull(4) ? null : (int?)Convert.ToInt32(reader.GetValue(4)),
+                                TableName = reader.IsDBNull(5) ? null : reader.GetString(5),
+                                GuestName = reader.IsDBNull(6) ? null : reader.GetString(6),
+                                ServerName = reader.IsDBNull(7) ? null : reader.GetString(7),
+                                ItemCount = reader.GetInt32(8),
+                                TotalAmount = reader.GetDecimal(9),
+                                CreatedAt = reader.GetDateTime(10),
+                                Duration = TimeSpan.FromMinutes(reader.IsDBNull(11) ? 0 : reader.GetInt32(11))
                             };
+
+                            if (completedSummary.CounterId.HasValue && completedSummary.CounterId.Value > 0 && counterDisplayById.TryGetValue(completedSummary.CounterId.Value, out var cdisp))
+                            {
+                                completedSummary.CounterDisplay = cdisp;
+                            }
+                            else
+                            {
+                                completedSummary.CounterDisplay = string.Empty;
+                            }
                             
                             // Override with merged table names if available
                             completedSummary.TableName = GetMergedTableDisplayName(completedSummary.Id, completedSummary.TableName);
@@ -4210,6 +4349,7 @@ END", connection))
                         o.OrderNumber,
                         o.OrderType,
                         o.Status,
+                        " + (string.IsNullOrWhiteSpace(ordersCounterCol) ? "CAST(NULL AS int) AS CounterId," : $"TRY_CONVERT(int, o.[{ordersCounterCol}]) AS CounterId,") + @"
                         CASE 
                             WHEN o.OrderType = 0 THEN t.TableName 
                             ELSE NULL 
@@ -4246,9 +4386,21 @@ END", connection))
                     }
                     using (Microsoft.Data.SqlClient.SqlDataReader reader = command.ExecuteReader())
                     {
+                        var ordId = reader.GetOrdinal("Id");
+                        var ordOrderNumber = reader.GetOrdinal("OrderNumber");
+                        var ordOrderType = reader.GetOrdinal("OrderType");
+                        var ordCounterId = reader.GetOrdinal("CounterId");
+                        var ordTableName = reader.GetOrdinal("TableName");
+                        var ordGuestName = reader.GetOrdinal("GuestName");
+                        var ordServerName = reader.GetOrdinal("ServerName");
+                        var ordItemCount = reader.GetOrdinal("ItemCount");
+                        var ordTotalAmount = reader.GetOrdinal("TotalAmount");
+                        var ordCreatedAt = reader.GetOrdinal("CreatedAt");
+                        var ordDurationMinutes = reader.GetOrdinal("DurationMinutes");
+
                         while (reader.Read())
                         {
-                            var orderType = reader.GetInt32(2);
+                            var orderType = reader.IsDBNull(ordOrderType) ? 0 : Convert.ToInt32(reader.GetValue(ordOrderType));
                             string orderTypeDisplay = orderType switch
                             {
                                 0 => "Dine-In",
@@ -4261,20 +4413,30 @@ END", connection))
                             
                             var cancelledSummary = new OrderSummary
                             {
-                                Id = reader.GetInt32(0),
-                                OrderNumber = reader.GetString(1),
+                                Id = reader.IsDBNull(ordId) ? 0 : Convert.ToInt32(reader.GetValue(ordId)),
+                                OrderNumber = reader.IsDBNull(ordOrderNumber) ? string.Empty : Convert.ToString(reader.GetValue(ordOrderNumber)),
                                 OrderType = orderType,
                                 OrderTypeDisplay = orderTypeDisplay,
                                 Status = 4,
                                 StatusDisplay = "Cancelled",
-                                TableName = reader.IsDBNull(4) ? null : reader.GetString(4),
-                                GuestName = reader.IsDBNull(5) ? null : reader.GetString(5),
-                                ServerName = reader.IsDBNull(6) ? null : reader.GetString(6),
-                                ItemCount = reader.GetInt32(7),
-                                TotalAmount = reader.GetDecimal(8),
-                                CreatedAt = reader.GetDateTime(9),
-                                Duration = TimeSpan.FromMinutes(reader.IsDBNull(10) ? 0 : reader.GetInt32(10))
+                                CounterId = reader.IsDBNull(ordCounterId) ? null : (int?)Convert.ToInt32(reader.GetValue(ordCounterId)),
+                                TableName = reader.IsDBNull(ordTableName) ? null : Convert.ToString(reader.GetValue(ordTableName)),
+                                GuestName = reader.IsDBNull(ordGuestName) ? null : Convert.ToString(reader.GetValue(ordGuestName)),
+                                ServerName = reader.IsDBNull(ordServerName) ? null : Convert.ToString(reader.GetValue(ordServerName)),
+                                ItemCount = reader.IsDBNull(ordItemCount) ? 0 : Convert.ToInt32(reader.GetValue(ordItemCount)),
+                                TotalAmount = reader.IsDBNull(ordTotalAmount) ? 0 : reader.GetDecimal(ordTotalAmount),
+                                CreatedAt = reader.IsDBNull(ordCreatedAt) ? DateTime.MinValue : reader.GetDateTime(ordCreatedAt),
+                                Duration = TimeSpan.FromMinutes(reader.IsDBNull(ordDurationMinutes) ? 0 : Convert.ToInt32(reader.GetValue(ordDurationMinutes)))
                             };
+
+                            if (cancelledSummary.CounterId.HasValue && cancelledSummary.CounterId.Value > 0 && counterDisplayById.TryGetValue(cancelledSummary.CounterId.Value, out var cdisp))
+                            {
+                                cancelledSummary.CounterDisplay = cdisp;
+                            }
+                            else
+                            {
+                                cancelledSummary.CounterDisplay = string.Empty;
+                            }
                             
                             // Override with merged table names if available
                             cancelledSummary.TableName = GetMergedTableDisplayName(cancelledSummary.Id, cancelledSummary.TableName);

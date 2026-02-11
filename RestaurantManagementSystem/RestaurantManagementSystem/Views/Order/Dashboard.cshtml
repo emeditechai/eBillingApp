@@ -87,6 +87,33 @@
         </div>
     </div>
 
+    @* Counter filter (client-side). Defaults to POS-selected counter for this session. *@
+    @{
+        var counterOptions = ViewBag.CounterOptions as List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> ?? new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+        var defaultCounterId = 0;
+        try { defaultCounterId = (int)(ViewBag.DefaultCounterId ?? 0); } catch { defaultCounterId = 0; }
+    }
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card" style="background: rgba(255,255,255,0.95); border: none; box-shadow: 0 8px 30px rgba(0,0,0,.15);">
+                <div class="card-body d-flex align-items-center justify-content-between flex-wrap" style="gap: .75rem; padding: .75rem;">
+                    <div class="d-flex align-items-center" style="gap:.5rem;">
+                        <span class="small fw-semibold" style="color:#0f172a;"><i class="fas fa-filter me-1"></i>Counter</span>
+                        <select id="counterFilter" class="form-select form-select-sm" style="min-width: 220px;">
+                            <option value="">All Counters</option>
+                            @foreach (var c in counterOptions)
+                            {
+                                var isSelected = (!string.IsNullOrWhiteSpace(c.Value) && int.TryParse(c.Value, out var cid) && cid == defaultCounterId);
+                                <option value="@c.Value" selected="@(isSelected ? "selected" : null)">@c.Text</option>
+                            }
+                        </select>
+                    </div>
+                    <small class="text-muted">Client-side filter (does not change totals)</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
     @* Active Orders *@
     <div class="row">
         <div class="col-12">
@@ -108,6 +135,7 @@
                                     <tr class="text-center">
                                         <th>Order #</th>
                                         <th>Type</th>
+                                        <th>Counter</th>
                                         <th>Table/Customer</th>
                                         <th>Server</th>
                                         <th>Status</th>
@@ -121,9 +149,10 @@
                                 <tbody>
                                     @foreach (var order in Model.ActiveOrders)
                                     {
-                                        <tr class="align-middle text-center">
+                                        <tr class="align-middle text-center" data-counter-id="@(order.CounterId?.ToString() ?? "")">
                                             <td><strong>@order.OrderNumber</strong></td>
                                             <td>@order.OrderTypeDisplay</td>
+                                            <td>@(string.IsNullOrWhiteSpace(order.CounterDisplay) ? "-" : order.CounterDisplay)</td>
                                             <td>
                                                 @if (order.OrderType == 0) // Dine-In
                                                 {
@@ -210,6 +239,7 @@
                                     <tr class="text-center">
                                         <th>Order #</th>
                                         <th>Type</th>
+                                        <th>Counter</th>
                                         <th>Table/Customer</th>
                                         <th>Server</th>
                                         <th>Status</th>
@@ -222,9 +252,10 @@
                                 <tbody>
                                     @foreach (var order in Model.CancelledOrders)
                                     {
-                                        <tr class="align-middle text-center">
+                                        <tr class="align-middle text-center" data-counter-id="@(order.CounterId?.ToString() ?? "")">
                                             <td><strong>@order.OrderNumber</strong></td>
                                             <td>@order.OrderTypeDisplay</td>
+                                            <td>@(string.IsNullOrWhiteSpace(order.CounterDisplay) ? "-" : order.CounterDisplay)</td>
                                             <td>
                                                 @if (order.OrderType == 0) { @(order.TableName ?? "No Table") }
                                                 else { @(order.GuestName ?? "No Name") }
@@ -283,6 +314,7 @@
                                     <tr class="text-center">
                                         <th>Order #</th>
                                         <th>Type</th>
+                                        <th>Counter</th>
                                         <th>Total</th>
                                         <th>Actions</th>
                                     </tr>
@@ -290,9 +322,10 @@
                                 <tbody>
                                     @foreach (var order in Model.CompletedOrders)
                                     {
-                                        <tr class="align-middle text-center">
+                                        <tr class="align-middle text-center" data-counter-id="@(order.CounterId?.ToString() ?? "")">
                                             <td><strong>@order.OrderNumber</strong></td>
                                             <td>@order.OrderTypeDisplay</td>
+                                            <td>@(string.IsNullOrWhiteSpace(order.CounterDisplay) ? "-" : order.CounterDisplay)</td>
                                             <td><strong>₹@order.TotalAmount.ToString("F2")</strong></td>
                                             <td>
                                                 <div class="btn-group">
@@ -415,7 +448,7 @@
                 scrollCollapse: true
             });
             buildTypeFilter(activeTable, '#activeOrdersTypeFilter', 1, 'od_activeType_');
-            $('#cancelledOrders').DataTable({
+            var cancelledTable = $('#cancelledOrders').DataTable({
                 order: [[5, 'desc']],
                 paging: false,
                 info: false,
@@ -423,7 +456,7 @@
                 scrollY: '28vh',
                 scrollCollapse: true
             });
-            $('#completedOrders').DataTable({
+            var completedTable = $('#completedOrders').DataTable({
                 order: [[0, 'desc']],
                 paging: false,
                 info: false,
@@ -431,6 +464,35 @@
                 scrollY: '28vh',
                 scrollCollapse: true
             });
+
+            // Client-side counter filter by CounterId (stored in data-counter-id per row)
+            var selectedCounterId = ($('#counterFilter').val() ?? '').toString();
+
+            $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
+                var tableId = settings?.nTable?.getAttribute('id') || '';
+                if (tableId !== 'activeOrders' && tableId !== 'cancelledOrders' && tableId !== 'completedOrders') return true;
+
+                if (!selectedCounterId) return true; // All
+
+                try {
+                    var rowNode = settings.aoData[dataIndex].nTr;
+                    var rowCounterId = (rowNode?.getAttribute('data-counter-id') || '').toString();
+                    return rowCounterId === selectedCounterId;
+                } catch {
+                    return true;
+                }
+            });
+
+            function applyCounterFilter() {
+                selectedCounterId = ($('#counterFilter').val() ?? '').toString();
+                activeTable.draw();
+                cancelledTable.draw();
+                completedTable.draw();
+            }
+
+            $('#counterFilter').on('change', applyCounterFilter);
+            // Apply default selected counter on initial load
+            applyCounterFilter();
 
             // Keep dashboard fresh
             setTimeout(function() { location.reload(); }, 120000);

@@ -28,6 +28,9 @@ namespace RestaurantManagementSystem.Models
         public string OrderTypeDisplay { get; set; }
         public int Status { get; set; } // 0=Open, 1=In Progress, 2=Ready, 3=Completed, 4=Cancelled
         public string StatusDisplay { get; set; }
+        // Optional: POS counter (only present when Orders has a counter column and the order was created from POS)
+        public int? CounterId { get; set; }
+        public string CounterDisplay { get; set; }
         public string TableName { get; set; }
         public string GuestName { get; set; }
         // Room Service only (optional)
