@@ -661,6 +661,30 @@
                                 <div class="text-muted">Discount</div>
                                 <div>-₹<span id="posDiscount">@(Model.Order?.DiscountAmount.ToString("F2") ?? "0.00")</span></div>
                             </div>
+
+                            <div class="mt-2 p-2 border rounded bg-light" id="posDiscountWrap">
+                                <div class="fw-semibold mb-1">Discount (Optional)</div>
+                                <div class="alert alert-info py-2 px-3 mb-2 d-none" id="posDiscountAppliedInfo" role="alert">
+                                    <i class="fas fa-tags me-1"></i>
+                                    <strong>Discount Applied:</strong> <span id="posDiscountAppliedAmt">₹0.00</span>
+                                    <span class="text-muted">(click Edit to change)</span>
+                                </div>
+                                <div class="d-flex flex-wrap gap-2 align-items-center">
+                                    <div class="btn-group btn-group-sm" role="group" aria-label="Discount type">
+                                        <input type="radio" class="btn-check" name="posDiscountType" id="posDiscTypeAmount" value="amount" checked>
+                                        <label class="btn btn-outline-secondary" for="posDiscTypeAmount">Amount</label>
+                                        <input type="radio" class="btn-check" name="posDiscountType" id="posDiscTypePercent" value="percent">
+                                        <label class="btn btn-outline-secondary" for="posDiscTypePercent">Percent</label>
+                                    </div>
+                                    <div class="input-group input-group-sm" style="max-width:340px;">
+                                        <span class="input-group-text" id="posDiscPrefix">₹</span>
+                                        <input type="number" min="0" step="0.01" id="posDiscountEntry" class="form-control" placeholder="Enter discount" value="@(Model.Order != null && Model.Order.DiscountAmount > 0 ? Model.Order.DiscountAmount.ToString("F2") : "")" />
+                                        <button type="button" id="posApplyDiscountBtn" class="btn btn-outline-primary">Apply</button>
+                                        <button type="button" id="posCancelDiscountBtn" class="btn btn-outline-danger" style="display:@(Model.Order != null && Model.Order.DiscountAmount > 0 ? "inline-block" : "none")">Cancel</button>
+                                    </div>
+                                </div>
+                                <div class="form-text">Applied once on subtotal; GST recalculated.</div>
+                            </div>
                             <div class="d-flex justify-content-between mt-2">
                                 <div class="fw-semibold">Total</div>
                                 <div class="fw-semibold">₹<span id="posTotal">@(Model.Order?.TotalAmount.ToString("F2") ?? "0.00")</span></div>
@@ -1401,6 +1425,11 @@
                 document.getElementById('posTax').textContent = (+data.taxAmount).toFixed(2);
                 document.getElementById('posDiscount').textContent = (+data.discountAmount).toFixed(2);
 
+                // Keep discount controls in sync with server totals after refresh.
+                try {
+                    window.__posDiscountSync && window.__posDiscountSync();
+                } catch { }
+
                 const totalAmount = (+data.totalAmount) || 0;
                 document.getElementById('posTotal').textContent = totalAmount.toFixed(2);
                 const payableTotal = roundHalfUp(totalAmount);
@@ -1648,6 +1677,7 @@
                 updateTopBarSubtitle();
                 resetCreateForm();
                 resetActiveUi();
+                try { window.__posDiscountReset && window.__posDiscountReset(); } catch { }
                 toggleOrderSections(false);
                 setLockedState(false);
                 updatePrintButton(false);
@@ -1733,6 +1763,9 @@
                         customerAddress: formData.get('CustomerAddress')?.toString() || '',
                         specialInstructions: formData.get('SpecialInstructions')?.toString() || ''
                     });
+
+                    // New order should start without previous order's discount input values.
+                    try { window.__posDiscountReset && window.__posDiscountReset(); } catch { }
 
                     applyCatalogPrices(orderType);
                     toggleOrderSections(true);
@@ -2206,6 +2239,197 @@
                 document.getElementById('posPaymentMsg')?.classList.add('d-none');
                 updatePaymentFieldVisibility();
             });
+
+            // Discount (Amount/Percent) - persist via PaymentController, keep POS one-screen
+            (function(){
+                const applyBtn = document.getElementById('posApplyDiscountBtn');
+                const cancelBtn = document.getElementById('posCancelDiscountBtn');
+                const input = document.getElementById('posDiscountEntry');
+                const typeAmount = document.getElementById('posDiscTypeAmount');
+                const typePercent = document.getElementById('posDiscTypePercent');
+                const prefix = document.getElementById('posDiscPrefix');
+                const appliedInfo = document.getElementById('posDiscountAppliedInfo');
+                const appliedAmt = document.getElementById('posDiscountAppliedAmt');
+                if (!applyBtn || !input || !typeAmount || !typePercent) return;
+
+                let discountLocked = false;
+
+                function parseNum(s) {
+                    const v = parseFloat((s || '').toString());
+                    return isNaN(v) ? 0 : v;
+                }
+
+                function currentType() {
+                    return (typePercent && typePercent.checked) ? 'percent' : 'amount';
+                }
+
+                function setPrefix() {
+                    if (prefix) prefix.textContent = currentType() === 'percent' ? '%' : '₹';
+                }
+
+                function existingDiscountAmount() {
+                    return parseNum(document.getElementById('posDiscount')?.textContent || '0');
+                }
+
+                function setAppliedInfo(discountAmt) {
+                    const has = (discountAmt || 0) > 0.009;
+                    if (appliedInfo) appliedInfo.classList.toggle('d-none', !has);
+                    if (appliedAmt) appliedAmt.textContent = '₹' + (has ? (discountAmt || 0).toFixed(2) : '0.00');
+                    if (cancelBtn) cancelBtn.style.display = has ? 'inline-block' : 'none';
+                }
+
+                function setLocked(state) {
+                    discountLocked = !!state;
+                    input.disabled = discountLocked;
+                    typeAmount.disabled = discountLocked;
+                    typePercent.disabled = discountLocked;
+
+                    if (discountLocked) {
+                        applyBtn.textContent = 'Edit';
+                        applyBtn.classList.remove('btn-outline-primary');
+                        applyBtn.classList.add('btn-outline-secondary');
+                    } else {
+                        applyBtn.textContent = 'Apply';
+                        applyBtn.classList.remove('btn-outline-secondary');
+                        applyBtn.classList.add('btn-outline-primary');
+                    }
+                }
+
+                function syncFromDom() {
+                    const d = existingDiscountAmount();
+                    setAppliedInfo(d);
+                    setLocked(d > 0.009);
+                }
+
+                function resetUi() {
+                    input.value = '';
+                    if (typeAmount) typeAmount.checked = true;
+                    if (typePercent) typePercent.checked = false;
+                    setPrefix();
+                    setAppliedInfo(0);
+                    setLocked(false);
+                }
+
+                async function postForm(url, params) {
+                    const token = getToken();
+                    if (!token) {
+                        return { success: false, error: 'Security token not found. Please refresh the page.' };
+                    }
+
+                    const body = new URLSearchParams();
+                    Object.keys(params || {}).forEach(k => body.set(k, params[k]));
+                    body.set('__RequestVerificationToken', token);
+
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'RequestVerificationToken': token
+                        },
+                        body: body.toString()
+                    });
+                    return await res.json().catch(() => ({ success: false, error: 'Invalid server response' }));
+                }
+
+                applyBtn.addEventListener('click', async function(){
+                    if (!orderId) {
+                        alert('Create an order first.');
+                        return;
+                    }
+                    if (isLocked) return;
+
+                    if (discountLocked) {
+                        setLocked(false);
+                        setTimeout(() => input.focus(), 0);
+                        return;
+                    }
+
+                    let entered = parseNum(input.value);
+                    if (entered <= 0) {
+                        alert('Please enter a valid discount.');
+                        input.focus();
+                        return;
+                    }
+
+                    if (currentType() === 'percent') {
+                        if (entered > 100) {
+                            entered = 100;
+                            input.value = '100';
+                        }
+                    }
+
+                    applyBtn.disabled = true;
+                    try {
+                        // Replace discount (avoid stacking): cancel first if discount exists, then apply.
+                        if (existingDiscountAmount() > 0.009) {
+                            const cancelRes = await postForm('/Payment/CancelDiscount', { orderId: String(orderId) });
+                            if (!cancelRes || !cancelRes.success) {
+                                alert('Failed to update discount: ' + (cancelRes && cancelRes.error ? cancelRes.error : 'Unknown error'));
+                                return;
+                            }
+                        }
+
+                        const res = await postForm('/Payment/ApplyDiscount', {
+                            orderId: String(orderId),
+                            discount: input.value,
+                            discountType: currentType()
+                        });
+
+                        if (res && res.success) {
+                            await refresh();
+                            setLocked(true);
+                            setAppliedInfo(existingDiscountAmount());
+                        } else {
+                            alert('Failed to apply discount: ' + (res && res.error ? res.error : 'Unknown error'));
+                        }
+                    } catch (err) {
+                        console.error('Error applying discount:', err);
+                        alert('Failed to apply discount. Please try again.');
+                    } finally {
+                        applyBtn.disabled = false;
+                    }
+                });
+
+                if (cancelBtn) {
+                    cancelBtn.addEventListener('click', async function(){
+                        if (!orderId) return;
+                        if (isLocked) return;
+                        if (!confirm('Are you sure you want to cancel the discount?')) return;
+
+                        cancelBtn.disabled = true;
+                        try {
+                            const res = await postForm('/Payment/CancelDiscount', { orderId: String(orderId) });
+                            if (res && res.success) {
+                                input.value = '';
+                                await refresh();
+                                syncFromDom();
+                            } else {
+                                alert('Failed to cancel discount: ' + (res && res.error ? res.error : 'Unknown error'));
+                            }
+                        } catch (err) {
+                            console.error('Error canceling discount:', err);
+                            alert('Failed to cancel discount. Please try again.');
+                        } finally {
+                            cancelBtn.disabled = false;
+                        }
+                    });
+                }
+
+                [typeAmount, typePercent].forEach(el => el && el.addEventListener('change', setPrefix));
+                input.addEventListener('keydown', function(evt) {
+                    if (evt.key === 'Enter') {
+                        evt.preventDefault();
+                        applyBtn.click();
+                    }
+                });
+
+                setPrefix();
+                // Expose a safe sync function so refresh() can keep UI consistent.
+                window.__posDiscountSync = syncFromDom;
+                // Expose a reset for "Next Order" / new order creation.
+                window.__posDiscountReset = resetUi;
+                syncFromDom();
+            })();
 
             setPriceFilter(activePriceFilterKey);
             toggleOrderSections(!!orderId);
