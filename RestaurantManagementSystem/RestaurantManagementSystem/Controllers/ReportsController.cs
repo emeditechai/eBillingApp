@@ -1,11 +1,14 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
 using RestaurantManagementSystem.Filters;
 using RestaurantManagementSystem.Models;
 using RestaurantManagementSystem.Models.Authorization;
 using RestaurantManagementSystem.ViewModels;
 using RestaurantManagementSystem.Services;
+using Microsoft.AspNetCore.Http;
+using SkiaSharp;
 using System.Data;
 using System.Linq;
 using System.Security.Claims;
@@ -1483,6 +1486,21 @@ namespace RestaurantManagementSystem.Controllers
                     ToDate = DateTime.Today
                 }
             };
+
+            // Default Counter filter from POS session (if selected)
+            try
+            {
+                var posCounterId = HttpContext?.Session?.GetInt32("POS.SelectedCounterId") ?? 0;
+                if (posCounterId > 0)
+                {
+                    model.Filter.CounterId = posCounterId;
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+
             var canViewAllCollections = CurrentUserCanViewAllReportData();
             var currentUserId = GetCurrentUserId();
             ViewBag.CanViewAllCollectionUsers = canViewAllCollections;
@@ -1491,6 +1509,7 @@ namespace RestaurantManagementSystem.Controllers
                 model.Filter.UserId = currentUserId;
             }
             await LoadPaymentMethodsAsync(model);
+            await LoadCountersAsync(model);
             await LoadCollectionRegisterDataAsync(model, canViewAllCollections, currentUserId);
             await SetViewPermissionsAsync(MenuCodes.Collection);
             return View(model);
@@ -1510,9 +1529,254 @@ namespace RestaurantManagementSystem.Controllers
                 model.Filter.UserId = currentUserId;
             }
             await LoadPaymentMethodsAsync(model);
+            await LoadCountersAsync(model);
             await LoadCollectionRegisterDataAsync(model, canViewAllCollections, currentUserId);
             await SetViewPermissionsAsync(MenuCodes.Collection);
             return View(model);
+        }
+
+        [HttpGet]
+        [RequirePermission(MenuCodes.Collection, PermissionAction.Export)]
+        public async Task<IActionResult> CollectionRegisterPdf(DateTime? fromDate, DateTime? toDate, int? paymentMethodId, int? counterId)
+        {
+            ViewData["Title"] = "Order Wise Payment Method Wise Collection Register";
+
+            var model = new CollectionRegisterViewModel
+            {
+                Filter = new CollectionRegisterFilter
+                {
+                    FromDate = fromDate?.Date ?? DateTime.Today,
+                    ToDate = toDate?.Date ?? DateTime.Today,
+                    PaymentMethodId = paymentMethodId,
+                    CounterId = counterId
+                }
+            };
+
+            var canViewAllCollections = CurrentUserCanViewAllReportData();
+            var currentUserId = GetCurrentUserId();
+            if (!canViewAllCollections)
+            {
+                model.Filter.UserId = currentUserId;
+            }
+
+            await LoadPaymentMethodsAsync(model);
+            await LoadCountersAsync(model);
+            await LoadCollectionRegisterDataAsync(model, canViewAllCollections, currentUserId);
+
+            var pdfBytes = BuildCollectionRegisterPdf(model);
+            var fileName = BuildCollectionRegisterExportFileName(model.Filter, "pdf");
+            return File(pdfBytes, "application/pdf", fileName);
+        }
+
+        private static string BuildCollectionRegisterExportFileName(CollectionRegisterFilter filter, string extension)
+        {
+            var from = (filter.FromDate ?? DateTime.Today).ToString("yyyy-MM-dd");
+            var to = (filter.ToDate ?? DateTime.Today).ToString("yyyy-MM-dd");
+            var counter = string.IsNullOrWhiteSpace(filter.CounterName) ? "ALL" : filter.CounterName;
+            var safeCounter = new string(counter.Where(ch => char.IsLetterOrDigit(ch) || ch == '-' || ch == '_' || ch == ' ').ToArray())
+                .Trim()
+                .Replace(' ', '_');
+            if (string.IsNullOrWhiteSpace(safeCounter)) safeCounter = "ALL";
+            return $"CollectionRegister_{from}_to_{to}_{safeCounter}.{extension}";
+        }
+
+        private static byte[] BuildCollectionRegisterPdf(CollectionRegisterViewModel model)
+        {
+            using var stream = new MemoryStream();
+            using var document = SKDocument.CreatePdf(stream);
+
+            // A4 landscape in points (1/72 inch)
+            const float pageWidth = 842f;
+            const float pageHeight = 595f;
+            const float margin = 28f;
+
+            var regularTypeface = SKTypeface.Default;
+            var boldTypeface = SKTypeface.FromFamilyName(regularTypeface?.FamilyName, SKFontStyle.Bold) ?? regularTypeface;
+
+            var headerPaint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
+            var subHeaderPaint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
+            var labelPaint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
+            var textPaint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
+            var mutedPaint = new SKPaint { Color = SKColors.DimGray, IsAntialias = true };
+            var linePaint = new SKPaint { Color = SKColors.LightGray, StrokeWidth = 1, IsAntialias = true };
+
+            using var headerFont = new SKFont(boldTypeface, 16);
+            using var subHeaderFont = new SKFont(regularTypeface, 10);
+            using var labelFont = new SKFont(boldTypeface, 9);
+            using var textFont = new SKFont(regularTypeface, 9);
+            using var mutedFont = new SKFont(regularTypeface, 9);
+
+            float rowHeight = 16f;
+            float headerHeight = 56f;
+            float filterHeight = 24f;
+            float tableTopPadding = 8f;
+
+            // Columns (sum should fit within (pageWidth - 2*margin))
+            var contentWidth = pageWidth - (2 * margin);
+            // Date, Order, Table, User, Counter, Actual, Disc, GST, Round, Receipt, Method, Details
+            float[] colWidths = { 90, 70, 45, 60, 95, 60, 55, 55, 55, 65, 60, 176 };
+            var totalWidth = colWidths.Sum();
+            if (totalWidth > contentWidth)
+            {
+                // Scale down proportionally if needed
+                var scale = contentWidth / totalWidth;
+                for (int i = 0; i < colWidths.Length; i++) colWidths[i] *= scale;
+            }
+
+            string[] headers = { "Date/Time", "Order No", "Table", "User", "Counter", "Actual", "Discount", "GST", "Round", "Receipt", "Method", "Details" };
+
+            int rowIndex = 0;
+            int pageNumber = 0;
+            while (rowIndex < model.Rows.Count || rowIndex == 0)
+            {
+                pageNumber++;
+                using var canvas = document.BeginPage(pageWidth, pageHeight);
+                float y = margin;
+
+                // Header
+                canvas.DrawText("Collection Register Report", margin, y + 16, SKTextAlign.Left, headerFont, headerPaint);
+                var periodText = $"Period: {(model.Filter.FromDate ?? DateTime.Today):dd-MMM-yyyy} to {(model.Filter.ToDate ?? DateTime.Today):dd-MMM-yyyy} | Payment: {model.Filter.PaymentMethodName} | Counter: {model.Filter.CounterName}";
+                canvas.DrawText(periodText, margin, y + 34, SKTextAlign.Left, subHeaderFont, subHeaderPaint);
+                canvas.DrawText($"Generated: {DateTime.Now:dd-MMM-yyyy HH:mm}", margin, y + 50, SKTextAlign.Left, mutedFont, mutedPaint);
+                y += headerHeight;
+
+                // Summary line
+                var summaryText = $"Transactions: {model.Summary.TotalTransactions} | Total Receipt: {model.Summary.TotalReceiptAmount:N2} | Round Off: {model.Summary.TotalRoundOff:+0.00;-0.00;0.00}";
+                canvas.DrawText(summaryText, margin, y + 12, SKTextAlign.Left, mutedFont, mutedPaint);
+                y += filterHeight;
+                y += tableTopPadding;
+
+                // Table header
+                float x = margin;
+                float headerY = y;
+                for (int c = 0; c < headers.Length; c++)
+                {
+                    canvas.DrawText(headers[c], x + 2, headerY + 12, SKTextAlign.Left, labelFont, labelPaint);
+                    x += colWidths[c];
+                }
+                y += rowHeight;
+                canvas.DrawLine(margin, y, margin + contentWidth, y, linePaint);
+
+                // Rows
+                int rowsPerPage = (int)((pageHeight - margin - y - 18f) / rowHeight);
+                if (rowsPerPage < 1) rowsPerPage = 1;
+
+                int end = Math.Min(model.Rows.Count, rowIndex + rowsPerPage);
+                for (int i = rowIndex; i < end; i++)
+                {
+                    var r = model.Rows[i];
+                    x = margin;
+                    var isRefund = r.PaymentStatus == 3;
+                    var rowPaint = isRefund
+                        ? new SKPaint { Color = SKColors.DarkRed, IsAntialias = true }
+                        : textPaint;
+
+                    string[] values = {
+                        r.PaymentDate.ToString("dd-MMM HH:mm"),
+                        r.OrderNo ?? "",
+                        r.TableNo ?? "",
+                        r.Username ?? "",
+                        string.IsNullOrWhiteSpace(r.CounterName) ? "-" : r.CounterName,
+                        r.ActualBillAmount.ToString("N2"),
+                        Math.Abs(r.DiscountAmount).ToString("N2"),
+                        r.GSTAmount.ToString("N2"),
+                        r.RoundOffAmount.ToString("+0.00;-0.00;0.00"),
+                        r.ReceiptAmount.ToString("N2"),
+                        r.PaymentMethod ?? "",
+                        r.Details ?? ""
+                    };
+
+                    for (int c = 0; c < values.Length; c++)
+                    {
+                        var val = values[c] ?? "";
+                        // simple clipping/truncation
+                        var maxWidth = colWidths[c] - 4;
+                        if (textFont.MeasureText(val) > maxWidth)
+                        {
+                            while (val.Length > 1 && textFont.MeasureText(val + "…") > maxWidth) val = val.Substring(0, val.Length - 1);
+                            val = val + "…";
+                        }
+                        canvas.DrawText(val, x + 2, y + 12, SKTextAlign.Left, textFont, rowPaint);
+                        x += colWidths[c];
+                    }
+
+                    y += rowHeight;
+                    canvas.DrawLine(margin, y, margin + contentWidth, y, linePaint);
+                }
+
+                rowIndex = end;
+
+                // Footer / page number
+                var pageText = $"Page {pageNumber}";
+                canvas.DrawText(pageText, pageWidth - margin, pageHeight - margin + 6, SKTextAlign.Right, mutedFont, mutedPaint);
+
+                document.EndPage();
+
+                if (model.Rows.Count == 0) break;
+            }
+
+            document.Close();
+            return stream.ToArray();
+        }
+
+        private async Task LoadCountersAsync(CollectionRegisterViewModel model)
+        {
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                model.Counters.Clear();
+                model.Counters.Add(new SelectListItem { Value = "", Text = "ALL Counters" });
+
+                using (var existsCmd = new SqlCommand("SELECT CASE WHEN OBJECT_ID('dbo.Counters', 'U') IS NULL THEN 0 ELSE 1 END", connection))
+                {
+                    var hasCountersTableObj = await existsCmd.ExecuteScalarAsync();
+                    var hasCountersTable = false;
+                    try { hasCountersTable = Convert.ToInt32(hasCountersTableObj) == 1; } catch { hasCountersTable = false; }
+                    if (!hasCountersTable)
+                    {
+                        return;
+                    }
+                }
+
+                using var command = new SqlCommand(@"
+SELECT Id, CounterCode, CounterName, IsActive
+FROM dbo.Counters WITH (NOLOCK)
+ORDER BY CounterCode, CounterName", connection);
+
+                using var reader = await command.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    var id = reader.IsDBNull(0) ? 0 : reader.GetInt32(0);
+                    var code = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+                    var name = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
+                    var isActive = !reader.IsDBNull(3) && reader.GetBoolean(3);
+
+                    var displayName = string.IsNullOrWhiteSpace(code)
+                        ? name
+                        : (string.IsNullOrWhiteSpace(name) ? code : $"{code} - {name}");
+
+                    if (!isActive)
+                    {
+                        displayName = string.IsNullOrWhiteSpace(displayName) ? "(Inactive)" : $"{displayName} (Inactive)";
+                    }
+
+                    model.Counters.Add(new SelectListItem
+                    {
+                        Value = id > 0 ? id.ToString() : string.Empty,
+                        Text = string.IsNullOrWhiteSpace(displayName) ? $"Counter #{id}" : displayName
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading counters: {ex.Message}");
+                if (!model.Counters.Any())
+                {
+                    model.Counters.Add(new SelectListItem { Value = "", Text = "ALL Counters" });
+                }
+            }
         }
 
         private async Task LoadPaymentMethodsAsync(CollectionRegisterViewModel model)
@@ -1575,17 +1839,63 @@ namespace RestaurantManagementSystem.Controllers
                 command.Parameters.AddWithValue("@PaymentMethodId", (object?)model.Filter.PaymentMethodId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@UserId", (object?)requestedUserId ?? DBNull.Value);
 
+                // Counter filter (only if the stored procedure supports it)
+                var hasCounterParam = false;
+                try
+                {
+                    using var paramCheck = new SqlCommand(@"
+SELECT COUNT(1)
+FROM sys.parameters
+WHERE object_id = OBJECT_ID('dbo.usp_GetCollectionRegister')
+  AND name = '@CounterId'", connection);
+                    var hasParamObj = await paramCheck.ExecuteScalarAsync();
+                    try { hasCounterParam = Convert.ToInt32(hasParamObj) > 0; } catch { hasCounterParam = false; }
+                    if (hasCounterParam)
+                    {
+                        command.Parameters.AddWithValue("@CounterId", (object?)model.Filter.CounterId ?? DBNull.Value);
+                    }
+                }
+                catch
+                {
+                    // ignore - keep compatibility
+                }
+
                 using var reader = await command.ExecuteReaderAsync();
 
                 model.Rows.Clear();
                 // Read detail rows
                 while (await reader.ReadAsync())
                 {
+                    int? counterId = null;
+                    string counterName = string.Empty;
+                    try
+                    {
+                        var counterIdOrdinal = reader.GetOrdinal("CounterId");
+                        if (!reader.IsDBNull(counterIdOrdinal))
+                        {
+                            var raw = reader.GetValue(counterIdOrdinal);
+                            if (raw != null && raw != DBNull.Value)
+                            {
+                                try { counterId = Convert.ToInt32(raw); } catch { counterId = null; }
+                            }
+                        }
+                    }
+                    catch { /* ignore */ }
+
+                    try
+                    {
+                        var counterNameOrdinal = reader.GetOrdinal("CounterName");
+                        counterName = reader.IsDBNull(counterNameOrdinal) ? string.Empty : reader.GetString(counterNameOrdinal);
+                    }
+                    catch { /* ignore */ }
+
                     var row = new CollectionRegisterRow
                     {
                         OrderNo = reader.GetString(reader.GetOrdinal("OrderNo")),
                         TableNo = reader.GetString(reader.GetOrdinal("TableNo")),
                         Username = reader.GetString(reader.GetOrdinal("Username")),
+                        CounterId = counterId,
+                        CounterName = counterName,
                         ActualBillAmount = reader.GetDecimal(reader.GetOrdinal("ActualBillAmount")),
                         DiscountAmount = reader.GetDecimal(reader.GetOrdinal("DiscountAmount")),
                         GSTAmount = reader.GetDecimal(reader.GetOrdinal("GSTAmount")),
@@ -1597,6 +1907,148 @@ namespace RestaurantManagementSystem.Controllers
                         PaymentStatus = reader.GetInt32(reader.GetOrdinal("PaymentStatus"))
                     };
                     model.Rows.Add(row);
+                }
+
+                // Backward-compatible Counter enrichment:
+                // Some DBs may not yet return CounterId/CounterName in usp_GetCollectionRegister.
+                // If missing, fetch Counter details by OrderNumber from Orders (+ Counters if present).
+                if (model.Rows.Any(r => !r.CounterId.HasValue || string.IsNullOrWhiteSpace(r.CounterName)))
+                {
+                    string? ordersCounterCol = null;
+                    try
+                    {
+                        using var ordersCounterColCmd = new SqlCommand(@"
+SELECT CASE
+  WHEN COL_LENGTH('dbo.Orders','CounterID') IS NOT NULL THEN 'CounterID'
+  WHEN COL_LENGTH('dbo.Orders','CounterId') IS NOT NULL THEN 'CounterId'
+  WHEN COL_LENGTH('dbo.Orders','Counter_Id') IS NOT NULL THEN 'Counter_Id'
+  WHEN COL_LENGTH('dbo.Orders','Counter') IS NOT NULL THEN 'Counter'
+  ELSE NULL
+END", connection);
+                        var obj = await ordersCounterColCmd.ExecuteScalarAsync();
+                        if (obj != null && obj != DBNull.Value) ordersCounterCol = obj.ToString();
+                    }
+                    catch { ordersCounterCol = null; }
+
+                    if (!string.IsNullOrWhiteSpace(ordersCounterCol))
+                    {
+                        var hasCountersTable = false;
+                        try
+                        {
+                            using var existsCmd = new SqlCommand("SELECT CASE WHEN OBJECT_ID('dbo.Counters', 'U') IS NULL THEN 0 ELSE 1 END", connection);
+                            var obj = await existsCmd.ExecuteScalarAsync();
+                            hasCountersTable = Convert.ToInt32(obj) == 1;
+                        }
+                        catch { hasCountersTable = false; }
+
+                        async Task<Dictionary<string, (int? CounterId, string CounterDisplay)>> LoadCounterMapByOrderNoAsync(List<string> orderNos)
+                        {
+                            var map = new Dictionary<string, (int? CounterId, string CounterDisplay)>(StringComparer.OrdinalIgnoreCase);
+                            if (orderNos.Count == 0) return map;
+
+                            const int chunkSize = 500;
+                            for (var offset = 0; offset < orderNos.Count; offset += chunkSize)
+                            {
+                                var chunk = orderNos.Skip(offset).Take(chunkSize).ToList();
+                                if (chunk.Count == 0) continue;
+
+                                var paramNames = new List<string>();
+                                using var cmd = new SqlCommand();
+                                cmd.Connection = connection;
+
+                                for (int i = 0; i < chunk.Count; i++)
+                                {
+                                    var pname = "@o" + (offset + i);
+                                    paramNames.Add(pname);
+                                    cmd.Parameters.AddWithValue(pname, chunk[i]);
+                                }
+
+                                cmd.CommandText = $@"
+SELECT o.OrderNumber,
+       TRY_CONVERT(int, o.[{ordersCounterCol}]) AS CounterId,
+       {(hasCountersTable ? "c.CounterCode" : "CAST(NULL AS nvarchar(50)) AS CounterCode")},
+       {(hasCountersTable ? "c.CounterName" : "CAST(NULL AS nvarchar(100)) AS CounterName")}
+FROM dbo.Orders o WITH (NOLOCK)
+{(hasCountersTable ? $"LEFT JOIN dbo.Counters c WITH (NOLOCK) ON c.Id = TRY_CONVERT(int, o.[{ordersCounterCol}])" : string.Empty)}
+WHERE o.OrderNumber IN ({string.Join(",", paramNames)})";
+
+                                using var r = await cmd.ExecuteReaderAsync();
+                                while (await r.ReadAsync())
+                                {
+                                    var orderNo = r.IsDBNull(0) ? string.Empty : r.GetString(0);
+                                    if (string.IsNullOrWhiteSpace(orderNo)) continue;
+
+                                    int? cid = null;
+                                    if (!r.IsDBNull(1))
+                                    {
+                                        var raw = r.GetValue(1);
+                                        if (raw != null && raw != DBNull.Value)
+                                        {
+                                            try { cid = Convert.ToInt32(raw); } catch { cid = null; }
+                                        }
+                                    }
+
+                                    var code = r.IsDBNull(2) ? string.Empty : Convert.ToString(r.GetValue(2)) ?? string.Empty;
+                                    var name = r.IsDBNull(3) ? string.Empty : Convert.ToString(r.GetValue(3)) ?? string.Empty;
+                                    var display = string.Empty;
+                                    if (!string.IsNullOrWhiteSpace(code) && !string.IsNullOrWhiteSpace(name)) display = $"{code} - {name}";
+                                    else if (!string.IsNullOrWhiteSpace(name)) display = name;
+                                    else if (!string.IsNullOrWhiteSpace(code)) display = code;
+                                    else if (cid.HasValue && cid.Value > 0) display = $"Counter #{cid.Value}";
+
+                                    if (!map.ContainsKey(orderNo)) map[orderNo] = (cid, display);
+                                }
+                            }
+
+                            return map;
+                        }
+
+                        var distinctOrderNos = model.Rows
+                            .Select(r => (r.OrderNo ?? string.Empty).Trim())
+                            .Where(x => !string.IsNullOrWhiteSpace(x))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToList();
+
+                        var counterMap = await LoadCounterMapByOrderNoAsync(distinctOrderNos);
+
+                        foreach (var row in model.Rows)
+                        {
+                            var orderNo = (row.OrderNo ?? string.Empty).Trim();
+                            if (!string.IsNullOrWhiteSpace(orderNo) && counterMap.TryGetValue(orderNo, out var info))
+                            {
+                                if (!row.CounterId.HasValue && info.CounterId.HasValue) row.CounterId = info.CounterId;
+                                if (string.IsNullOrWhiteSpace(row.CounterName) && !string.IsNullOrWhiteSpace(info.CounterDisplay)) row.CounterName = info.CounterDisplay;
+                            }
+
+                            // Resolve CounterName from loaded counter dropdown (if we have the ID)
+                            if (string.IsNullOrWhiteSpace(row.CounterName) && row.CounterId.HasValue)
+                            {
+                                var selected = model.Counters.FirstOrDefault(c => c.Value == row.CounterId.Value.ToString());
+                                if (selected != null && !string.IsNullOrWhiteSpace(selected.Text))
+                                {
+                                    row.CounterName = selected.Text;
+                                }
+                            }
+
+                            // If server-side filter was applied and we still couldn't resolve per-row display,
+                            // fall back to the selected filter counter name.
+                            if (hasCounterParam && model.Filter.CounterId.HasValue && (row.CounterId is null || row.CounterId <= 0))
+                            {
+                                row.CounterId = model.Filter.CounterId;
+                            }
+                            if (hasCounterParam && model.Filter.CounterId.HasValue && string.IsNullOrWhiteSpace(row.CounterName))
+                            {
+                                row.CounterName = model.Filter.CounterName;
+                            }
+                        }
+                    }
+                }
+
+                // If the DB proc doesn't support CounterId param, apply client-side counter filtering (only when possible).
+                if (!hasCounterParam && model.Filter.CounterId.HasValue && model.Rows.Any(r => r.CounterId.HasValue))
+                {
+                    var wanted = model.Filter.CounterId.Value;
+                    model.Rows = model.Rows.Where(r => r.CounterId.HasValue && r.CounterId.Value == wanted).ToList();
                 }
 
                 // Calculate summary
@@ -1612,6 +2064,13 @@ namespace RestaurantManagementSystem.Controllers
                 {
                     var selectedMethod = model.PaymentMethods.FirstOrDefault(pm => pm.Value == model.Filter.PaymentMethodId.ToString());
                     model.Filter.PaymentMethodName = selectedMethod?.Text ?? "ALL";
+                }
+
+                // Set counter name for display
+                if (model.Filter.CounterId.HasValue)
+                {
+                    var selectedCounter = model.Counters.FirstOrDefault(c => c.Value == model.Filter.CounterId.ToString());
+                    model.Filter.CounterName = selectedCounter?.Text ?? "ALL";
                 }
 
                 if (!string.IsNullOrEmpty(scopedUserDisplayName))

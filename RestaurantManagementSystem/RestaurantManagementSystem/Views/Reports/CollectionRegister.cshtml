@@ -1,6 +1,8 @@
 @model RestaurantManagementSystem.ViewModels.CollectionRegisterViewModel
+@using RestaurantManagementSystem.Models.Authorization
 @{
     ViewData["Title"] = "Collection Register";
+    var reportPermissions = ViewBag.ReportPermissions as PermissionSet ?? new PermissionSet();
 }
 
 <style>
@@ -38,28 +40,37 @@
     <div class="card-body">
         <div class="alert alert-info mb-4">
             <i class="fas fa-info-circle me-2"></i>
-            <strong>Report Formula:</strong> Actual Bill = Subtotal - Discount (Taxable Amount) | Receipt Amount = Actual Bill + GST + Round Off | 
+            <strong>Report Formula:</strong> Actual Bill = Subtotal - Discount (Taxable Amount) | Receipt Amount = Payment Amount + Tip + Round Off (signed) | 
             <strong>Note:</strong> Shows individual payment records (split payments appear as separate rows)
         </div>
         
-        <form asp-action="CollectionRegister" method="post" class="row g-3 mb-3">
-            <div class="col-md-2">
+        <form asp-action="CollectionRegister" method="post" class="row g-3 mb-3 align-items-end">
+            <div class="col-lg-2 col-md-3">
                 <label asp-for="Filter.FromDate" class="form-label">From Date</label>
                 <input asp-for="Filter.FromDate" class="form-control" type="date" />
             </div>
-            <div class="col-md-2">
+            <div class="col-lg-2 col-md-3">
                 <label asp-for="Filter.ToDate" class="form-label">To Date</label>
                 <input asp-for="Filter.ToDate" class="form-control" type="date" />
             </div>
-            <div class="col-md-3">
+            <div class="col-lg-3 col-md-6">
                 <label asp-for="Filter.PaymentMethodId" class="form-label">Payment Method</label>
                 <select asp-for="Filter.PaymentMethodId" asp-items="Model.PaymentMethods" class="form-select">
                 </select>
             </div>
-            <div class="col-md-5 d-flex align-items-end">
-                <button type="submit" class="btn btn-success me-2"><i class="fas fa-sync-alt me-1"></i>Refresh</button>
-                <button type="button" id="exportCsvBtn" class="btn btn-outline-secondary me-2"><i class="fas fa-file-csv me-1"></i>Export CSV</button>
-                <button type="button" id="exportExcelBtn" class="btn btn-outline-success me-2"><i class="fas fa-file-excel me-1"></i>Export Excel</button>
+            <div class="col-lg-3 col-md-6">
+                <label asp-for="Filter.CounterId" class="form-label">Counter</label>
+                <select asp-for="Filter.CounterId" asp-items="Model.Counters" class="form-select">
+                </select>
+            </div>
+            <div class="col-lg-2 col-md-12 d-flex justify-content-lg-end justify-content-start gap-2 flex-wrap">
+                <button type="submit" class="btn btn-success"><i class="fas fa-sync-alt me-1"></i>Refresh</button>
+                @if (reportPermissions.CanExport)
+                {
+                    <button type="button" id="exportCsvBtn" class="btn btn-outline-secondary"><i class="fas fa-file-csv me-1"></i>CSV</button>
+                    <button type="button" id="exportExcelBtn" class="btn btn-outline-success"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                    <button type="button" id="exportPdfBtn" class="btn btn-outline-danger"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                }
                 <button type="button" id="printBtn" class="btn btn-outline-primary"><i class="fas fa-print me-1"></i>Print</button>
             </div>
         </form>
@@ -133,6 +144,7 @@
                 <i class="fas fa-filter me-2"></i>
                 <strong>Period:</strong> @(Model.Filter.FromDate?.ToString("dd-MMM-yyyy")) to @(Model.Filter.ToDate?.ToString("dd-MMM-yyyy")) |
                 <strong>Payment Method:</strong> @Model.Filter.PaymentMethodName |
+                <strong>Counter:</strong> @Model.Filter.CounterName |
                 <strong>Records:</strong> @(Model.Rows.Count)
             </div>
 
@@ -144,6 +156,7 @@
                             <th>Order No</th>
                             <th>Table No</th>
                             <th>Username</th>
+                            <th>Counter</th>
                             <th class="text-end">Actual Bill</th>
                             <th class="text-end">Discount</th>
                             <th class="text-end">GST Amount</th>
@@ -164,6 +177,7 @@
                                 <td>@row.OrderNo</td>
                                 <td>@row.TableNo</td>
                                 <td>@row.Username</td>
+                                <td class="text-nowrap">@(!string.IsNullOrWhiteSpace(row.CounterName) ? row.CounterName : "-")</td>
                                 <td class="text-end @textClass">₹@(row.ActualBillAmount.ToString("N2"))</td>
                                 <td class="text-end @textClass">₹@(Math.Abs(row.DiscountAmount).ToString("N2"))</td>
                                 <td class="text-end @(isRefund ? "text-danger" : "text-success")">₹@(row.GSTAmount.ToString("N2"))</td>
@@ -176,7 +190,7 @@
                     </tbody>
                     <tfoot class="table-light fw-bold">
                         <tr>
-                            <td colspan="4" class="text-end">TOTAL:</td>
+                            <td colspan="5" class="text-end">TOTAL:</td>
                             <td class="text-end">₹@(Model.Summary.TotalActualAmount.ToString("N2"))</td>
                             <td class="text-end">₹@(Model.Summary.TotalDiscount.ToString("N2"))</td>
                             <td class="text-end text-success">₹@(Model.Summary.TotalGST.ToString("N2"))</td>
@@ -199,7 +213,27 @@
 
 @section Scripts {
     <script>
-        document.getElementById('exportCsvBtn').addEventListener('click', function() {
+        function ensureExportAllowed() {
+            var canExport = @((reportPermissions.CanExport).ToString().ToLower());
+            if (!canExport) {
+                alert('You do not have permission to export this report.');
+                return false;
+            }
+            return true;
+        }
+
+        function buildExportFileSuffix() {
+            const from = (document.querySelector('[name="Filter.FromDate"]')?.value || '').toString();
+            const to = (document.querySelector('[name="Filter.ToDate"]')?.value || '').toString();
+            const counterText = (document.querySelector('[name="Filter.CounterId"] option:checked')?.textContent || 'ALL').trim();
+            const safeCounter = counterText.replace(/[^a-z0-9\-_ ]/gi, '').replace(/\s+/g, '_');
+            const safeFrom = from || new Date().toISOString().split('T')[0];
+            const safeTo = to || safeFrom;
+            return `${safeFrom}_to_${safeTo}_${safeCounter}`;
+        }
+
+        document.getElementById('exportCsvBtn')?.addEventListener('click', function() {
+            if (!ensureExportAllowed()) return;
             const table = document.getElementById('collectionTable');
             let csv = [];
             
@@ -232,18 +266,36 @@
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = 'CollectionRegister_' + new Date().toISOString().split('T')[0] + '.csv';
+            link.download = 'CollectionRegister_' + buildExportFileSuffix() + '.csv';
             link.click();
         });
 
-        document.getElementById('exportExcelBtn').addEventListener('click', function() {
+        document.getElementById('exportExcelBtn')?.addEventListener('click', function() {
+            if (!ensureExportAllowed()) return;
             // For Excel export, we'll use HTML table format which Excel can open
             const table = document.getElementById('collectionTable').outerHTML;
             const blob = new Blob([table], { type: 'application/vnd.ms-excel' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = 'CollectionRegister_' + new Date().toISOString().split('T')[0] + '.xls';
+            link.download = 'CollectionRegister_' + buildExportFileSuffix() + '.xls';
             link.click();
+        });
+
+        document.getElementById('exportPdfBtn')?.addEventListener('click', function() {
+            if (!ensureExportAllowed()) return;
+            const form = document.querySelector('form[asp-action="CollectionRegister"], form[action*="CollectionRegister"]');
+            const from = (document.querySelector('[name="Filter.FromDate"]')?.value || '').toString();
+            const to = (document.querySelector('[name="Filter.ToDate"]')?.value || '').toString();
+            const paymentMethodId = (document.querySelector('[name="Filter.PaymentMethodId"]')?.value || '').toString();
+            const counterId = (document.querySelector('[name="Filter.CounterId"]')?.value || '').toString();
+            const params = new URLSearchParams();
+            if (from) params.set('fromDate', from);
+            if (to) params.set('toDate', to);
+            if (paymentMethodId) params.set('paymentMethodId', paymentMethodId);
+            if (counterId) params.set('counterId', counterId);
+
+            const url = '@Url.Action("CollectionRegisterPdf", "Reports")' + (params.toString() ? ('?' + params.toString()) : '');
+            window.open(url, '_blank');
         });
 
         document.getElementById('printBtn').addEventListener('click', function() {

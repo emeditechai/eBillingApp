@@ -6,6 +6,7 @@ namespace RestaurantManagementSystem.ViewModels
     {
         public CollectionRegisterFilter Filter { get; set; } = new CollectionRegisterFilter();
         public List<SelectListItem> PaymentMethods { get; set; } = new List<SelectListItem>();
+        public List<SelectListItem> Counters { get; set; } = new List<SelectListItem>();
         public List<CollectionRegisterRow> Rows { get; set; } = new List<CollectionRegisterRow>();
         public CollectionRegisterSummary Summary { get; set; } = new CollectionRegisterSummary();
     }
@@ -16,6 +17,8 @@ namespace RestaurantManagementSystem.ViewModels
         public DateTime? ToDate { get; set; }
         public int? PaymentMethodId { get; set; }
         public string PaymentMethodName { get; set; } = "ALL";
+        public int? CounterId { get; set; }
+        public string CounterName { get; set; } = "ALL";
         public int? UserId { get; set; }
         public string UserDisplayName { get; set; } = string.Empty;
     }
@@ -25,6 +28,8 @@ namespace RestaurantManagementSystem.ViewModels
         public string OrderNo { get; set; }
         public string TableNo { get; set; }
         public string Username { get; set; }
+        public int? CounterId { get; set; }
+        public string CounterName { get; set; }
         public decimal ActualBillAmount { get; set; } // Subtotal - Discount (before GST)
         public decimal DiscountAmount { get; set; }
         public decimal GSTAmount { get; set; } // CGST + SGST
