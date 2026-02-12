@@ -933,7 +933,9 @@ namespace RestaurantManagementSystem.Controllers
                     SELECT DISTINCT u.Id, u.FirstName, u.LastName 
                     FROM Users u 
                     INNER JOIN Orders o ON u.Id = o.UserId 
-                    WHERE u.IsActive = 1 AND u.FirstName IS NOT NULL AND u.LastName IS NOT NULL
+                                        WHERE u.IsActive = 1
+                                            AND u.FirstName IS NOT NULL AND u.LastName IS NOT NULL
+                                            AND NULLIF(LTRIM(RTRIM(o.OrderNumber)), '') IS NOT NULL
                     ORDER BY u.FirstName, u.LastName", connection);
                 
                 using var reader = await command.ExecuteReaderAsync();

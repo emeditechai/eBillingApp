@@ -40,6 +40,7 @@ BEGIN
     LEFT JOIN Users u ON o.UserId = u.Id
     WHERE 
         CAST(o.CreatedAt AS DATE) BETWEEN @FromDate AND @ToDate
+        AND NULLIF(LTRIM(RTRIM(o.OrderNumber)), '') IS NOT NULL
         AND (@UserId IS NULL OR o.UserId = @UserId)
         AND (@Status IS NULL OR o.Status = @Status)
         AND (@OrderType IS NULL OR o.OrderType = @OrderType)
@@ -105,6 +106,7 @@ BEGIN
     ) oi ON o.Id = oi.OrderId
     WHERE 
         CAST(o.CreatedAt AS DATE) BETWEEN @FromDate AND @ToDate
+        AND NULLIF(LTRIM(RTRIM(o.OrderNumber)), '') IS NOT NULL
         AND (@UserId IS NULL OR o.UserId = @UserId)
         AND (@Status IS NULL OR o.Status = @Status)
         AND (@OrderType IS NULL OR o.OrderType = @OrderType)
@@ -126,6 +128,7 @@ BEGIN
     LEFT JOIN Users u ON o.UserId = u.Id
     WHERE 
         CAST(o.CreatedAt AS DATE) BETWEEN @FromDate AND @ToDate
+        AND NULLIF(LTRIM(RTRIM(o.OrderNumber)), '') IS NOT NULL
         AND (@UserId IS NULL OR o.UserId = @UserId)
         AND (@Status IS NULL OR o.Status = @Status)
         AND (@OrderType IS NULL OR o.OrderType = @OrderType)
@@ -147,6 +150,7 @@ BEGIN
     FROM Users u
     INNER JOIN Orders o ON u.Id = o.UserId
     WHERE u.IsActive = 1
+            AND NULLIF(LTRIM(RTRIM(o.OrderNumber)), '') IS NOT NULL
     ORDER BY u.FirstName, u.LastName;
 
     -- Result Set 5: Hourly Order Distribution (for charts)
@@ -157,6 +161,7 @@ BEGIN
     FROM Orders o
     WHERE 
         CAST(o.CreatedAt AS DATE) BETWEEN @FromDate AND @ToDate
+        AND NULLIF(LTRIM(RTRIM(o.OrderNumber)), '') IS NOT NULL
         AND (@UserId IS NULL OR o.UserId = @UserId)
         AND (@Status IS NULL OR o.Status = @Status)
         AND (@OrderType IS NULL OR o.OrderType = @OrderType)
