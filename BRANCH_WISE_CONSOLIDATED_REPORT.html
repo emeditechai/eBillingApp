@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Branch-wise Consolidated Report</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Branch-wise Consolidated Report</h1>
+</header>
+<h1 id="branch-wise-implementation-guide-end-to-end">Branch-wise
+Implementation Guide (End-to-End)</h1>
+<p>Date: 12 Feb 2026</p>
+<h2 id="goal">Goal</h2>
+<p>Make the entire application <strong>branch-aware</strong> so that: -
+Every page loads data <strong>branch-wise</strong> (no cross-branch
+leakage by default) - All transactions (Orders → Items → Kitchen/Bar
+tickets → Payments → Closing → Reports) are <strong>scoped to the active
+branch</strong> - Master pages (Menu, Categories, Tables, Counters,
+Users, Settings, etc.) are either: - Branch-owned and filtered by
+branch, or - Global but optionally overridable per branch (explicitly
+designed)</p>
+<p>This guide describes the recommended approach, design decisions,
+schema changes, rollout steps, and validation checklist.</p>
+<hr />
+<h2 id="decide-the-branch-model-must-be-finalized-first">1) Decide the
+Branch Model (must be finalized first)</h2>
+<h3 id="users-and-branch-access">1.1 Users and Branch access</h3>
+<p>Choose one: 1) <strong>Single-branch user</strong> (simplest): each
+user belongs to exactly one branch. 2) <strong>Multi-branch
+user</strong>: user can access multiple branches and must select an
+<strong>Active Branch</strong>. 3) Add <strong>privileged roles</strong>
+that can view multiple or all branches.</p>
+<p>Recommended for growth: <strong>multi-branch access with a required
+Active Branch</strong>.</p>
+<h3 id="what-is-branch-owned-vs-global">1.2 What is branch-owned vs
+global?</h3>
+<p>Create a table (design contract) for every major entity:</p>
+<p><strong>Typically branch-owned (recommended)</strong> - Tables, Table
+Sections - Counters / POS terminals - Orders, OrderItems,
+KitchenTickets, Bar tickets (BOT) - Payments, PaymentSplits, Refunds,
+Complimentary - Day closing / cash closing / collection register - Audit
+trail (if it contains branch-sensitive data)</p>
+<p><strong>Typically global (optional)</strong> - Menu master
+(Categories, MenuItems, Modifiers) - Tax rules, configuration
+defaults</p>
+<p><strong>Hybrid pattern</strong> (common) - Menu master global, but
+<strong>price / availability / tax</strong> can be overridden per
+branch.</p>
+<h3 id="branch-scope-rules">1.3 Branch scope rules</h3>
+<p>Write these rules and keep them consistent: - “If active branch is X,
+show ONLY branch X data” - “Admin can switch branch; normal users may be
+restricted” - “Any access by ID (e.g., /Order/Details?id=123) must
+validate that record belongs to active branch unless privileged”</p>
+<hr />
+<h2 id="database-strategy-recommended">2) Database Strategy
+(recommended)</h2>
+<h3 id="add-a-branches-table">2.1 Add a <code>Branches</code> table</h3>
+<p>Create <code>Branches</code> with at least: - <code>Id</code> (PK) -
+<code>BranchCode</code> (unique) - <code>BranchName</code> -
+<code>IsActive</code> - Address/phone fields (optional)</p>
+<h3 id="add-branchid-to-branch-owned-tables">2.2 Add
+<code>BranchId</code> to branch-owned tables</h3>
+<p>Add a <code>BranchId</code> foreign key column and index it.</p>
+<p>Recommended minimum (core transactions): -
+<code>Orders(BranchId)</code> - <code>OrderItems(BranchId)</code>
+(optional if always joined via Orders, but recommended for performance)
+- <code>KitchenTickets(BranchId)</code> -
+<code>KitchenTicketItems(BranchId)</code> -
+<code>Payments(BranchId)</code> - <code>Tables(BranchId)</code> -
+<code>TableTurnovers(BranchId)</code> -
+<code>Counters(BranchId)</code></p>
+<p>If there are additional operational tables (discount approvals, void
+logs, etc.), add <code>BranchId</code> there too.</p>
+<h3 id="constraints-indexes">2.3 Constraints + indexes</h3>
+<p>For each transactional table: - <code>BranchId</code> should become
+<code>NOT NULL</code> after backfill - Add FK:
+<code>BranchId → Branches(Id)</code> - Index patterns: -
+<code>IX_Orders_BranchId_CreatedAt</code> -
+<code>IX_Orders_BranchId_Status_CreatedAt</code> -
+<code>IX_Payments_BranchId_PaymentDate</code></p>
+<h3 id="stored-procedure-contract">2.4 Stored procedure contract</h3>
+<p>For every stored procedure that reads/writes branch-owned data: - Add
+parameter: <code>@BranchId INT</code> - Enforce scope: - For reads:
+<code>WHERE BranchId = @BranchId</code> - For writes: set
+<code>BranchId = @BranchId</code> - Defensive validation: - If procedure
+takes a record ID, confirm the record belongs to
+<code>@BranchId</code></p>
+<p>Example rule: - If <code>@OrderId</code> is passed, validate:
+<code>Orders.Id=@OrderId AND Orders.BranchId=@BranchId</code>.</p>
+<hr />
+<h2 id="application-strategy-end-to-end">3) Application Strategy
+(end-to-end)</h2>
+<h3 id="establish-an-active-branch-source-of-truth">3.1 Establish an
+“Active Branch” source of truth</h3>
+<p>Recommended: - Store Allowed Branch IDs in DB (mapping) - On login,
+set an <code>ActiveBranchId</code> in Session - Optionally also store in
+auth claims for easier access</p>
+<p>Create a single helper method used everywhere: -
+<code>GetActiveBranchId()</code></p>
+<h3 id="branch-switch-ui">3.2 Branch switch UI</h3>
+<p>Add a Branch selector in top navigation: - For multi-branch users:
+dropdown to switch Active Branch - On switch: - Update session
+ActiveBranchId - Clear branch-dependent caches (POS menu cache, counter
+selection cache) - Redirect to dashboard</p>
+<h3 id="enforce-branch-in-every-endpoint">3.3 Enforce branch in every
+endpoint</h3>
+<p>For any controller action that loads or modifies data: - Derive
+<code>branchId = GetActiveBranchId()</code> - Pass <code>branchId</code>
+into stored procedures - If performing a direct SQL query, add
+<code>BranchId</code> filter - If endpoint accepts an ID (OrderId,
+PaymentId, TableId): validate it belongs to Active Branch</p>
+<h3 id="dont-trust-client-input">3.4 Don’t trust client input</h3>
+<p>Never accept BranchId from browser without validation. - Browser can
+only <em>request</em> a branch switch - Server validates the user can
+access the requested branch</p>
+<hr />
+<h2 id="master-pages-branch-wise-from-users-to-menu">4) Master Pages
+(branch-wise from Users to Menu)</h2>
+<h3 id="users">4.1 Users</h3>
+<p>Pick one: - <strong>User has BranchId</strong> (single-branch) -
+<strong>UserBranchAccess(UserId, BranchId)</strong> (multi-branch)</p>
+<p>Recommended: mapping table for multi-branch.</p>
+<p>UI changes: - Create/edit user should include: - Default branch -
+Allowed branches list - Role-based privilege (can view all branches)</p>
+<h3 id="tables-sections-reservations">4.2 Tables, Sections,
+Reservations</h3>
+<p>These should almost always be branch-owned: - Filter list pages by
+ActiveBranchId - Enforce BranchId during create/update</p>
+<h3 id="counters-pos-setup">4.3 Counters / POS setup</h3>
+<p>Counters should be branch-owned: - When selecting POS counter, only
+show counters for ActiveBranchId - When loading POS dashboard/orders,
+filter by ActiveBranchId</p>
+<h3 id="menu-and-pricing-model">4.4 Menu and pricing model</h3>
+<p>Choose one design:</p>
+<p><strong>Option A: Fully branch-owned menu</strong> (simpler, but
+duplicates data) - Menu tables include BranchId and are filtered</p>
+<p><strong>Option B: Global menu + branch overrides
+(recommended)</strong> - Global: <code>MenuItems</code>,
+<code>Categories</code>, <code>Modifiers</code> - Branch override
+tables: -
+<code>BranchMenuItemSettings(BranchId, MenuItemId, PriceOverride, IsAvailable, TaxOverride, ...)</code></p>
+<p>This keeps master data consistent and allows per-branch
+differences.</p>
+<h3 id="settings-gst-taxes">4.5 Settings / GST / Taxes</h3>
+<p>Decide: - Global settings with optional branch overrides
+(recommended) - Or strictly per-branch settings</p>
+<p>Implement as: - <code>Settings</code> table global -
+<code>BranchSettings(BranchId, Key, Value)</code> override</p>
+<hr />
+<h2 id="transaction-flows-foodbarposkitchenpayment">5) Transaction Flows
+(Food/Bar/POS/Kitchen/Payment)</h2>
+<h3 id="order-creation">5.1 Order creation</h3>
+<p>When creating an order: - Always stamp
+<code>Orders.BranchId = ActiveBranchId</code> - If the order is tied to
+a Table/Turnover/Counter: - Validate those belong to the same branch</p>
+<h3 id="add-items-kitchen-tickets">5.2 Add items / kitchen tickets</h3>
+<ul>
+<li>Item inserts must match order’s branch</li>
+<li>Any “kitchen ticket creation” must be filtered/scoped to branch</li>
+</ul>
+<h3 id="dashboards">5.3 Dashboards</h3>
+<p>Order dashboard, Bar dashboard, Kitchen dashboard: - Add
+<code>BranchId = ActiveBranchId</code> filter to the queries</p>
+<h3 id="payments">5.4 Payments</h3>
+<p>For all payment actions: - Validate the order belongs to
+ActiveBranchId - Store <code>BranchId</code> in payment tables</p>
+<h3 id="closing-day-closing">5.5 Closing / day closing</h3>
+<p>Every closing summary must: - Filter only orders/payments from
+ActiveBranchId - Store <code>BranchId</code> on closing tables</p>
+<hr />
+<h2 id="reports-branch-wise">6) Reports (branch-wise)</h2>
+<p>For every report stored procedure: - Add <code>@BranchId</code> (or
+<code>@BranchIds</code> for privileged roles) - Add
+<code>WHERE BranchId = @BranchId</code> - Ensure exports (CSV/Excel/PDF)
+use the same query path</p>
+<p>Be careful with: - “Totals” cards on dashboards - Financial summaries
+- GST breakup - Collection register</p>
+<hr />
+<h2 id="data-migration-plan-safe-rollout">7) Data Migration Plan (safe
+rollout)</h2>
+<h3 id="phase-1-add-schema-nullable">7.1 Phase 1: Add schema
+(nullable)</h3>
+<ul>
+<li>Add <code>Branches</code></li>
+<li>Add <code>BranchId</code> columns as NULLABLE</li>
+<li>Add indexes (optional at this stage)</li>
+</ul>
+<h3 id="phase-2-backfill">7.2 Phase 2: Backfill</h3>
+<p>Populate BranchId for existing data using deterministic rules: -
+Prefer: <code>Orders.CounterId → Counters.BranchId</code> - Else:
+<code>Orders.TableTurnoverId → Tables.BranchId</code> - Else: default to
+“Main” branch</p>
+<p>Backfill dependent tables: -
+<code>OrderItems.BranchId = Orders.BranchId</code> -
+<code>Payments.BranchId = Orders.BranchId</code> (or from payment
+source)</p>
+<h3 id="phase-3-enforce-not-null-fk">7.3 Phase 3: Enforce NOT NULL +
+FK</h3>
+<p>After verification: - Convert BranchId columns to NOT NULL - Add
+foreign keys to Branches - Add required indexes</p>
+<h3 id="phase-4-deploy-app-changes">7.4 Phase 4: Deploy app changes</h3>
+<ul>
+<li>Login sets ActiveBranchId</li>
+<li>All queries filter by branch</li>
+</ul>
+<h3 id="phase-5-cleanup">7.5 Phase 5: Cleanup</h3>
+<ul>
+<li>Remove legacy code paths that don’t pass BranchId</li>
+<li>Add monitoring / audit for cross-branch attempts</li>
+</ul>
+<hr />
+<h2 id="hardening-prevent-cross-branch-access-by-id">8) Hardening
+(prevent cross-branch access by ID)</h2>
+<h3 id="always-validate-record-ownership">8.1 Always validate record
+ownership</h3>
+<p>For endpoints like: - <code>/Order/Details?id=...</code> -
+<code>/Payment/Manage?orderId=...</code> -
+<code>/Kitchen/Ticket?id=...</code></p>
+<p>Server must validate: -
+<code>record.BranchId == ActiveBranchId</code> unless privileged.</p>
+<h3 id="central-authorization-rule">8.2 Central authorization rule</h3>
+<p>Add a helper: - <code>UserCanAccessBranch(branchId)</code> -
+<code>UserCanViewAllBranches()</code></p>
+<hr />
+<h2 id="testing-plan-mandatory">9) Testing Plan (mandatory)</h2>
+<p>Create 2 branches: A and B.</p>
+<h3 id="access-control-tests">9.1 Access control tests</h3>
+<ul>
+<li>Branch A user cannot see Branch B orders/tables/payments</li>
+<li>Branch switch changes data immediately</li>
+</ul>
+<h3 id="transaction-tests">9.2 Transaction tests</h3>
+<ul>
+<li>Create order in A, ensure it never appears in B dashboards</li>
+<li>Payment in A cannot be applied from B UI</li>
+</ul>
+<h3 id="report-tests">9.3 Report tests</h3>
+<ul>
+<li>Reports totals match dashboard totals for same branch</li>
+<li>Exports match on-screen data</li>
+</ul>
+<h3 id="performance">9.4 Performance</h3>
+<ul>
+<li>Ensure indexes exist for <code>(BranchId, CreatedAt)</code> style
+filters</li>
+</ul>
+<hr />
+<h2 id="recommended-implementation-order-step-by-step">10) Recommended
+Implementation Order (step-by-step)</h2>
+<ol type="1">
+<li>Finalize branch ownership matrix (transaction tables + master
+tables)</li>
+<li>Create <code>Branches</code> + user-branch mapping tables</li>
+<li>Add ActiveBranchId in login + UI selector</li>
+<li>Add <code>BranchId</code> to Tables + Counters + TableTurnovers
+first</li>
+<li>Add <code>BranchId</code> to Orders and enforce it end-to-end</li>
+<li>Propagate to OrderItems, KitchenTickets, Payments</li>
+<li>Update all dashboards to filter by branch</li>
+<li>Update all reports SPs + exports</li>
+<li>Update master pages (Menu/Categories/Modifiers) according to chosen
+model</li>
+<li>Hardening + test suite + rollout</li>
+</ol>
+<hr />
+<h2 id="notes-common-pitfalls">Notes / Common pitfalls</h2>
+<ul>
+<li>If “MenuItems are global” but “availability is branch-wise”, you
+must have a branch override table; otherwise you will constantly fight
+inconsistent behavior.</li>
+<li>If you allow multi-branch users, always store an ActiveBranchId;
+showing mixed data across branches is the most common source of report
+mismatches.</li>
+<li>Ensure POS cached data (menu, counters) is scoped by branch;
+otherwise users will see wrong price/availability.</li>
+</ul>
+<hr />
+<h2 id="deliverables-checklist-what-you-should-end-up-with">Deliverables
+Checklist (what you should end up with)</h2>
+<ul>
+<li><code>Branches</code> master + <code>UserBranchAccess</code> mapping
+(if multi-branch)</li>
+<li>BranchId columns + FKs + indexes on all branch-owned tables</li>
+<li>Updated stored procedures: all take <code>@BranchId</code></li>
+<li>Login + session stores ActiveBranchId</li>
+<li>Branch switch UI</li>
+<li>Every controller action filters by ActiveBranchId</li>
+<li>All reports and exports filter by ActiveBranchId</li>
+<li>Migration scripts + backfill scripts + validation SQL</li>
+</ul>
+<h1 id="branch-wise-implementation-repo-db-scan-report">Branch-wise
+Implementation (Repo + DB Scan Report)</h1>
+<p>This document is a repo-specific assessment for adding a
+<strong>Restaurant Branch</strong> concept across login → all pages →
+all transactions, with <strong>admin consolidated (all-branches)
+reporting</strong>.</p>
+<p>It is based on scanning this workspace (C# controllers/views + SQL
+scripts). It does <strong>not</strong> implement anything; it’s a
+step-by-step workaround / rollout plan.</p>
+<hr />
+<h2 id="what-the-scan-shows-current-state">1) What the scan shows
+(current state)</h2>
+<p><strong>Repo size (quick stats)</strong> - C# files: ~197 -
+Controllers: ~49 - Razor views: ~166 - SQL scripts: ~153</p>
+<p><strong>Where data access lives</strong> - A lot of SQL is written
+inline inside controllers (not a centralized repository layer). - Stored
+procedures are also used (at least ~91 call sites found), so branch
+filtering must be done in both: - controller inline SQL - stored
+procedures / views</p>
+<p><strong>High-traffic transactional areas</strong> (most likely to
+need strict branch filtering) - Orders / POS:
+<code>OrderController</code>, <code>OrderController_NewItems</code>, and
+related SQL procs. - Payments / split bills / settlement:
+<code>PaymentController</code> + <code>Payments_Setup.sql</code>. - Bar
+(BOT module): <code>BOTController</code> + <code>BOT_Setup.sql</code>. -
+Kitchen tickets: <code>KitchenController</code> +
+<code>Kitchen_Setup.sql</code>. - Reports:
+<code>ReportsController</code> + multiple report stored procedures. -
+Table service &amp; reservations: <code>TableServiceController</code>,
+<code>ReservationController</code> + setup scripts.</p>
+<p><strong>Important discovery: “BranchID” already exists but for Hotel
+Room Service</strong> This repo already uses a <em>hotel</em> branch
+concept: - <code>Orders.H_BranchID</code> (and other hotel-related
+columns like booking/room) - View:
+<code>vw_RoomService_PendingSettlement</code> maps
+<code>o.H_BranchID AS BranchID</code> - Procedure:
+<code>usp_GetRoomServicePendingSettlementDetails(@BranchID)</code>
+filters on <code>o.H_BranchID = @BranchID</code> - UI:
+<code>Views/Order/Create.cshtml</code> has <code>hotelBranch</code>
+dropdown +
+<code>/Order/GetCheckedInOccupiedRooms?branchId=...</code></p>
+<p><strong>Implication:</strong> - Do <strong>not</strong> reuse
+<code>H_BranchID</code> for restaurant branches. - Introduce a
+<strong>separate restaurant branch key</strong>,
+e.g. <code>Orders.BranchId</code> (recommended), and keep hotel
+integration intact.</p>
+<hr />
+<h2 id="design-decision-you-must-confirm-before-coding">2) Design
+decision you must confirm (before coding)</h2>
+<p>You need to decide these 4 items up-front, because they change both
+schema and UI behavior:</p>
+<ol type="1">
+<li><strong>Branch scope model</strong>
+<ul>
+<li><strong>Strict branch isolation</strong>: every transactional table
+row belongs to exactly one branch.</li>
+<li>Admin may read all branches; normal users only their branch.</li>
+</ul></li>
+<li><strong>Branch selection UX</strong>
+<ul>
+<li>Option A: user is tied to a single branch (no switch UI).</li>
+<li>Option B (your request): user can <strong>switch branch</strong>
+(session-based active branch).</li>
+</ul></li>
+<li><strong>Master data (Menu/Prices) strategy</strong>
+<ul>
+<li>Global masters shared across branches (simpler) vs.</li>
+<li>Branch-specific menu/pricing (more complex but common for
+chains)</li>
+</ul></li>
+<li><strong>Counter strategy</strong>
+<ul>
+<li><code>Counters</code> are almost always branch-specific
+(recommended), because POS counter belongs to a physical location.</li>
+</ul></li>
+</ol>
+<hr />
+<h2 id="recommended-branch-data-model-db">3) Recommended branch data
+model (DB)</h2>
+<h3 id="core-tables">3.1 Core tables</h3>
+<p>Create: -
+<code>Branches (Id, BranchCode, BranchName, IsActive, CreatedAt, UpdatedAt, ...)</code>
+-
+<code>UserBranches (UserId, BranchId, IsDefault, IsActive, ...)</code></p>
+<p>Add: - <code>Users.DefaultBranchId</code> (optional but
+practical)</p>
+<h3 id="transactional-tables-that-should-get-branchid">3.2 Transactional
+tables that should get <code>BranchId</code></h3>
+<p>At minimum: - <code>Orders</code> (most important)<br />
+- <code>OrderItems</code> (optional if always joined from Orders, but
+recommended for indexing / safety) - <code>Payments</code>,
+<code>SplitBills</code>, <code>SplitBillItems</code> -
+<code>TableTurnovers</code>, <code>ServerAssignments</code> -
+<code>Reservations</code>, <code>Waitlist</code>, <code>Tables</code>
+(or at least tables/turnovers) - BOT module: <code>BOT_Header</code>,
+<code>BOT_Detail</code>, <code>BOT_Bills</code>,
+<code>BOT_Payments</code> - Kitchen module: <code>KitchenTickets</code>,
+<code>KitchenTicketItems</code> (and related) - Day closing / cashier:
+<code>CashierDayOpening</code>, <code>CashierDayClose</code>,
+<code>DayLockAudit</code> - Online ordering: <code>OnlineOrders</code>,
+<code>OnlineOrderItems</code> (and related)</p>
+<h3 id="foreign-keys-and-indexes-performance-correctness">3.3 Foreign
+keys and indexes (performance + correctness)</h3>
+<ul>
+<li>Add FK: <code>... BranchId → Branches.Id</code></li>
+<li>Add indexes:
+<ul>
+<li><code>Orders(BranchId, CreatedAt)</code></li>
+<li><code>Orders(BranchId, Status)</code></li>
+<li><code>Payments(BranchId, CreatedAt)</code> or
+<code>Payments(OrderId)</code> + join filter</li>
+<li><code>KitchenTickets(BranchId, Status, CreatedAt)</code></li>
+<li><code>BOT_Header(BranchId, Status, CreatedAt)</code></li>
+</ul></li>
+</ul>
+<hr />
+<h2 id="application-approach-asp.net-core-mvc">4) Application approach
+(ASP.NET Core MVC)</h2>
+<h3 id="where-to-store-the-active-branch">4.1 Where to store the active
+branch</h3>
+<p>This app already uses Session for POS counter selection
+(<code>POS.SelectedCounterId</code>). Reuse the same pattern: - Session
+keys: - <code>BRANCH.ActiveBranchId</code> -
+<code>BRANCH.ActiveBranchName</code> (optional)</p>
+<h3 id="how-to-pick-the-branch-at-login">4.2 How to pick the branch at
+login</h3>
+<p>Recommended flow: - After successful login: - fetch allowed branches
+for user - if only 1 branch → set session active branch automatically -
+if multiple branches → show a “Select Branch” screen once, then store in
+session</p>
+<h3 id="enforcing-branch-scope">4.3 Enforcing branch scope</h3>
+<p>Because SQL is often inline in controllers, the safest pattern is: -
+Make a <strong>single helper</strong> that resolves active branch id (or
+throws) - Every query that reads/writes transactions must include: -
+<code>... WHERE BranchId = @BranchId</code> - or
+<code>JOIN Orders o ... WHERE o.BranchId = @BranchId</code></p>
+<p>For Admin consolidated reporting: - allow
+<code>@BranchId = NULL</code> meaning “all branches” - BUT only if user
+has an <code>Admin</code>/<code>SuperAdmin</code> role/claim</p>
+<hr />
+<h2 id="repo-impact-map-what-you-will-need-to-touch">5) Repo impact map
+(what you will need to touch)</h2>
+<h3 id="controllers-that-are-branch-sensitive-highest-priority">5.1
+Controllers that are branch-sensitive (highest priority)</h3>
+<p>These controllers were found referencing Orders/Payments and are the
+main risk for cross-branch leakage: - <code>OrderController.cs</code> -
+<code>OrderController_NewItems.cs</code> -
+<code>PaymentController.cs</code> - <code>ReportsController.cs</code> -
+<code>BOTController.cs</code> - <code>KitchenController.cs</code> -
+<code>OnlineOrderController.cs</code> -
+<code>ReservationController.cs</code> -
+<code>TableServiceController.cs</code> -
+<code>AuditTrailController.cs</code></p>
+<h3 id="sql-scripts-procedures-examples">5.2 SQL scripts / procedures
+(examples)</h3>
+<p>You will need to branch-scope: - Order creation / item add /
+dashboards / recent orders - Payment info + payment processing - BOT
+dashboard / listing / settlement - Kitchen dashboards / tickets by
+status - Reports procedures (sales/discount/GST/collection
+register/order report/etc.) - Day closing procedures</p>
+<h3 id="existing-hotel-room-service-branch-fields-do-not-break">5.3
+Existing Hotel Room Service branch fields (do not break)</h3>
+<p>Files that currently depend on hotel branch (<code>H_BranchID</code>)
+and should remain separate: -
+<code>RestaurantManagementSystem/RestaurantManagementSystem/SQL/usp_GetRoomServicePendingSettlementDetails.sql</code>
+-
+<code>RestaurantManagementSystem/RestaurantManagementSystem/SQL/vw_RoomService_PendingSettlement.sql</code>
+-
+<code>RestaurantManagementSystem/RestaurantManagementSystem/Views/Order/Create.cshtml</code>
+-
+<code>RestaurantManagementSystem/RestaurantManagementSystem/Controllers/OrderController.cs</code>
+(room-service flow) -
+<code>RestaurantManagementSystem/RestaurantManagementSystem/Controllers/PaymentController.cs</code>
+(room-service settlement references)</p>
+<p>Recommendation: - Keep hotel-related parameter naming as
+<code>HotelBranchId</code> or <code>HBranchId</code> in C# models to
+reduce confusion. - Introduce restaurant <code>BranchId</code> for
+restaurant module.</p>
+<hr />
+<h2 id="step-by-step-workaround-rollout-plan-safe-phases">6)
+Step-by-step workaround / rollout plan (safe phases)</h2>
+<h3 id="phase-0-finalize-rules-12-days">Phase 0 — Finalize rules (1–2
+days)</h3>
+<ul>
+<li>Confirm master data strategy: global vs branch-specific
+menu/prices.</li>
+<li>Confirm whether order numbers are global across branches or
+per-branch.</li>
+<li>Confirm whether admin can switch branch and/or view all.</li>
+</ul>
+<h3 id="phase-1-db-foundation-24-days">Phase 1 — DB foundation (2–4
+days)</h3>
+<ul>
+<li>Create <code>Branches</code> and <code>UserBranches</code>.</li>
+<li>Add nullable <code>BranchId</code> columns to
+<strong>top-level</strong> transaction tables first (Orders, Payments,
+BOT, Kitchen, Reservations).</li>
+<li>Backfill <code>BranchId</code> for existing rows:
+<ul>
+<li>If you only have one branch today: set all existing rows to that
+branch.</li>
+<li>If multiple branches already exist implicitly (by Counter or hotel
+branch): define mapping rules explicitly.</li>
+</ul></li>
+<li>Add indexes on <code>(BranchId, CreatedAt/Status)</code>.</li>
+</ul>
+<h3 id="phase-2-app-active-branch-plumbing-24-days">Phase 2 — App
+“active branch” plumbing (2–4 days)</h3>
+<ul>
+<li>Add a branch selector after login (only when user has &gt;1 allowed
+branch).</li>
+<li>Store active branch in session
+(<code>BRANCH.ActiveBranchId</code>).</li>
+<li>Add a small helper (single source of truth) to get active branch in
+controllers.</li>
+</ul>
+<h3 id="phase-3-enforce-branch-on-write-paths-37-days">Phase 3 — Enforce
+branch on write paths (3–7 days)</h3>
+<p>Do this before read paths to prevent new cross-branch records. -
+Order creation: insert <code>Orders.BranchId = @BranchId</code>. -
+Add/update order items: ensure <code>OrderId</code> belongs to the
+active branch. - Payments: ensure payment is applied only to an order in
+the active branch. - BOT/Kitchen: ensure created rows inherit branch
+from the order.</p>
+<h3 id="phase-4-enforce-branch-on-read-paths-510-days">Phase 4 — Enforce
+branch on read paths (5–10 days)</h3>
+<ul>
+<li>Dashboards (food + bar + kitchen): filter by active branch.</li>
+<li>POS views and active order lists: filter by branch.</li>
+<li>Reports:
+<ul>
+<li>Normal users: filter by branch only.</li>
+<li>Admin: add optional branch filter + “All branches” option.</li>
+</ul></li>
+</ul>
+<h3 id="phase-5-make-branchid-not-null-add-fks-12-days">Phase 5 — Make
+BranchId NOT NULL + add FKs (1–2 days)</h3>
+<p>After app is fully writing correct BranchId: - Make
+<code>BranchId</code> required on core transactional tables. - Add
+strict foreign keys.</p>
+<h3 id="phase-6-hardening-qa-ongoing">Phase 6 — Hardening + QA
+(ongoing)</h3>
+<ul>
+<li>Add automated checks (or at least manual test cases) for:
+<ul>
+<li>user from Branch A cannot view Branch B orders</li>
+<li>payment cannot be applied across branches</li>
+<li>reports totals match per-branch and all-branches</li>
+</ul></li>
+</ul>
+<hr />
+<h2 id="high-risk-areas-gotchas-specific-to-this-repo">7) High-risk
+areas / gotchas (specific to this repo)</h2>
+<ol type="1">
+<li><strong>Two branch concepts</strong>
+<ul>
+<li>Hotel room-service uses <code>H_BranchID</code> already.</li>
+<li>Restaurant branch must be separate to avoid logic conflicts.</li>
+</ul></li>
+<li><strong>Inline SQL scattered across controllers</strong>
+<ul>
+<li>Branch conditions are easy to miss; expect iterative hardening.</li>
+</ul></li>
+<li><strong>Counters &amp; POS</strong>
+<ul>
+<li>POS uses selected counter in session.</li>
+<li>Recommended: <code>Counters</code> should have
+<code>BranchId</code>, and selected counter must belong to active
+branch.</li>
+</ul></li>
+<li><strong>Reports stored procedures</strong>
+<ul>
+<li>Many reports are SQL procedures; each needs either:
+<ul>
+<li>mandatory <code>@BranchId</code> parameter, or</li>
+<li>optional <code>@BranchId</code> with admin-only all-branch
+mode.</li>
+</ul></li>
+</ul></li>
+<li><strong>Backfill rules</strong>
+<ul>
+<li>If historical data cannot be mapped to a branch, you’ll need a
+“Legacy/Unknown” branch.</li>
+</ul></li>
+</ol>
+<hr />
+<h2 id="practical-next-step-if-you-want-me-to-continue-the-scan">8)
+Practical next step (if you want me to continue the scan)</h2>
+<p>If you want an even more actionable deliverable, I can generate a
+second document that lists: - each controller action that needs
+<code>BranchId</code> filter - each stored procedure that queries
+<code>Orders/Payments</code> and needs a <code>@BranchId</code>
+input</p>
+<p>Tell me your decision for these 2 items and I’ll tailor that list: 1)
+Menu data is <strong>global</strong> or
+<strong>branch-specific</strong>? 2) Reports: Admin needs <strong>All
+branches at once</strong> or <strong>switch branch only</strong>?</p>
+<h1
+id="branch-wise-implementation-exact-touch-list-menupricing-branch-wise-admin-all-branches-reporting">Branch-wise
+Implementation — Exact Touch List (Menu/Pricing Branch-wise + Admin
+All-Branches Reporting)</h1>
+<p>Decisions confirmed (12 Feb 2026): - <strong>Menu/Pricing is
+branch-wise</strong> - <strong>Admin reporting shows all branches at
+once</strong> (consolidated)</p>
+<p>This is a repo-specific “what to change” list (controllers + SQL
+procedures) based on scanning this workspace.</p>
+<hr />
+<h2 id="a-db-changes-must-do">A) DB changes (must-do)</h2>
+<h3 id="a1-new-tables">A1) New tables</h3>
+<ol type="1">
+<li><code>dbo.Branches</code>
+<ul>
+<li><code>Id INT IDENTITY PK</code></li>
+<li><code>BranchCode NVARCHAR(20) UNIQUE</code></li>
+<li><code>BranchName NVARCHAR(120)</code></li>
+<li><code>IsActive BIT</code>, <code>CreatedAt</code>,
+<code>UpdatedAt</code></li>
+</ul></li>
+<li><code>dbo.UserBranches</code>
+<ul>
+<li><code>UserId INT FK -&gt; Users.Id</code></li>
+<li><code>BranchId INT FK -&gt; Branches.Id</code></li>
+<li><code>IsDefault BIT</code>, <code>IsActive BIT</code>,
+timestamps</li>
+<li>Unique constraint <code>(UserId, BranchId)</code></li>
+</ul></li>
+</ol>
+<h3 id="a2-branchid-columns-recommended-minimum">A2) BranchId columns
+(recommended minimum)</h3>
+<p><strong>Restaurant transactional</strong> -
+<code>Orders.BranchId</code> (do NOT reuse <code>H_BranchID</code>) -
+<code>Payments.BranchId</code> (or enforce via join from Orders; still
+recommended) - <code>OrderItems.BranchId</code> (recommended for
+performance &amp; safety) - <code>SplitBills.BranchId</code>,
+<code>SplitBillItems.BranchId</code> -
+<code>TableTurnovers.BranchId</code>,
+<code>ServerAssignments.BranchId</code> -
+<code>Reservations.BranchId</code>, <code>Waitlist.BranchId</code>,
+<code>Tables.BranchId</code> - Kitchen:
+<code>KitchenTickets.BranchId</code>,
+<code>KitchenTicketItems.BranchId</code> - Bar/BOT:
+<code>BOT_Header.BranchId</code>, <code>BOT_Detail.BranchId</code>,
+<code>BOT_Bills.BranchId</code>, <code>BOT_Payments.BranchId</code> -
+Day closing: <code>CashierDayOpening.BranchId</code>,
+<code>CashierDayClose.BranchId</code>,
+<code>DayLockAudit.BranchId</code> - Online ordering:
+<code>OnlineOrders.BranchId</code>,
+<code>OnlineOrderItems.BranchId</code>,
+<code>WebhookEvents.BranchId</code> (if needed)</p>
+<p><strong>Menu + Pricing (branch-wise requirement)</strong> At least
+one of these models must be chosen. Recommended is “branch-scoped menu
+rows”. - <code>Categories.BranchId</code> -
+<code>SubCategories.BranchId</code> - <code>MenuItems.BranchId</code> -
+<code>Modifiers.BranchId</code> - Any mapping tables used by
+menu/kitchen (e.g. <code>MenuItemModifiers</code>,
+<code>MenuItemKitchenStations</code>) should either: - inherit from
+<code>MenuItems</code>, or - store <code>BranchId</code> for faster
+filtering.</p>
+<h3 id="a3-indexes-performance">A3) Indexes (performance)</h3>
+<ul>
+<li><code>Orders(BranchId, CreatedAt DESC)</code></li>
+<li><code>Orders(BranchId, Status, CreatedAt DESC)</code></li>
+<li><code>MenuItems(BranchId, IsAvailable, CategoryId)</code></li>
+<li><code>Payments(BranchId, CreatedAt DESC)</code></li>
+<li><code>KitchenTickets(BranchId, Status, CreatedAt DESC)</code></li>
+<li><code>BOT_Header(BranchId, Status, CreatedAt DESC)</code></li>
+</ul>
+<h3
+id="a4-important-existing-hotel-room-service-branch-stays-separate">A4)
+Important: existing Hotel Room-Service branch stays separate</h3>
+<p>This repo already uses <strong>hotel</strong> branch fields
+(<code>Orders.H_BranchID</code>) for room-service settlement. - Keep
+those flows unchanged. - Restaurant branch must be
+<code>Orders.BranchId</code> (new).</p>
+<hr />
+<h2 id="b-app-plumbing-must-do">B) App plumbing (must-do)</h2>
+<h3 id="b1-session-keys">B1) Session keys</h3>
+<p>Add active branch selection (similar to existing POS counter session
+approach): - <code>BRANCH.ActiveBranchId</code> -
+<code>BRANCH.ActiveBranchName</code> (optional)</p>
+<h3 id="b2-login-switch-branch">B2) Login / switch branch</h3>
+<p>Implement: - After login: load allowed branches for user. - If 1
+branch → set it. - If many → force select branch (once) then proceed. -
+Provide a “Switch Branch” option (clears cached lists where needed).</p>
+<h3 id="b3-enforcement-rule">B3) Enforcement rule</h3>
+<p>For non-admin users: - Every read/write must be filtered by
+<code>BranchId = ActiveBranchId</code>.</p>
+<p>For admin: - Most pages still work in single active branch mode. -
+Reports allow <strong>All branches</strong> consolidated: - pass
+<code>@BranchId = NULL</code> (or <code>0</code>) to report procedures.
+- only if admin role/permission.</p>
+<hr />
+<h2 id="c-controllers-to-modify-repo-scan-result">C) Controllers to
+modify (repo scan result)</h2>
+<p>These controllers were identified as touching Orders/Payments and
+will need branch enforcement.</p>
+<h3 id="c1-orders-pos">C1) Orders &amp; POS</h3>
+<p><strong>File:</strong>
+RestaurantManagementSystem/RestaurantManagementSystem/Controllers/OrderController.cs
+Actions seen in scan (non-exhaustive): - <code>Dashboard</code>,
+<code>Create</code>, <code>Details</code>,
+<code>GetOrderDashboard</code> - POS: <code>POSOrder</code>,
+<code>SetPOSCounter</code>, <code>CreatePOSOrder</code>,
+<code>CreatePOSOrderAjax</code>, <code>UpdateMultipleOrderItems</code> -
+Items: <code>AddItem</code>, <code>QuickAddMenuItem</code>,
+<code>FireItems</code>, <code>SubmitOrder</code> - Hotel-only:
+<code>GetHotelBranches</code>, <code>GetCheckedInOccupiedRooms</code>
+(keep using <code>H_BranchID</code> path)</p>
+<p>What to change: - On create order: set
+<code>Orders.BranchId = ActiveBranchId</code> (restaurant orders) - On
+add/update items: validate the order belongs to branch - On listing
+dashboards: filter by branch - Keep room-service (OrderType=4) flow
+separate from restaurant branches.</p>
+<p><strong>File:</strong>
+RestaurantManagementSystem/RestaurantManagementSystem/Controllers/OrderController_NewItems.cs
+- Same branch rules as above for any order-item write APIs.</p>
+<h3 id="c2-payments">C2) Payments</h3>
+<p><strong>File:</strong>
+RestaurantManagementSystem/RestaurantManagementSystem/Controllers/PaymentController.cs
+Actions seen: - <code>Index</code>, <code>ProcessPayment</code>,
+<code>ProcessSplitPayments</code> - <code>VoidPayment</code>, approvals
+(<code>ApprovePayment</code>, <code>RejectPayment</code>,
+<code>ApprovePaymentAjax</code>, <code>RejectPaymentAjax</code>) -
+Dashboards: <code>Dashboard</code>, <code>BarDashboard</code> - Print
+flows: <code>Print</code>, <code>PrintBill</code>,
+<code>PrintPOS</code></p>
+<p>What to change: - Any payment operation must confirm the
+<code>OrderId</code> belongs to active branch. - Payment
+listing/dashboard queries must filter by branch. - If you add
+<code>Payments.BranchId</code>, always populate it from the order’s
+branch.</p>
+<h3 id="c3-bar-bot">C3) Bar / BOT</h3>
+<p><strong>File:</strong>
+RestaurantManagementSystem/RestaurantManagementSystem/Controllers/BOTController.cs
+Actions seen: - <code>Dashboard</code>, <code>Tickets</code>,
+<code>Details</code>, <code>UpdateStatus</code>, <code>Void</code> -
+<code>BarOrderCreate</code>, <code>BarOrderDashboard</code></p>
+<p>What to change: - Ensure BOT header/detail rows are created with
+<code>BranchId</code> (inherit from Orders). - Filter BOT dashboards and
+reports by branch.</p>
+<h3 id="c4-kitchen">C4) Kitchen</h3>
+<p><strong>File:</strong>
+RestaurantManagementSystem/RestaurantManagementSystem/Controllers/KitchenController.cs
+Actions seen: - <code>Dashboard</code>, <code>Tickets</code>,
+<code>TicketDetails</code> - status updates + station management
+(<code>Stations</code>, <code>SaveStation</code>, etc.)</p>
+<p>What to change: - Filter kitchen ticket lists/dashboard by branch. -
+Station management: decide whether kitchen stations are branch-wise
+(almost always yes).</p>
+<h3 id="c5-reports-admin-all-branches">C5) Reports (Admin
+all-branches)</h3>
+<p><strong>File:</strong>
+RestaurantManagementSystem/RestaurantManagementSystem/Controllers/ReportsController.cs
+Actions seen: - <code>Sales</code>, <code>Orders</code>,
+<code>Menu</code>, <code>Customers</code>, <code>Financial</code> -
+<code>Kitchen</code>, <code>Bar</code> - <code>DiscountReport</code>,
+<code>GSTBreakup</code>, <code>CollectionRegister</code>,
+<code>CashClosing</code>, <code>FeedbackSurveyReport</code></p>
+<p>What to change: - Add branch selector in report UI: - Normal users:
+fixed to active branch (no “All”). - Admin: allow
+<code>All branches</code>. - Pass <code>@BranchId</code> into stored
+procedures: - <code>@BranchId = ActiveBranchId</code> normally -
+<code>@BranchId = NULL</code> for admin consolidated</p>
+<h3 id="c6-tablesreservations">C6) Tables/Reservations</h3>
+<p><strong>Files:</strong> -
+RestaurantManagementSystem/RestaurantManagementSystem/Controllers/ReservationController.cs
+-
+RestaurantManagementSystem/RestaurantManagementSystem/Controllers/TableServiceController.cs</p>
+<p>What to change: - Tables/Reservations/Waitlist/Turnovers must be
+branch-scoped. - All lists and lookups filtered by branch.</p>
+<h3 id="c7-online-ordering">C7) Online ordering</h3>
+<p><strong>File:</strong>
+RestaurantManagementSystem/RestaurantManagementSystem/Controllers/OnlineOrderController.cs
+Actions seen: - <code>Dashboard</code>, <code>Index</code>,
+<code>Details</code>, <code>SyncOrder</code>, webhook receiver</p>
+<p>What to change: - Decide whether an online source is branch-wise.
+Usually: <strong>yes</strong>. - Store <code>BranchId</code> on online
+orders and enforce during sync.</p>
+<h3 id="c8-menu-pricing-branch-wise-requirement">C8) Menu + Pricing
+(branch-wise requirement)</h3>
+<p><strong>Files:</strong> -
+RestaurantManagementSystem/RestaurantManagementSystem/Controllers/MenuManagementController.cs
+-
+RestaurantManagementSystem/RestaurantManagementSystem/Controllers/MenuController.cs
+-
+RestaurantManagementSystem/RestaurantManagementSystem/Controllers/CategoryController.cs
+-
+RestaurantManagementSystem/RestaurantManagementSystem/Controllers/SubCategoryController.cs</p>
+<p>What to change: - Every list/create/edit/delete must use active
+branch. - If Admin needs to manage multiple branches: - either switch
+branch while managing menu, or - provide branch dropdown on menu
+pages.</p>
+<hr />
+<h2 id="d-stored-procedures-to-update-from-sql-scan">D) Stored
+procedures to update (from SQL scan)</h2>
+<h3 id="d1-orders">D1) Orders</h3>
+<ul>
+<li><code>dbo.usp_CreateOrder</code> → add <code>@BranchId</code> and
+insert to <code>Orders.BranchId</code></li>
+<li><code>dbo.usp_AddOrderItem</code> → validate order branch;
+optionally set <code>OrderItems.BranchId</code></li>
+<li><code>dbo.usp_FireOrderItems</code> → filter/validate by branch</li>
+<li><code>usp_GetRecentOrdersForDashboard</code> / dashboards → filter
+by branch</li>
+</ul>
+<h3 id="d2-payments">D2) Payments</h3>
+<ul>
+<li><code>dbo.usp_GetOrderPaymentInfo</code> → enforce that requested
+order belongs to branch</li>
+<li><code>dbo.usp_ProcessPayment</code> → enforce/derive branch</li>
+<li><code>dbo.usp_CreateSplitBill</code> → enforce/derive branch</li>
+<li><code>dbo.usp_VoidPayment</code> → enforce/derive branch</li>
+</ul>
+<h3 id="d3-bot">D3) BOT</h3>
+<ul>
+<li><code>dbo.GetBOTDashboardStats</code>,
+<code>dbo.GetBOTsByStatus</code>, <code>dbo.GetBOTDetails</code> →
+filter by branch</li>
+<li><code>dbo.GetNextBOTNumber</code> → decide if sequence is per-branch
+(recommended)</li>
+<li><code>dbo.UpdateBOTStatus</code>, <code>dbo.VoidBOT</code> →
+validate branch</li>
+<li><code>dbo.usp_GetBarBOTReport</code> → add <code>@BranchId</code>
+(nullable for admin) and filter.</li>
+</ul>
+<h3 id="d4-kitchen">D4) Kitchen</h3>
+<ul>
+<li><code>GetKitchenDashboardStats</code>,
+<code>GetKitchenTicketsByStatus</code>,
+<code>GetFilteredKitchenTickets</code>,
+<code>GetKitchenTicketDetails</code> → add <code>@BranchId</code></li>
+<li><code>UpdateKitchenTicketsForOrder</code> /
+<code>dbo.UpdateKitchenTicketsForOrder</code> → validate branch</li>
+<li><code>MarkAllTicketsReady</code> → branch filter</li>
+</ul>
+<h3 id="d5-reports-admin-consolidated">D5) Reports (admin
+consolidated)</h3>
+<p>Add <code>@BranchId INT = NULL</code> to each report SP and use
+pattern: -
+<code>WHERE (@BranchId IS NULL OR o.BranchId = @BranchId)</code></p>
+<p>Procedures found in scan: - <code>usp_GetSalesReport</code> -
+<code>usp_GetOrderReport</code> - <code>usp_GetDiscountReport</code> -
+<code>dbo.usp_GetGSTBreakupReport</code> -
+<code>dbo.usp_GetCollectionRegister</code> -
+<code>usp_GetFinancialSummary</code> -
+<code>usp_GetCashClosingReport</code> -
+<code>usp_GetHomeDashboardStats</code> /
+<code>usp_GetHomeDashboardStatsEnhanced</code> (if totals should be
+branch-wise) - <code>dbo.usp_GetCustomerAnalysis</code> -
+<code>dbo.usp_GetMenuAnalysis</code></p>
+<h3 id="d6-menu-pricing-branch-wise">D6) Menu + Pricing
+(branch-wise)</h3>
+<p>Procedures found in scan: - <code>dbo.sp_GetAllMenuItems</code> -
+<code>dbo.sp_GetMenuItemById</code> - <code>dbo.sp_CreateMenuItem</code>
+- <code>dbo.sp_UpdateMenuItem</code> -
+<code>dbo.sp_PublishMenuItem</code> -
+<code>dbo.sp_GetAllModifiers</code> -
+<code>dbo.sp_ApprovePriceChange</code> - plus recipe-related SPs
+(<code>dbo.sp_ManageRecipe</code>, etc.)</p>
+<p>What to change: - Add <code>@BranchId</code> to all menu/proc
+read/write. - Ensure any uniqueness constraints consider branch (e.g.,
+item codes/names).</p>
+<h3 id="d7-tablesreservations">D7) Tables/Reservations</h3>
+<ul>
+<li><code>dbo.usp_SeatGuests</code>,
+<code>dbo.usp_AssignServerToTable</code>,
+<code>dbo.usp_StartTableTurnover</code>,
+<code>dbo.usp_UpdateTableTurnoverStatus</code></li>
+<li><code>dbo.usp_UpsertReservation</code>,
+<code>dbo.usp_UpsertWaitlist</code>,
+<code>dbo.usp_UpsertTable</code></li>
+</ul>
+<p>Add branch enforcement and prevent cross-branch table assignment.</p>
+<h3 id="d8-hotel-room-service-leave-as-is">D8) Hotel room-service (leave
+as-is)</h3>
+<ul>
+<li><code>dbo.usp_GetRoomServicePendingSettlementDetails</code></li>
+<li><code>dbo.vw_RoomService_PendingSettlement</code></li>
+</ul>
+<p>These are hotel-specific and depend on
+<code>Orders.H_BranchID</code>.</p>
+<hr />
+<h2 id="e-recommended-implementation-order-workable-sequence">E)
+Recommended implementation order (workable sequence)</h2>
+<ol type="1">
+<li>DB: create <code>Branches</code>, <code>UserBranches</code>.</li>
+<li>Add <code>BranchId</code> to menu tables first (because menu/pricing
+is branch-wise).</li>
+<li>Add <code>BranchId</code> to <code>Orders</code> and enforce on
+create/add items.</li>
+<li>Add branch enforcement to payments.</li>
+<li>Add branch enforcement to BOT + Kitchen.</li>
+<li>Reports: add <code>@BranchId</code> param (nullable) and enable
+admin consolidated.</li>
+<li>Backfill existing rows to a default branch.</li>
+<li>Make <code>BranchId</code> NOT NULL + FK constraints.</li>
+</ol>
+<hr />
+<h2 id="f-next-optional-deliverable">F) Next optional deliverable</h2>
+<p>If you want, I can generate a ready-to-run SQL migration skeleton
+that: - creates <code>Branches</code>, <code>UserBranches</code> - adds
+<code>BranchId</code> columns - adds indexes - shows safe backfill
+template</p>
+</body>
+</html>
