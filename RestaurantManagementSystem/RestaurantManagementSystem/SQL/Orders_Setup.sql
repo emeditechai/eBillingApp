@@ -216,12 +216,9 @@ BEGIN
     DECLARE @OrderNumber NVARCHAR(20);
     DECLARE @OrderId INT;
     DECLARE @Message NVARCHAR(200);
-    
-    -- Generate unique order number based on date and sequence
-    SET @OrderNumber = 'ORD-' + CONVERT(NVARCHAR(8), GETDATE(), 112) + '-' + 
-                       RIGHT('0000' + CAST((SELECT ISNULL(MAX(CAST(RIGHT(OrderNumber, 4) AS INT)), 0) + 1 
-                                           FROM Orders 
-                                           WHERE LEFT(OrderNumber, 12) = 'ORD-' + CONVERT(NVARCHAR(8), GETDATE(), 112)) AS NVARCHAR(4)), 4);
+
+    -- OrderNumber is assigned when the first menu item is added (prevents consuming numbers for abandoned orders)
+    SET @OrderNumber = '';
     
     BEGIN TRANSACTION;
     
@@ -303,6 +300,7 @@ BEGIN
     DECLARE @Subtotal DECIMAL(10, 2);
     DECLARE @OrderItemId INT;
     DECLARE @Message NVARCHAR(200);
+    DECLARE @OrderNumber NVARCHAR(20);
     
     -- Check if order exists
     IF NOT EXISTS (SELECT 1 FROM [Orders] WHERE [Id] = @OrderId)
@@ -341,6 +339,28 @@ BEGIN
     BEGIN TRANSACTION;
     
     BEGIN TRY
+        -- Assign OrderNumber on first item add (schema uses NOT NULL; blank means "not assigned yet")
+        SELECT @OrderNumber = o.OrderNumber
+        FROM dbo.Orders o WITH (UPDLOCK, HOLDLOCK)
+        WHERE o.Id = @OrderId;
+
+        IF (@OrderNumber IS NULL OR LTRIM(RTRIM(@OrderNumber)) = '')
+        BEGIN
+            DECLARE @Today VARCHAR(8) = CONVERT(VARCHAR(8), GETDATE(), 112);
+            DECLARE @OrderCount INT;
+
+            SELECT @OrderCount = ISNULL(MAX(CAST(RIGHT(OrderNumber, 4) AS INT)), 0) + 1
+            FROM dbo.Orders WITH (UPDLOCK, HOLDLOCK)
+            WHERE OrderNumber LIKE 'ORD-' + @Today + '-%';
+
+            SET @OrderNumber = 'ORD-' + @Today + '-' + RIGHT('0000' + CAST(@OrderCount AS VARCHAR(4)), 4);
+
+            UPDATE dbo.Orders
+            SET OrderNumber = @OrderNumber,
+                UpdatedAt = GETDATE()
+            WHERE Id = @OrderId;
+        END
+
         -- Add order item
         INSERT INTO [OrderItems] (
             [OrderId],
@@ -415,7 +435,7 @@ BEGIN
         COMMIT TRANSACTION;
         
         SET @Message = 'Item added to order successfully.';
-        SELECT @OrderItemId AS OrderItemId, @Message AS [Message];
+        SELECT @OrderItemId AS OrderItemId, @Message AS [Message], @OrderNumber AS OrderNumber;
     END TRY
     BEGIN CATCH
         ROLLBACK TRANSACTION;

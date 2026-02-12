@@ -28,16 +28,9 @@ BEGIN
     
     BEGIN TRY
         BEGIN TRANSACTION;
-        
-        -- Generate order number in format: ORD-YYYYMMDD-XXXX
-        DECLARE @OrderCount INT;
-        DECLARE @Today VARCHAR(8) = CONVERT(VARCHAR(8), GETDATE(), 112); -- YYYYMMDD format
-        
-        SELECT @OrderCount = ISNULL(MAX(CAST(RIGHT(OrderNumber, 4) AS INT)), 0) + 1
-        FROM Orders
-        WHERE OrderNumber LIKE 'ORD-' + @Today + '-%';
-        
-        SET @OrderNumber = 'ORD-' + @Today + '-' + RIGHT('0000' + CAST(@OrderCount AS VARCHAR(4)), 4);
+
+        -- OrderNumber is assigned when the first menu item is added (prevents consuming numbers for abandoned orders)
+        SET @OrderNumber = '';
         
         -- Insert order
         INSERT INTO Orders (

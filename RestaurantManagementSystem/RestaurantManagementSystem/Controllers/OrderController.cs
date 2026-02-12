@@ -712,7 +712,9 @@ END", connection))
                                             }
                                             catch { /* Audit logging should not break the main flow */ }
                                             
-                                            TempData["SuccessMessage"] = $"Order {orderNumber} created successfully.";
+                                            TempData["SuccessMessage"] = string.IsNullOrWhiteSpace(orderNumber)
+                                                ? "Order created successfully. Order number will be assigned when the first item is saved."
+                                                : $"Order {orderNumber} created successfully.";
                                             TempData["IsBarOrder"] = false; // Explicitly mark as non-bar order (from Orders navigation)
                                             return RedirectToAction("Details", new { id = orderId });
                                         }
@@ -3209,7 +3211,9 @@ END", connection))
 
                             transaction.Commit();
 
-                            TempData["SuccessMessage"] = $"Order {orderNumber} created.";
+                            TempData["SuccessMessage"] = string.IsNullOrWhiteSpace(orderNumber)
+                                ? "Order created. Order number will be assigned when the first item is saved."
+                                : $"Order {orderNumber} created.";
                             return RedirectToAction(nameof(POSOrder), new { orderId });
                         }
                         catch (Exception)
@@ -4042,7 +4046,8 @@ END", connection))
                         SUM(CASE WHEN Status = 3 AND CAST(CreatedAt AS DATE) = CAST(GETDATE() AS DATE) THEN TotalAmount ELSE 0 END) AS TotalSales,
                         SUM(CASE WHEN Status = 4 AND CAST(ISNULL(UpdatedAt, CreatedAt) AS DATE) = CAST(GETDATE() AS DATE) THEN 1 ELSE 0 END) AS CancelledCount
                     FROM Orders
-                    WHERE (OrderKitchenType != 'Bar' OR OrderKitchenType IS NULL)";
+                    WHERE (OrderKitchenType != 'Bar' OR OrderKitchenType IS NULL)
+                      AND NULLIF(LTRIM(RTRIM(OrderNumber)), '') IS NOT NULL";
 
                 if (!canViewAllRecords)
                 {
@@ -4098,7 +4103,8 @@ END", connection))
                     LEFT JOIN Tables t ON tt.TableId = t.Id
                     LEFT JOIN Users u ON o.UserId = u.Id
                     WHERE o.Status < 3 -- Not completed
-                    AND (o.OrderKitchenType != 'Bar' OR o.OrderKitchenType IS NULL)";
+                    AND (o.OrderKitchenType != 'Bar' OR o.OrderKitchenType IS NULL)
+                    AND NULLIF(LTRIM(RTRIM(o.OrderNumber)), '') IS NOT NULL";
 
                 if (!canViewAllRecords)
                 {
@@ -4264,6 +4270,7 @@ END", connection))
                     LEFT JOIN Users u ON o.UserId = u.Id
                     WHERE o.Status = 3 -- Completed
                     AND (o.OrderKitchenType != 'Bar' OR o.OrderKitchenType IS NULL)
+                    AND NULLIF(LTRIM(RTRIM(o.OrderNumber)), '') IS NOT NULL
                 ";
 
                 if (!canViewAllRecords)
@@ -4369,6 +4376,7 @@ END", connection))
                     LEFT JOIN Users u ON o.UserId = u.Id
                     WHERE o.Status = 4 -- Cancelled
                     AND (o.OrderKitchenType != 'Bar' OR o.OrderKitchenType IS NULL)
+                    AND NULLIF(LTRIM(RTRIM(o.OrderNumber)), '') IS NOT NULL
                     AND CAST(ISNULL(o.UpdatedAt, o.CreatedAt) AS DATE) = CAST(GETDATE() AS DATE) -- Filter by cancellation date";
 
                 if (!canViewAllRecords)
@@ -5535,6 +5543,13 @@ END", connection))
                             // First handle existing item updates
                             var existingItems = items.Where(i => !i.IsNew).ToList();
                             var newItems = items.Where(i => i.IsNew).ToList();
+
+                            // If we're adding at least one new item, assign OrderNumber now (first-save semantics)
+                            string assignedOrderNumber = string.Empty;
+                            if (newItems.Any())
+                            {
+                                assignedOrderNumber = EnsureOrderNumberAssigned(orderId, connection, transaction);
+                            }
                             
                             // Update each existing item
                             foreach (var item in existingItems)
@@ -5644,7 +5659,7 @@ END", connection))
                             UpdateOrderFinancials(orderId, connection, transaction);
                             
                             transaction.Commit();
-                            return Json(new { success = true, message = "All items updated successfully." });
+                            return Json(new { success = true, message = "All items updated successfully.", orderNumber = assignedOrderNumber });
                         }
                         catch (Exception ex)
                         {
@@ -5657,6 +5672,41 @@ END", connection))
             catch (Exception ex)
             {
                 return Json(new { success = false, message = "Error updating items: " + ex.Message });
+            }
+        }
+
+        private string EnsureOrderNumberAssigned(int orderId, Microsoft.Data.SqlClient.SqlConnection connection, Microsoft.Data.SqlClient.SqlTransaction transaction)
+        {
+            if (orderId <= 0) return string.Empty;
+
+            using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+                DECLARE @OrderNumber nvarchar(20);
+                SELECT @OrderNumber = o.OrderNumber
+                FROM dbo.Orders o WITH (UPDLOCK, HOLDLOCK)
+                WHERE o.Id = @OrderId;
+
+                IF (@OrderNumber IS NULL OR LTRIM(RTRIM(@OrderNumber)) = '')
+                BEGIN
+                    DECLARE @Today varchar(8) = CONVERT(varchar(8), GETDATE(), 112);
+                    DECLARE @OrderCount int;
+
+                    SELECT @OrderCount = ISNULL(MAX(CAST(RIGHT(OrderNumber, 4) AS int)), 0) + 1
+                    FROM dbo.Orders WITH (UPDLOCK, HOLDLOCK)
+                    WHERE OrderNumber LIKE 'ORD-' + @Today + '-%';
+
+                    SET @OrderNumber = 'ORD-' + @Today + '-' + RIGHT('0000' + CAST(@OrderCount AS varchar(4)), 4);
+
+                    UPDATE dbo.Orders
+                    SET OrderNumber = @OrderNumber,
+                        UpdatedAt = GETDATE()
+                    WHERE Id = @OrderId;
+                END
+
+                SELECT @OrderNumber;", connection, transaction))
+            {
+                cmd.Parameters.AddWithValue("@OrderId", orderId);
+                var result = cmd.ExecuteScalar();
+                return result == null || result == DBNull.Value ? string.Empty : Convert.ToString(result);
             }
         }
         

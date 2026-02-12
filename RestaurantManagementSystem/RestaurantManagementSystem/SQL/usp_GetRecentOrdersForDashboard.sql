@@ -15,7 +15,7 @@ BEGIN
     
     SELECT TOP (@OrderCount)
         o.Id as OrderId,
-        ISNULL(o.OrderNumber, 'ORD-' + CAST(o.Id AS VARCHAR(10))) as OrderNumber,
+        ISNULL(NULLIF(o.OrderNumber, ''), 'ORD-' + CAST(o.Id AS VARCHAR(10))) as OrderNumber,
         ISNULL(o.CustomerName, 'Walk-in Customer') as CustomerName,
         CASE 
             WHEN merged.MergedTableNames IS NOT NULL THEN merged.MergedTableNames

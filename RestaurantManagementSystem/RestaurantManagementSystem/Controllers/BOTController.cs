@@ -1053,7 +1053,9 @@ namespace RestaurantManagementSystem.Controllers
                                             }
                                             
                                             transaction.Commit();
-                                            TempData["SuccessMessage"] = $"Bar Order {orderNumber} created successfully.";
+                                            TempData["SuccessMessage"] = string.IsNullOrWhiteSpace(orderNumber)
+                                                ? "Bar order created successfully. Order number will be assigned when the first item is saved."
+                                                : $"Bar Order {orderNumber} created successfully.";
                                             TempData["IsBarOrder"] = true; // Flag to indicate this came from Bar
                                             return RedirectToAction("Details", "Order", new { id = orderId, fromBar = true });
                                         }
@@ -1268,7 +1270,8 @@ namespace RestaurantManagementSystem.Controllers
                         SUM(CASE WHEN Status = 3 AND CAST(CreatedAt AS DATE) = CAST(GETDATE() AS DATE) THEN TotalAmount ELSE 0 END) AS TotalSales,
                         SUM(CASE WHEN Status = 4 AND CAST(ISNULL(UpdatedAt, CreatedAt) AS DATE) = CAST(GETDATE() AS DATE) THEN 1 ELSE 0 END) AS CancelledCount
                     FROM Orders
-                    WHERE OrderKitchenType = 'Bar'";
+                    WHERE OrderKitchenType = 'Bar'
+                      AND NULLIF(LTRIM(RTRIM(OrderNumber)), '') IS NOT NULL";
 
                 if (!canViewAllRecords)
                 {
@@ -1319,7 +1322,8 @@ namespace RestaurantManagementSystem.Controllers
                     LEFT JOIN TableTurnovers tt ON o.TableTurnoverId = tt.Id
                     LEFT JOIN Tables t ON tt.TableId = t.Id
                     LEFT JOIN Users u ON o.UserId = u.Id
-                    WHERE o.Status < 3 AND o.OrderKitchenType = 'Bar'";
+                                        WHERE o.Status < 3 AND o.OrderKitchenType = 'Bar'
+                                            AND NULLIF(LTRIM(RTRIM(o.OrderNumber)), '') IS NOT NULL";
 
                 if (!canViewAllRecords)
                 {
@@ -1406,7 +1410,8 @@ namespace RestaurantManagementSystem.Controllers
                     LEFT JOIN TableTurnovers tt ON o.TableTurnoverId = tt.Id
                     LEFT JOIN Tables t ON tt.TableId = t.Id
                     LEFT JOIN Users u ON o.UserId = u.Id
-                    WHERE o.Status = 3 AND o.OrderKitchenType = 'Bar'
+                                        WHERE o.Status = 3 AND o.OrderKitchenType = 'Bar'
+                                            AND NULLIF(LTRIM(RTRIM(o.OrderNumber)), '') IS NOT NULL
                 ";
 
                 if (!canViewAllRecords)
@@ -1497,6 +1502,7 @@ namespace RestaurantManagementSystem.Controllers
                     LEFT JOIN Users u ON o.UserId = u.Id
                     WHERE o.Status = 4 
                     AND o.OrderKitchenType = 'Bar'
+                    AND NULLIF(LTRIM(RTRIM(o.OrderNumber)), '') IS NOT NULL
                     AND CAST(ISNULL(o.UpdatedAt, o.CreatedAt) AS DATE) = CAST(GETDATE() AS DATE)
                 ";
 
