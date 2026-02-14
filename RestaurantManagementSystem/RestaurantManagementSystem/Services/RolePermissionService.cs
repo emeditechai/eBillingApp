@@ -75,7 +75,7 @@ namespace RestaurantManagementSystem.Services
         {
             var userId = user?.GetUserId();
             var activeRoleId = user?.GetActiveRoleId();
-            var isSuperAdmin = IsSuperAdminUser(user);
+            var isSuperAdmin = user.IsSuperAdminUser();
 
             var allMenus = await GetAllMenusAsync();
             var visibleMenus = allMenus.Where(m => m.IsActive && m.IsVisible).ToList();
@@ -566,7 +566,7 @@ namespace RestaurantManagementSystem.Services
                 return permission;
             }
 
-            if (IsSuperAdminUser(user))
+            if (user.IsSuperAdminUser())
             {
                 return PermissionSet.FullAccess;
             }
@@ -640,7 +640,7 @@ namespace RestaurantManagementSystem.Services
                 return false;
             }
 
-            if (IsSuperAdminUser(user))
+            if (user.IsSuperAdminUser())
             {
                 return true;
             }
@@ -698,18 +698,6 @@ namespace RestaurantManagementSystem.Services
             await using var command = new SqlCommand(sql, connection);
             var count = Convert.ToInt32(await command.ExecuteScalarAsync());
             return count > 0;
-        }
-
-        private static bool IsSuperAdminUser(ClaimsPrincipal user)
-        {
-            if (user?.Identity?.IsAuthenticated != true)
-            {
-                return false;
-            }
-
-            var username = user.Identity?.Name;
-            return !string.IsNullOrWhiteSpace(username)
-                   && username.Equals("Admin", StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task<bool> IsAdministratorUserAsync(int userId)

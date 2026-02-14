@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
 using RestaurantManagementSystem.Middleware;
+using RestaurantManagementSystem.Filters;
 using RestaurantManagementSystem.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
@@ -19,7 +20,10 @@ namespace RestaurantManagementSystem
             var builder = WebApplication.CreateBuilder(args);
 
             // Add services to the container.
-            builder.Services.AddControllersWithViews();
+            builder.Services.AddControllersWithViews(options =>
+            {
+                options.Filters.AddService<EnforceMenuPermissionFilter>();
+            });
             builder.Services.AddMemoryCache();
             builder.Services.AddHttpContextAccessor();
 
@@ -64,6 +68,7 @@ namespace RestaurantManagementSystem
             builder.Services.AddScoped<UserService>();
             builder.Services.AddScoped<UserRoleService>();
             builder.Services.AddScoped<RolePermissionService>();
+            builder.Services.AddScoped<EnforceMenuPermissionFilter>();
             builder.Services.AddScoped<AdminSetupService>();
             builder.Services.AddScoped<PasswordResetTool>();
             builder.Services.AddScoped<UrlEncryptionService>();

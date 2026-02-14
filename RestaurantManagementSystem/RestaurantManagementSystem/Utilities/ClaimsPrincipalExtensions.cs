@@ -30,6 +30,18 @@ namespace RestaurantManagementSystem.Utilities
         public static string? GetActiveRoleName(this ClaimsPrincipal user)
             => user?.FindFirst("ActiveRoleName")?.Value;
 
+        public static bool IsSuperAdminUser(this ClaimsPrincipal user)
+        {
+            if (user?.Identity?.IsAuthenticated != true)
+            {
+                return false;
+            }
+
+            var username = user.Identity?.Name;
+            return !string.IsNullOrWhiteSpace(username)
+                   && username.Equals("Admin", StringComparison.OrdinalIgnoreCase);
+        }
+
         public static bool HasConfirmedRoleSelection(this ClaimsPrincipal user)
         {
             var claimValue = user?.FindFirst("RoleSelectionConfirmed")?.Value;
