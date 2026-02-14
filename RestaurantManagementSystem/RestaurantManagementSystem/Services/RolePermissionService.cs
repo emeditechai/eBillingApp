@@ -75,24 +75,13 @@ namespace RestaurantManagementSystem.Services
         {
             var userId = user?.GetUserId();
             var activeRoleId = user?.GetActiveRoleId();
-            var activeRoleName = user?.GetActiveRoleName();
-            var isAdmin = !string.IsNullOrWhiteSpace(activeRoleName) && activeRoleName.Equals("Administrator", StringComparison.OrdinalIgnoreCase);
-
-            if (!isAdmin && activeRoleId.HasValue)
-            {
-                isAdmin = await IsAdministratorRoleAsync(activeRoleId.Value);
-            }
-
-            if (!isAdmin && userId.HasValue && !activeRoleId.HasValue)
-            {
-                isAdmin = await IsAdministratorUserAsync(userId.Value);
-            }
+            var isSuperAdmin = IsSuperAdminUser(user);
 
             var allMenus = await GetAllMenusAsync();
             var visibleMenus = allMenus.Where(m => m.IsActive && m.IsVisible).ToList();
             HashSet<string> allowedCodes;
 
-            if (isAdmin || userId is null)
+            if (isSuperAdmin || userId is null)
             {
                 allowedCodes = visibleMenus.Select(m => m.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
             }
@@ -107,7 +96,7 @@ namespace RestaurantManagementSystem.Services
                 EnsureParentsIncluded(allMenus, allowedCodes);
             }
 
-            return BuildMenuTree(visibleMenus, allowedCodes, isAdmin);
+            return BuildMenuTree(visibleMenus, allowedCodes, isSuperAdmin);
         }
 
         private async Task<HashSet<string>> GetMenuCodesForRoleAsync(int roleId)
@@ -370,12 +359,6 @@ namespace RestaurantManagementSystem.Services
             menuIds ??= Array.Empty<int>();
             var menuSet = new HashSet<int>(menuIds);
 
-            if (await IsAdministratorRoleAsync(roleId))
-            {
-                await GrantFullPermissionsToRoleAsync(roleId);
-                return;
-            }
-
             await using var connection = CreateConnection();
             await connection.OpenAsync();
             await using var transaction = await connection.BeginTransactionAsync();
@@ -508,12 +491,6 @@ namespace RestaurantManagementSystem.Services
         {
             rows ??= Array.Empty<RolePermissionMatrixRow>();
 
-            if (await IsAdministratorRoleAsync(roleId))
-            {
-                await GrantFullPermissionsToRoleAsync(roleId);
-                return;
-            }
-
             await using var connection = CreateConnection();
             await connection.OpenAsync();
             await using var transaction = await connection.BeginTransactionAsync();
@@ -589,7 +566,7 @@ namespace RestaurantManagementSystem.Services
                 return permission;
             }
 
-            if (await IsAdministratorUserAsync(user))
+            if (IsSuperAdminUser(user))
             {
                 return PermissionSet.FullAccess;
             }
@@ -663,7 +640,7 @@ namespace RestaurantManagementSystem.Services
                 return false;
             }
 
-            if (await IsAdministratorUserAsync(user))
+            if (IsSuperAdminUser(user))
             {
                 return true;
             }
@@ -723,32 +700,16 @@ namespace RestaurantManagementSystem.Services
             return count > 0;
         }
 
-        private async Task<bool> IsAdministratorUserAsync(ClaimsPrincipal user)
+        private static bool IsSuperAdminUser(ClaimsPrincipal user)
         {
             if (user?.Identity?.IsAuthenticated != true)
             {
                 return false;
             }
 
-            var activeRoleName = user.GetActiveRoleName();
-            if (!string.IsNullOrWhiteSpace(activeRoleName) && activeRoleName.Equals("Administrator", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            var activeRoleId = user.GetActiveRoleId();
-            if (activeRoleId.HasValue)
-            {
-                return await IsAdministratorRoleAsync(activeRoleId.Value);
-            }
-
-            var userId = user.GetUserId();
-            if (userId is null)
-            {
-                return false;
-            }
-
-            return await IsAdministratorUserAsync(userId.Value);
+            var username = user.Identity?.Name;
+            return !string.IsNullOrWhiteSpace(username)
+                   && username.Equals("Admin", StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task<bool> IsAdministratorUserAsync(int userId)
