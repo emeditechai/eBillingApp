@@ -179,10 +179,10 @@ END", connection))
                     return Json(new { success = false, message = "Order not found." });
                 }
 
-                // Enforce scope (only allow POS to operate on Takeout/Delivery orders)
+                // Enforce scope (only allow POS to operate on B2C/Delivery orders)
                 if (order.OrderType != 1 && order.OrderType != 2)
                 {
-                    return Json(new { success = false, message = "POS Order supports only Takeout or Delivery orders." });
+                    return Json(new { success = false, message = "POS Order supports only B2C or Delivery orders." });
                 }
 
                 return Json(new
@@ -700,7 +700,7 @@ END", connection))
                                                 var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
                                                 var userName = User.FindFirst(ClaimTypes.Name)?.Value ?? "System";
                                                 var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-                                                var orderTypeText = model.OrderType switch { 0 => "Dine In", 1 => "Takeout", 2 => "Delivery", 3 => "Online", 4 => "Room Service", _ => "Unknown" };
+                                                var orderTypeText = model.OrderType switch { 0 => "Walking", 1 => "B2C", 2 => "Delivery", 3 => "Online", 4 => "Room Service", _ => "Unknown" };
                                                 var additionalInfo = $"Order Type: {orderTypeText}";
                                                 if (model.OrderType == 0 && primaryTableId.HasValue)
                                                 {
@@ -1252,8 +1252,8 @@ END", connection))
                     serverName = model.ServerName,
                     orderType = model.OrderType switch
                     {
-                        0 => "Dine-In",
-                        1 => "Takeout",
+                        0 => "Walking",
+                        1 => "B2C",
                         2 => "Delivery",
                         3 => "Online",
                         4 => "Room Service",
@@ -2756,7 +2756,7 @@ END", connection))
 
                 if (order.OrderType != 1 && order.OrderType != 2)
                 {
-                    return BadRequest("POS Order supports only Takeout (1) and Delivery (2).");
+                    return BadRequest("POS Order supports only B2C (1) and Delivery (2).");
                 }
 
                 LoadPosMenuItems(order);
@@ -3041,7 +3041,7 @@ END", connection))
 
             if (model.OrderType != 1 && model.OrderType != 2)
             {
-                ModelState.AddModelError(nameof(model.OrderType), "POS Order supports only Takeout (1) or Delivery (2).");
+                ModelState.AddModelError(nameof(model.OrderType), "POS Order supports only B2C (1) or Delivery (2).");
             }
 
             if (model.OrderType == 2 && string.IsNullOrWhiteSpace(model.CustomerAddress))
@@ -3266,7 +3266,7 @@ END", connection))
 
             if (model.OrderType != 1 && model.OrderType != 2)
             {
-                ModelState.AddModelError(nameof(model.OrderType), "POS Order supports only Takeout (1) or Delivery (2).");
+                ModelState.AddModelError(nameof(model.OrderType), "POS Order supports only B2C (1) or Delivery (2).");
             }
 
             if (model.OrderType == 2 && string.IsNullOrWhiteSpace(model.CustomerAddress))
@@ -4142,8 +4142,8 @@ END", connection))
                             var orderType = reader.IsDBNull(ordOrderType) ? 0 : Convert.ToInt32(reader.GetValue(ordOrderType));
                             string orderTypeDisplay = orderType switch
                             {
-                                0 => "Dine-In",
-                                1 => "Takeout",
+                                0 => "Walking",
+                                1 => "B2C",
                                 2 => "Delivery",
                                 3 => "Online",
                                 4 => "Room Service",
@@ -4307,8 +4307,8 @@ END", connection))
                             var orderType = reader.GetInt32(2);
                             string orderTypeDisplay = orderType switch
                             {
-                                0 => "Dine-In",
-                                1 => "Takeout",
+                                0 => "Walking",
+                                1 => "B2C",
                                 2 => "Delivery",
                                 3 => "Online",
                                 4 => "Room Service",
@@ -4411,8 +4411,8 @@ END", connection))
                             var orderType = reader.IsDBNull(ordOrderType) ? 0 : Convert.ToInt32(reader.GetValue(ordOrderType));
                             string orderTypeDisplay = orderType switch
                             {
-                                0 => "Dine-In",
-                                1 => "Takeout",
+                                0 => "Walking",
+                                1 => "B2C",
                                 2 => "Delivery",
                                 3 => "Online",
                                 4 => "Room Service",
@@ -4812,8 +4812,8 @@ END", connection))
                             var orderType = reader.GetInt32(3);
                             string orderTypeDisplay = orderType switch
                             {
-                                0 => "Dine In",
-                                1 => "Take Out",
+                                0 => "Walking",
+                                1 => "B2C",
                                 2 => "Delivery",
                                 3 => "Online",
                                 4 => "Room Service",

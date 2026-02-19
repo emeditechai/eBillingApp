@@ -185,8 +185,10 @@
                                         <td class="text-truncate" style="max-width: 280px;" title="@row.Address">@row.Address</td>
                                         <td>
                                             @if (row.OrderType == "Delivery") { <span class="badge bg-info text-white">Delivery</span>; }
-                                            else if (row.OrderType == "Takeout") { <span class="badge bg-warning text-dark">Takeout</span>; }
-                                            else if (row.OrderType == "Dine-In") { <span class="badge bg-primary text-white">Dine-In</span>; }
+                                            else if (row.OrderType == "Takeout" || row.OrderType == "B2C") { <span class="badge bg-warning text-dark">B2C</span>; }
+                                            else if (row.OrderType == "Dine-In" || row.OrderType == "Walking") { <span class="badge bg-primary text-white">Walking</span>; }
+                                            else if (row.OrderType == "Foods") { <span class="badge bg-secondary">General</span>; }
+                                            else if (row.OrderType == "Bar") { <span class="badge bg-primary text-white">Others</span>; }
                                             else { <span class="badge bg-secondary">@row.OrderType</span>; }
                                         </td>
                                         <td class="text-end"><span class="badge bg-secondary">@row.Visits</span></td>

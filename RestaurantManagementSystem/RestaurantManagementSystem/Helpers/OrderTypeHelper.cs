@@ -12,8 +12,8 @@ namespace RestaurantManagementSystem.Helpers
         // Must match the dropdown values in Views/Order/Create.cshtml
         public static IReadOnlyList<(int Id, string Name)> GetOrderTypes() => new List<(int, string)>
         {
-            (0, "Dine-In"),
-            (1, "Takeout"),
+            (0, "Walking"),
+            (1, "B2C"),
             (2, "Delivery"),
             (4, "Room Service"),
         };

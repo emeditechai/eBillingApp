@@ -1,6 +1,13 @@
 @model IEnumerable<RestaurantManagementSystem.Models.MenuItemGroup>
 @{
     ViewData["Title"] = "Menu Item Groups";
+
+    string GetGroupDisplayName(string groupName)
+    {
+        if (string.Equals(groupName, "Foods", StringComparison.OrdinalIgnoreCase)) return "General";
+        if (string.Equals(groupName, "Bar", StringComparison.OrdinalIgnoreCase)) return "Others";
+        return groupName;
+    }
 }
 <div class="container py-3">
     <h2 class="mb-3">Menu Item Groups</h2>
@@ -61,7 +68,7 @@
                                 @foreach (var g in Model)
                                 {
                                     <tr data-id="@g.ID" data-name="@g.ItemGroup" data-active="@g.IsActive.ToString().ToLower()" data-gst="@(g.GST_Perc.HasValue ? g.GST_Perc.Value.ToString() : String.Empty)">
-                                        <td>@g.ItemGroup</td>
+                                        <td>@GetGroupDisplayName(g.ItemGroup)</td>
                                         <td class="text-center">
                                             <span class="badge @(g.IsActive ? "bg-success" : "bg-secondary")">@(g.IsActive ? "Yes" : "No")</span>
                                         </td>

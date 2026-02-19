@@ -60,8 +60,8 @@
                                 <label asp-for="Filter.OrderType" class="form-label">Order Type</label>
                                 <select asp-for="Filter.OrderType" class="form-select">
                                     <option value="">All Types</option>
-                                    <option value="0">Dine-In</option>
-                                    <option value="1">Takeout</option>
+                                    <option value="0">Walking</option>
+                                    <option value="1">B2C</option>
                                     <option value="2">Delivery</option>
                                 </select>
                             </div>
@@ -208,13 +208,13 @@
                     <div class="row">
                         <div class="col-12 mb-3">
                             <div class="d-flex justify-content-between">
-                                <span class="text-muted">Dine-In:</span>
+                                <span class="text-muted">Walking:</span>
                                 <span class="badge bg-primary text-white">@Model.Summary.DineInOrders</span>
                             </div>
                         </div>
                         <div class="col-12 mb-3">
                             <div class="d-flex justify-content-between">
-                                <span class="text-muted">Takeout:</span>
+                                <span class="text-muted">B2C:</span>
                                 <span class="badge bg-warning text-dark">@Model.Summary.TakeoutOrders</span>
                             </div>
                         </div>

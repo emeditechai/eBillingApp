@@ -1345,8 +1345,8 @@ namespace RestaurantManagementSystem.Controllers
                             var orderType = reader.GetInt32(2);
                             string orderTypeDisplay = orderType switch
                             {
-                                0 => "Dine-In",
-                                1 => "Takeout",
+                                0 => "Walking",
+                                1 => "B2C",
                                 2 => "Delivery",
                                 3 => "Online",
                                 _ => "Unknown"
@@ -1447,8 +1447,8 @@ namespace RestaurantManagementSystem.Controllers
                             var orderType = reader.GetInt32(2);
                             string orderTypeDisplay = orderType switch
                             {
-                                0 => "Dine-In",
-                                1 => "Takeout",
+                                0 => "Walking",
+                                1 => "B2C",
                                 2 => "Delivery",
                                 3 => "Online",
                                 _ => "Unknown"
@@ -1526,8 +1526,8 @@ namespace RestaurantManagementSystem.Controllers
                             var orderType = reader.GetInt32(2);
                             string orderTypeDisplay = orderType switch
                             {
-                                0 => "Dine-In",
-                                1 => "Takeout",
+                                0 => "Walking",
+                                1 => "B2C",
                                 2 => "Delivery",
                                 3 => "Online",
                                 _ => "Unknown"

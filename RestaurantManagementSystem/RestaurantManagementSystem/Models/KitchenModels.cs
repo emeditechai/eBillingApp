@@ -86,8 +86,8 @@ namespace RestaurantManagementSystem.Models
             {
                 return OrderType switch
                 {
-                    0 => "Dine In",
-                    1 => "Takeout",
+                    0 => "Walking",
+                    1 => "B2C",
                     2 => "Delivery",
                     3 => "Online",
                     4 => "Room Service",

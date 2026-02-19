@@ -317,21 +317,12 @@
                 {
                     <span>Order #@Model.OrderNumber</span>
                 }
-                else
-                {
-                    <span>Create Takeout / Delivery order</span>
-                }
             </div>
             <div class="flex-grow-1"></div>
             <div class="pos-search-shell ms-2">
                 <div class="input-group pos-search-input">
                     <span class="input-group-text"><i class="fas fa-search"></i></span>
                     <input class="form-control" id="posSearch" placeholder="Search products..." autocomplete="off" />
-                </div>
-                <div class="pos-search-chips" id="posSearchChips">
-                    <button type="button" class="pos-filter-chip active" data-chip="all">All items</button>
-                    <button type="button" class="pos-filter-chip" data-chip="value">Value picks</button>
-                    <button type="button" class="pos-filter-chip" data-chip="premium">Signature</button>
                 </div>
             </div>
                 <button class="btn btn-primary ms-2" type="button" id="posNewOrderBtn" style="display:@(hasOrder ? "inline-flex" : "none")">
@@ -506,7 +497,7 @@
         <div class="pos-panel" id="posRightPanel">
             <div class="pos-panel-header d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center gap-2">
-                    <div class="fw-semibold">Current Order</div>
+                    <div class="fw-semibold">Current Bill</div>
                     <span class="badge pos-items-badge" id="posItemCountBadge">0 items</span>
                     <span class="badge bg-secondary" id="posOrderStateBadge">@((hasOrder && Model?.Order?.IsFullyPaid == true) ? "PAID" : (hasOrder ? "OPEN" : "NEW"))</span>
                 </div>
@@ -522,7 +513,7 @@
                     </div>
                     <div class="compact-pill">
                         <span class="compact-label">Type</span>
-                        <span class="compact-value" id="posSummaryTypeMini">@((hasOrder ? Model.Order?.OrderTypeDisplay : "Takeout / Delivery"))</span>
+                        <span class="compact-value" id="posSummaryTypeMini">@((hasOrder ? Model.Order?.OrderTypeDisplay : "B2C / Delivery"))</span>
                     </div>
                     <div class="compact-pill">
                         <span class="compact-label">Remaining</span>
@@ -540,14 +531,14 @@
                             <label class="form-label">Order Type</label>
                             <div class="btn-group w-100" role="group" aria-label="Order Type">
                                 <button type="button" class="btn btn-outline-primary active" data-order-type="1" id="posOrderTypeTakeout">
-                                    <i class="fas fa-bag-shopping me-1"></i> Takeout
+                                    <i class="fas fa-bag-shopping me-1"></i> B2C
                                 </button>
                                 <button type="button" class="btn btn-outline-primary" data-order-type="2" id="posOrderTypeDelivery">
                                     <i class="fas fa-truck me-1"></i> Delivery
                                 </button>
                             </div>
                             <select class="form-select d-none" name="OrderType" id="posOrderType">
-                                <option value="1" selected>Takeout</option>
+                                <option value="1" selected>B2C</option>
                                 <option value="2">Delivery</option>
                             </select>
                         </div>
@@ -574,7 +565,7 @@
                         </div>
                         <div class="col-12 d-grid mt-2">
                             <button class="btn btn-primary" type="submit" id="posCreateBtn">
-                                <i class="fas fa-play me-1"></i> Start Order
+                                <i class="fas fa-play me-1"></i> Start Bill
                             </button>
                         </div>
                         <div class="col-12 mt-2">
@@ -852,12 +843,6 @@
             let categoriesCollapsed = false;
             let lastAddedMenuItemId = 0;
             let lastAddedAt = 0;
-            const priceFilters = {
-                all: null,
-                value: { tag: 'value' },
-                premium: { tag: 'premium' }
-            };
-            let activePriceFilterKey = 'all';
             const summaryEls = {
                 order: document.getElementById('posSummaryOrderMini'),
                 type: document.getElementById('posSummaryTypeMini'),
@@ -968,7 +953,7 @@
 
             function updateOrderSummary(orderNum, orderTypeName, remainingValue){
                 const orderText = orderNum && orderNum.trim() ? orderNum : '—';
-                const typeText = orderTypeName && orderTypeName.trim() ? orderTypeName : 'Takeout / Delivery';
+                const typeText = orderTypeName && orderTypeName.trim() ? orderTypeName : 'B2C / Delivery';
                 const remainingText = (isFinite(remainingValue) ? Number(remainingValue) : 0).toFixed(2);
                 if (summaryEls.order) summaryEls.order.textContent = orderText;
                 if (summaryEls.type) summaryEls.type.textContent = typeText;
@@ -1303,23 +1288,12 @@
                 const search = (document.getElementById('posSearch')?.value || '').trim().toLowerCase();
                 const products = Array.from(document.querySelectorAll('.pos-product'));
                 let visible = 0;
-                const priceFilter = priceFilters[activePriceFilterKey] || null;
                 products.forEach(el => {
                     const cat = el.getAttribute('data-category');
                     const name = (el.getAttribute('data-name') || '').toLowerCase();
                     const matchesCat = (selectedCategory === 'all') || (String(cat) === String(selectedCategory));
                     const matchesSearch = !search || name.includes(search);
-                    let matchesPrice = true;
-                    if (priceFilter) {
-                        const basePrice = parseFloat(el.getAttribute('data-price') || '0') || 0;
-                        if (typeof priceFilter.min === 'number' && basePrice < priceFilter.min) matchesPrice = false;
-                        if (typeof priceFilter.max === 'number' && basePrice > priceFilter.max) matchesPrice = false;
-                        if (priceFilter.tag) {
-                            const tags = (el.getAttribute('data-tags') || '').split(' ').filter(Boolean);
-                            matchesPrice = matchesPrice && tags.includes(priceFilter.tag);
-                        }
-                    }
-                    const ok = (matchesCat && matchesSearch && matchesPrice);
+                    const ok = (matchesCat && matchesSearch);
                     el.style.display = ok ? '' : 'none';
                     if (ok) visible++;
                 });
@@ -1327,20 +1301,11 @@
                 const countEl = document.getElementById('posVisibleCount');
                 if (countEl) {
                     const total = products.length;
-                    const filtering = !!search || (selectedCategory !== 'all') || activePriceFilterKey !== 'all';
+                    const filtering = !!search || (selectedCategory !== 'all');
                     countEl.textContent = filtering ? (`Showing ${visible} of ${total}`) : (`${total} items`);
                 }
                 const emptyEl = document.getElementById('posNoResults');
                 if (emptyEl) emptyEl.classList.toggle('d-none', visible !== 0);
-            }
-
-            function setPriceFilter(key){
-                activePriceFilterKey = priceFilters[key] ? key : 'all';
-                document.querySelectorAll('.pos-filter-chip').forEach(chip => {
-                    const chipKey = chip.getAttribute('data-chip') || 'all';
-                    chip.classList.toggle('active', chipKey === activePriceFilterKey);
-                });
-                applyFilters();
             }
 
             function applyCatalogPrices(orderType){
@@ -1360,13 +1325,13 @@
             }
 
             function getOrderTypeName(orderType){
-                return orderType === 2 ? 'Delivery' : 'Takeout';
+                return orderType === 2 ? 'Delivery' : 'B2C';
             }
 
             function updateTopBarSubtitle(){
                 const el = document.getElementById('posTopSubtitle');
                 if (!el) return;
-                el.textContent = orderId ? ('Order #' + orderNumber) : 'Create Takeout / Delivery order';
+                el.textContent = orderId ? ('Order #' + orderNumber) : '';
             }
 
             function toggleOrderSections(hasActive){
@@ -1686,7 +1651,7 @@
                 setOrderStateBadge('NEW');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
                 document.getElementById('posSearch')?.focus();
-                updateOrderSummary('—', 'Takeout / Delivery', 0);
+                updateOrderSummary('—', 'B2C / Delivery', 0);
                 resetDetailsPanel();
             }
 
@@ -2057,12 +2022,6 @@
             });
 
             document.getElementById('posSearch')?.addEventListener('input', applyFilters);
-            document.getElementById('posSearchChips')?.addEventListener('click', function(e){
-                const chip = e.target.closest('.pos-filter-chip');
-                if (!chip) return;
-                const key = chip.getAttribute('data-chip') || 'all';
-                setPriceFilter(key);
-            });
             document.getElementById('posToggleCategories')?.addEventListener('click', function(){
                 setCategoriesCollapsed(!categoriesCollapsed, true);
             });
@@ -2431,7 +2390,7 @@
                 syncFromDom();
             })();
 
-            setPriceFilter(activePriceFilterKey);
+            applyFilters();
             toggleOrderSections(!!orderId);
             updateTopBarSubtitle();
             const initialType = document.getElementById('posOrderTypeDisplay')?.textContent || getOrderTypeName(parseInt(document.getElementById('posOrderType')?.value || '1'));

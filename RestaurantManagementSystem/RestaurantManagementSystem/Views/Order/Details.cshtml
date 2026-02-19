@@ -152,13 +152,16 @@
                 {
                     foreach (var g in Model.MenuItemGroups)
                     {
+                    var itemGroupDisplayName = string.Equals(g.ItemGroup, "Foods", StringComparison.OrdinalIgnoreCase) ? "General"
+                      : string.Equals(g.ItemGroup, "Bar", StringComparison.OrdinalIgnoreCase) ? "Others"
+                      : g.ItemGroup;
                         if (g.ID == Model.SelectedMenuItemGroupId)
                         {
-                            <option value="@g.ID" selected>@g.ItemGroup</option>
+                      <option value="@g.ID" selected>@itemGroupDisplayName</option>
                         }
                         else
                         {
-                            <option value="@g.ID">@g.ItemGroup</option>
+                      <option value="@g.ID">@itemGroupDisplayName</option>
                         }
                     }
                 }

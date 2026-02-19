@@ -8,8 +8,8 @@ namespace RestaurantManagementSystem.Models
     {
         public int Id { get; set; }
 
-        [Required(ErrorMessage = "PLU Code is required")]
-        [Display(Name = "PLU Code")]
+        [Required(ErrorMessage = "Item Code is required")]
+        [Display(Name = "Item Code")]
         public string PLUCode { get; set; }
 
         [Required(ErrorMessage = "Name is required")]
@@ -25,8 +25,8 @@ namespace RestaurantManagementSystem.Models
         [DataType(DataType.Currency)]
         public decimal Price { get; set; }
 
-        [Display(Name = "Takeout Price")]
-        [Range(0.01, 9999.99, ErrorMessage = "Takeout Price must be between ₹0.01 and ₹9,999.99")]
+        [Display(Name = "B2C Price")]
+        [Range(0.01, 9999.99, ErrorMessage = "B2C Price must be between ₹0.01 and ₹9,999.99")]
         [DataType(DataType.Currency)]
         public decimal? TakeoutPrice { get; set; }
 

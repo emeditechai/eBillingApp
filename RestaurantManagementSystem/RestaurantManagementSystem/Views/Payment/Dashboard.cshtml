@@ -166,19 +166,19 @@
                                         }
                                         @if (Model.OrderType?.Equals("Foods", StringComparison.OrdinalIgnoreCase) == true)
                                         {
-                                            <option value="Foods" selected>Foods</option>
+                                            <option value="Foods" selected>General</option>
                                         }
                                         else
                                         {
-                                            <option value="Foods">Foods</option>
+                                            <option value="Foods">General</option>
                                         }
                                         @if (Model.OrderType?.Equals("Bar", StringComparison.OrdinalIgnoreCase) == true)
                                         {
-                                            <option value="Bar" selected>Bar</option>
+                                            <option value="Bar" selected>Others</option>
                                         }
                                         else
                                         {
-                                            <option value="Bar">Bar</option>
+                                            <option value="Bar">Others</option>
                                         }
                                     </select>
                                 </div>

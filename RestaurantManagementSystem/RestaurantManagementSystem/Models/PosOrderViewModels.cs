@@ -9,7 +9,7 @@ namespace RestaurantManagementSystem.Models
         public int? SelectedCounterId { get; set; }
 
         [Required]
-        [Range(1, 2, ErrorMessage = "POS Order supports only Takeout (1) or Delivery (2).")]
+        [Range(1, 2, ErrorMessage = "POS Order supports only B2C (1) or Delivery (2).")]
         public int OrderType { get; set; } = 1; // 1=Takeout, 2=Delivery
 
         [Display(Name = "Customer Name")]

@@ -21,21 +21,35 @@
                         <input type="hidden" asp-for="Id" />
                         <input type="hidden" asp-for="ImagePath" />
                         <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                        <input type="hidden" asp-for="PreparationTimeMinutes" value="@(Model.PreparationTimeMinutes <= 0 ? 1 : Model.PreparationTimeMinutes)" />
+                        <input type="hidden" asp-for="CalorieCount" />
+                        <input type="hidden" asp-for="KitchenStationId" />
+                        @if (Model.SelectedAllergens != null)
+                        {
+                            @foreach (var allergenId in Model.SelectedAllergens)
+                            {
+                                <input type="hidden" name="SelectedAllergens" value="@allergenId" />
+                            }
+                        }
+                        @if (Model.SelectedModifiers != null)
+                        {
+                            @foreach (var modifierId in Model.SelectedModifiers)
+                            {
+                                <input type="hidden" name="SelectedModifiers" value="@modifierId" />
+                            }
+                        }
+                        @if (Model.ModifierPrices != null)
+                        {
+                            @foreach (var modifierPrice in Model.ModifierPrices)
+                            {
+                                <input type="hidden" name="ModifierPrices[@modifierPrice.Key]" value="@modifierPrice.Value" />
+                            }
+                        }
                         
                         <ul class="nav nav-tabs nav-fill mb-3" id="menuItemTabs" role="tablist">
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link active" id="general-tab" data-bs-toggle="tab" data-bs-target="#general" type="button" role="tab" aria-controls="general" aria-selected="true">
                                     <i class="fas fa-info-circle me-1"></i> General
-                                </button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="allergens-tab" data-bs-toggle="tab" data-bs-target="#allergens" type="button" role="tab" aria-controls="allergens" aria-selected="false">
-                                    <i class="fas fa-exclamation-triangle me-1"></i> Allergens
-                                </button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="modifiers-tab" data-bs-toggle="tab" data-bs-target="#modifiers" type="button" role="tab" aria-controls="modifiers" aria-selected="false">
-                                    <i class="fas fa-sliders-h me-1"></i> Modifiers
                                 </button>
                             </li>
                         </ul>
@@ -115,28 +129,9 @@
                                             <span asp-validation-for="SubCategoryId" class="text-danger"></span>
                                         </div>
 
-                                        <div class="form-group">
-                                            <label asp-for="KitchenStationId" class="control-label"></label>
-                                            <select asp-for="KitchenStationId" class="form-control" asp-items="ViewBag.KitchenStations">
-                                                <option value="">-- Select Kitchen Station --</option>
-                                            </select>
-                                            <span asp-validation-for="KitchenStationId" class="text-danger"></span>
-                                        </div>
                                     </div>
                                     
                                     <div class="col-md-6">
-                                        <div class="form-group">
-                                            <label asp-for="PreparationTimeMinutes" class="control-label"></label>
-                                            <input asp-for="PreparationTimeMinutes" class="form-control" type="number" min="1" value="@(Model.PreparationTimeMinutes == 0 ? 1 : Model.PreparationTimeMinutes)" />
-                                            <span asp-validation-for="PreparationTimeMinutes" class="text-danger"></span>
-                                        </div>
-                                        
-                                        <div class="form-group">
-                                            <label asp-for="CalorieCount" class="control-label"></label>
-                                            <input asp-for="CalorieCount" class="form-control" type="number" />
-                                            <span asp-validation-for="CalorieCount" class="text-danger"></span>
-                                        </div>
-                                        
                                         <div class="form-group">
                                             <label asp-for="DiscountPercentage" class="control-label"></label>
                                             <input asp-for="DiscountPercentage" class="form-control" type="number" step="0.01" />
@@ -197,88 +192,6 @@
                                     </div>
                                 </div>
                             </div>
-                            
-                            <!-- Allergens Tab -->
-                            <div class="tab-pane fade" id="allergens" role="tabpanel" aria-labelledby="allergens-tab">
-                                <div class="row">
-                                    @if (ViewBag.Allergens != null)
-                                    {
-                                        @foreach (var allergen in ViewBag.Allergens)
-                                        {
-                                            <div class="col-md-3 mb-3">
-                                                <div class="card">
-                                                    <div class="card-body">
-                                                        <div class="form-check">
-                                                            <input type="checkbox" name="SelectedAllergens" value="@allergen.Id" id="allergen-@allergen.Id" class="form-check-input"
-                                                                   @(Model.SelectedAllergens != null && Model.SelectedAllergens.Contains(allergen.Id) ? "checked" : "") />
-                                                            <label class="form-check-label" for="allergen-@allergen.Id">
-                                                                @if (!string.IsNullOrEmpty(allergen.IconPath))
-                                                                {
-                                                                    <img src="@allergen.IconPath" alt="@allergen.Name" style="width:20px; height:20px;" class="mr-1" />
-                                                                }
-                                                                @allergen.Name
-                                                            </label>
-                                                            @if (!string.IsNullOrEmpty(allergen.Description))
-                                                            {
-                                                                <small class="form-text text-muted">@allergen.Description</small>
-                                                            }
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        }
-                                    }
-                                </div>
-                            </div>
-                            
-                            <!-- Ingredients tab removed intentionally -->
-                            
-                            <!-- Modifiers Tab -->
-                            <div class="tab-pane fade" id="modifiers" role="tabpanel" aria-labelledby="modifiers-tab">
-                                <div class="row">
-                                    @if (ViewBag.Modifiers != null)
-                                    {
-                                        @foreach (var modifier in ViewBag.Modifiers)
-                                        {
-                                            bool isSelected = Model.SelectedModifiers != null && Model.SelectedModifiers.Contains(modifier.Id);
-                                            decimal price = 0;
-                                            if (Model.ModifierPrices != null && Model.ModifierPrices.ContainsKey(modifier.Id))
-                                            {
-                                                price = Model.ModifierPrices[modifier.Id];
-                                            }
-                                            
-                                            <div class="col-md-6 mb-3">
-                                                <div class="card">
-                                                    <div class="card-body">
-                                                        <div class="form-check mb-2">
-                                                            <input type="checkbox" name="SelectedModifiers" value="@modifier.Id" id="modifier-@modifier.Id" class="form-check-input modifier-checkbox"
-                                                                   onchange="togglePriceField(@modifier.Id)" @(isSelected ? "checked" : "") />
-                                                            <label class="form-check-label" for="modifier-@modifier.Id">
-                                                                @modifier.Name (@modifier.ModifierType)
-                                                            </label>
-                                                        </div>
-                                                        
-                                                        @if (!string.IsNullOrEmpty(modifier.Description))
-                                                        {
-                                                            <small class="form-text text-muted mb-2">@modifier.Description</small>
-                                                        }
-                                                        
-                                                        <div class="form-group price-adjustment-group" id="price-group-@modifier.Id" style="display:@(isSelected ? "block" : "none");">
-                                                            <label>Price Adjustment</label>
-                                                            <div class="input-group">
-                                                                <div class="input-group-prepend">
-                                                                    <span class="input-group-text">&#8377;</span>
-                                                                </div>
-                                                                <input type="number" name="ModifierPrices[@modifier.Id]" class="form-control" value="@price" step="0.01" />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        }
-                                    }
-                                </div>
-                            </div>
                         </div>
 
                         <div class="form-group mt-4 text-right">
@@ -336,12 +249,6 @@
             
             // Ingredients feature removed
             
-            // Add event handler for modifier checkboxes
-            $(document).on("change", ".modifier-checkbox", function() {
-                const modifierId = $(this).val();
-                togglePriceField(modifierId);
-            });
-            
             // Form validation before submission
             $('form').on('submit', function(e) {
                 if (!this.checkValidity()) {
@@ -352,8 +259,14 @@
                     const invalidFields = $(this).find(':invalid');
                     if (invalidFields.length > 0) {
                         const tabPane = $(invalidFields[0]).closest('.tab-pane');
-                        const tabId = tabPane.attr('id') + '-tab';
-                        document.getElementById(tabId).click();
+                        const tabPaneId = tabPane.attr('id');
+                        if (tabPaneId) {
+                            const tabId = tabPaneId + '-tab';
+                            const tabButton = document.getElementById(tabId);
+                            if (tabButton) {
+                                tabButton.click();
+                            }
+                        }
                         
                         // Scroll to and focus the first invalid field
                         $('html, body').animate({
@@ -378,8 +291,27 @@
             toggleGstField();
             
             // Toggle UOM dropdown visibility based on Item Group selection
+            function getDisplayGroupName(groupName) {
+                const normalized = (groupName || '').trim().toUpperCase();
+                if (normalized === 'FOODS') return 'General';
+                if (normalized === 'BAR') return 'Others';
+                return groupName;
+            }
+
+            function normalizeItemGroupOptions() {
+                $('#MenuItemGroupId option').each(function() {
+                    const option = $(this);
+                    const originalText = option.attr('data-original-group') || option.text().trim();
+                    option.attr('data-original-group', originalText);
+                    if (option.val()) {
+                        option.text(getDisplayGroupName(originalText));
+                    }
+                });
+            }
+
             function toggleUOMField() {
-                var selectedGroup = $('#MenuItemGroupId option:selected').text().trim();
+                var selectedOption = $('#MenuItemGroupId option:selected');
+                var selectedGroup = (selectedOption.attr('data-original-group') || selectedOption.text() || '').trim().toUpperCase();
                 var uomGroup = $('#uom-group');
                 
                 if (selectedGroup === 'BAR') {
@@ -394,6 +326,7 @@
             $('#MenuItemGroupId').on('change', toggleUOMField);
             
             // Check initial state on page load
+            normalizeItemGroupOptions();
             toggleUOMField();
             
             // Load subcategories on page load if category is selected

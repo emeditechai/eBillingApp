@@ -1327,7 +1327,7 @@ namespace RestaurantManagementSystem.Controllers
                         ISNULL(NULLIF(o.CustomerPhone,''), '') AS Phone,
                         MAX(ISNULL(o.Customeremailid,'')) AS Email,
                         MAX(ISNULL(o.CustomerAddress,'')) AS Address,
-                        CASE o.OrderType WHEN 0 THEN 'Dine-In' WHEN 1 THEN 'Takeout' WHEN 2 THEN 'Delivery' ELSE 'Other' END AS OrderType,
+                        CASE o.OrderType WHEN 0 THEN 'Walking' WHEN 1 THEN 'B2C' WHEN 2 THEN 'Delivery' ELSE 'Other' END AS OrderType,
                         COUNT(*) AS Visits
                     FROM Orders o WITH (NOLOCK)
                     WHERE o.OrderType IN (0,1,2)
@@ -1336,7 +1336,7 @@ namespace RestaurantManagementSystem.Controllers
                     GROUP BY 
                         ISNULL(NULLIF(o.CustomerName,''), 'Unknown'),
                         ISNULL(NULLIF(o.CustomerPhone,''), ''),
-                        CASE o.OrderType WHEN 0 THEN 'Dine-In' WHEN 1 THEN 'Takeout' WHEN 2 THEN 'Delivery' ELSE 'Other' END
+                        CASE o.OrderType WHEN 0 THEN 'Walking' WHEN 1 THEN 'B2C' WHEN 2 THEN 'Delivery' ELSE 'Other' END
                     HAVING (ISNULL(NULLIF(o.CustomerPhone,''), '') <> '' OR MAX(ISNULL(o.Customeremailid,'')) <> '')
                     ORDER BY Visits DESC, Name ASC
                 ", connection2)

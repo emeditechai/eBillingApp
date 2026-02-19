@@ -32,7 +32,7 @@ $(document).ready(function() {
 
     function priceTypeLabel() {
         switch (priceType) {
-            case 'takeout': return 'Takeout';
+            case 'takeout': return 'B2C';
             case 'delivery': return 'Delivery';
             case 'roomService': return 'Room Service';
             default: return 'Base';

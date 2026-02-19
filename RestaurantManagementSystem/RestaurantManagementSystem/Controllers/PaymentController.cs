@@ -3245,7 +3245,7 @@ END", connection))
                     SELECT 
                         o.Id AS OrderId,
                         o.OrderNumber,
-                        ISNULL(tt.TableName, 'Takeout/Delivery') AS TableName,
+                        ISNULL(tt.TableName, 'B2C/Delivery') AS TableName,
                         ISNULL(pt.TotalPayable, 0) AS TotalPayable,
                         ISNULL(pt.TotalPayable, 0) AS TotalPaid,
                         0 AS DueAmount,
@@ -3316,7 +3316,7 @@ END", connection))
                                 p.Id AS PaymentId,
                                 p.OrderId,
                                 o.OrderNumber,
-                                ISNULL(tt.TableName, 'Takeout/Delivery') AS TableName,
+                                ISNULL(tt.TableName, 'B2C/Delivery') AS TableName,
                                 pm.Name AS PaymentMethodName,
                                 pm.DisplayName AS PaymentMethodDisplay,
                                 ISNULL(p.Amount,0) AS Amount,
@@ -3531,7 +3531,7 @@ END", connection))
                     SELECT 
                         o.Id AS OrderId,
                         o.OrderNumber,
-                        ISNULL(tt.TableName, 'Takeout/Delivery') AS TableName,
+                        ISNULL(tt.TableName, 'B2C/Delivery') AS TableName,
                         (SELECT ISNULL(SUM(p2.Amount), 0) FROM Payments p2 WHERE p2.OrderId = o.Id AND p2.Status = 1) AS TotalPayable,
                         ISNULL(SUM(p.Amount), 0) AS TotalPaid,
                         0 AS DueAmount,
@@ -3643,7 +3643,7 @@ END", connection))
                                 p.Id AS PaymentId,
                                 p.OrderId,
                                 o.OrderNumber,
-                                ISNULL(tt.TableName, 'Takeout/Delivery') AS TableName,
+                                ISNULL(tt.TableName, 'B2C/Delivery') AS TableName,
                                 pm.Name AS PaymentMethodName,
                                 pm.DisplayName AS PaymentMethodDisplay,
                                 ISNULL(p.Amount,0) AS Amount,
@@ -3801,8 +3801,8 @@ END", connection))
                             model.OrderType = (ordOrderType >= 0 && !reader.IsDBNull(ordOrderType)) ? reader.GetInt32(ordOrderType) : 0;
                             model.OrderTypeDisplay = model.OrderType switch
                             {
-                                0 => "Dine In",
-                                1 => "Takeout",
+                                0 => "Walking",
+                                1 => "B2C",
                                 2 => "Delivery",
                                 3 => "Online",
                                 4 => "Room Service",
@@ -4516,7 +4516,7 @@ END", connection))
                     SELECT 
                         o.Id AS OrderId,
                         o.OrderNumber,
-                        ISNULL(tt.TableName, 'Takeout/Delivery') AS TableName,
+                        ISNULL(tt.TableName, 'B2C/Delivery') AS TableName,
                         (SELECT ISNULL(SUM(p2.Amount), 0) FROM Payments p2 WHERE p2.OrderId = o.Id AND p2.Status = 1) AS TotalPayable,
                         ISNULL(SUM(p.Amount), 0) AS TotalPaid,
                         0 AS DueAmount,
@@ -4587,7 +4587,7 @@ END", connection))
                     SELECT 
                         o.Id AS OrderId,
                         o.OrderNumber,
-                        ISNULL(tt.TableName, 'Takeout/Delivery') AS TableName,
+                        ISNULL(tt.TableName, 'B2C/Delivery') AS TableName,
                         (SELECT ISNULL(SUM(p2.Amount), 0) FROM Payments p2 WHERE p2.OrderId = o.Id AND p2.Status = 1) AS TotalPayable,
                         ISNULL(SUM(p.Amount), 0) AS TotalPaid,
                         0 AS DueAmount,

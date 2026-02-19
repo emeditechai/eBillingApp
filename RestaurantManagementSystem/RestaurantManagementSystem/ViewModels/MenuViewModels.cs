@@ -10,9 +10,9 @@ namespace RestaurantManagementSystem.ViewModels
     {
         public int Id { get; set; }
 
-        [Required(ErrorMessage = "PLU Code is required")]
-        [Display(Name = "PLU Code")]
-        [StringLength(20, ErrorMessage = "PLU Code cannot exceed 20 characters")]
+        [Required(ErrorMessage = "Item Code is required")]
+        [Display(Name = "Item Code")]
+        [StringLength(20, ErrorMessage = "Item Code cannot exceed 20 characters")]
         public string PLUCode { get; set; }
 
         [Required(ErrorMessage = "Name is required")]
@@ -28,8 +28,8 @@ namespace RestaurantManagementSystem.ViewModels
         [DataType(DataType.Currency)]
         public decimal Price { get; set; }
 
-        [Display(Name = "Takeout Price")]
-        [Range(0.01, 10000, ErrorMessage = "Takeout Price must be greater than 0")]
+        [Display(Name = "B2C Price")]
+        [Range(0.01, 10000, ErrorMessage = "B2C Price must be greater than 0")]
         [DataType(DataType.Currency)]
         public decimal? TakeoutPrice { get; set; }
 

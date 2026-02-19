@@ -2,6 +2,13 @@
 
 @{
     ViewData["Title"] = "Menu Items";
+
+    string GetItemGroupDisplayName(string groupName)
+    {
+        if (string.Equals(groupName, "Foods", StringComparison.OrdinalIgnoreCase)) return "General";
+        if (string.Equals(groupName, "Bar", StringComparison.OrdinalIgnoreCase)) return "Others";
+        return string.IsNullOrWhiteSpace(groupName) ? "-" : groupName;
+    }
 }
 
 <div class="container-fluid">
@@ -46,7 +53,7 @@
                     <table id="menuItemsTable" class="table table-striped table-bordered">
                         <thead>
                             <tr>
-                                <th>PLU Code</th>
+                                <th>Item Code</th>
                                 <th>Image</th>
                                 <th>Name</th>
                                 <th>Category</th>
@@ -75,14 +82,14 @@
                                     </td>
                                     <td>@item.Name</td>
                                     <td>@item.Category?.Name</td>
-                                    <td>@(item.MenuItemGroup?.ItemGroup ?? "-")</td>
+                                    <td>@GetItemGroupDisplayName(item.MenuItemGroup?.ItemGroup)</td>
                                     <td>@(item.SubCategory?.Name ?? "-")</td>
                                     <td>
                                         <div class="small">
                                             <strong class="text-dark">Base:</strong> <strong class="text-success"><text>₹</text>@item.Price.ToString("N2")</strong>
                                             @if (item.TakeoutPrice.HasValue)
                                             {
-                                                <br/><strong class="text-primary">Takeout:</strong> <strong class="text-info"><text>₹</text>@item.TakeoutPrice.Value.ToString("N2")</strong>
+                                                <br/><strong class="text-primary">B2C:</strong> <strong class="text-info"><text>₹</text>@item.TakeoutPrice.Value.ToString("N2")</strong>
                                             }
                                             @if (item.DeliveryPrice.HasValue)
                                             {
@@ -140,7 +147,7 @@
                 "autoWidth": false,
                 "pageLength": 25,
                 "columns": [
-                    null,                      // PLU Code
+                    null,                      // Item Code
                     { "orderable": false },   // Image
                     null,                      // Name
                     null,                      // Category
