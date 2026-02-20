@@ -89,6 +89,7 @@ namespace RestaurantManagementSystem.Models
         public int? PreparationTimeMinutes { get; set; }
         public int ItemCount { get; set; }
         public int TotalQuantity { get; set; }
+        public List<OrderReportMenuItem> MenuItems { get; set; } = new List<OrderReportMenuItem>();
 
         // Formatted properties
         public string FormattedSubtotal => $"₹{Subtotal:N2}";
@@ -123,6 +124,15 @@ namespace RestaurantManagementSystem.Models
         };
 
         public bool HasSpecialInstructions => !string.IsNullOrWhiteSpace(SpecialInstructions);
+        public bool HasMenuItems => MenuItems.Count > 0;
+    }
+
+    public class OrderReportMenuItem
+    {
+        public string Name { get; set; } = string.Empty;
+        public int Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public string FormattedUnitPrice => $"₹{UnitPrice:N2}";
     }
 
     public class HourlyOrderDistribution

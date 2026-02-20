@@ -71,9 +71,9 @@
                                 <span asp-validation-for="Filter.EndDate" class="text-danger"></span>
                             </div>
                             <div class="col-md-3 mb-3">
-                                <label asp-for="Filter.UserId" class="form-label">Server/User</label>
+                                <label asp-for="Filter.UserId" class="form-label">Cashier/User</label>
                                 <select asp-for="Filter.UserId" class="form-select">
-                                    <option value="">All Servers</option>
+                                    <option value="">All Cashiers</option>
                                     @foreach (var user in Model.AvailableUsers)
                                     {
                                         <option value="@user.Id">@user.DisplayName</option>
@@ -192,7 +192,7 @@
                                 <tr>
                                     <th>Date/Time</th>
                                     <th>Order No</th>
-                                    <th>Server</th>
+                                    <th>Cashier</th>
                                     <th class="text-end">Bill Value</th>
                                     <th class="text-end text-danger">Discount</th>
                                     <th class="text-end text-success fw-bold">Net Amount</th>
@@ -374,7 +374,7 @@
         </div>
     </div>
 
-    <!-- Server Performance -->
+    <!-- Cashier Performance -->
     @if (Model.ServerPerformance.Any())
     {
         <div class="row mb-4">
@@ -382,7 +382,7 @@
                 <div class="card border-0 shadow-sm">
                     <div class="card-header bg-light border-0">
                         <h5 class="card-title mb-0">
-                            <i class="fas fa-users me-2"></i>Server Performance
+                            <i class="fas fa-users me-2"></i>Cashier Performance
                         </h5>
                     </div>
                     <div class="card-body">
@@ -390,7 +390,7 @@
                             <table class="table table-hover">
                                 <thead class="table-light">
                                     <tr>
-                                        <th>Server</th>
+                                        <th>Cashier</th>
                                         <th>Orders</th>
                                         <th>Total Sales</th>
                                         <th>Avg Order Value</th>

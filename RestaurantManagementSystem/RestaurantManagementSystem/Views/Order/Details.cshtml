@@ -196,7 +196,7 @@
             </div>
         </form>
         <div class="ms-auto d-flex flex-wrap align-items-center justify-content-end gap-2" id="orderPrimaryActions">
-          <div class="btn-group" role="group" aria-label="Kitchen actions">
+          <div class="btn-group d-none" role="group" aria-label="Kitchen actions">
             <button type="button" id="fireItemsBtn" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#fireItemsModal">
               <i class="fas @fireButtonIcon"></i> @fireButtonLabel <span class="badge bg-warning text-dark" style="font-size: 0.65rem;">Ctrl+F</span>
             </button>
@@ -329,10 +329,6 @@
               {
                 <span class="badge bg-primary">@kotBadgeText sent</span>
               }
-              @if (hasPendingToFire)
-              {
-                <span class="badge bg-warning text-dark">@kotBadgeText pending</span>
-              }
               <span class="badge bg-light text-dark border">Updated @Model.UpdatedAt.ToString("t")</span>
             </div>
             <dl class="row mb-0">
@@ -343,8 +339,7 @@
               {
                 <dt class="col-5">Address</dt><dd class="col-7">@Model.CustomerAddress</dd>
               }
-              <dt class="col-5">Table</dt><dd class="col-7">@(!string.IsNullOrEmpty(Model.TableName)?Model.TableName:"—")</dd>
-              <dt class="col-5">Server</dt><dd class="col-7">@(!string.IsNullOrEmpty(Model.ServerName)?Model.ServerName:"—")</dd>
+              <dt class="col-5">Cashier</dt><dd class="col-7">@(!string.IsNullOrEmpty(Model.ServerName)?Model.ServerName:"—")</dd>
               <dt class="col-5">Type</dt><dd class="col-7">@Model.OrderTypeDisplay</dd>
               @if (Model.OrderType == 4)
               {
@@ -492,12 +487,12 @@
 
         // Customer is optional (do not block payment when missing)
 
-        // Table + Server required for dine-in (OrderType == 0)
+        // Table + Cashier required for dine-in (OrderType == 0)
         if (@Model.OrderType == 0) {
           const tableText = '@(Model.TableName ?? "")';
           const serverText = '@(Model.ServerName ?? "")';
           if (!tableText || tableText.trim().length === 0) missing.push('table');
-          if (!serverText || serverText.trim().length === 0) missing.push('server');
+          if (!serverText || serverText.trim().length === 0) missing.push('cashier');
         }
 
         return missing;

@@ -1063,11 +1063,68 @@ namespace RestaurantManagementSystem.Controllers
                         });
                     }
                 }
+
+                await LoadOrderReportMenuItemsAsync(viewModel.Orders);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error loading order report data: {ex.Message}");
                 viewModel.Summary = new OrderReportSummary();
+            }
+        }
+
+        private async Task LoadOrderReportMenuItemsAsync(List<OrderReportItem> orders)
+        {
+            if (orders == null || orders.Count == 0)
+            {
+                return;
+            }
+
+            var orderIds = string.Join(",", orders.Select(x => x.Id));
+            if (string.IsNullOrWhiteSpace(orderIds))
+            {
+                return;
+            }
+
+            var orderLookup = orders.ToDictionary(x => x.Id);
+
+            using var connection = new SqlConnection(_connectionString);
+            await connection.OpenAsync();
+
+            const string sql = @"
+                SELECT 
+                    oi.OrderId,
+                    oi.Quantity,
+                    oi.UnitPrice,
+                    mi.Name AS MenuItemName
+                FROM OrderItems oi
+                INNER JOIN MenuItems mi ON oi.MenuItemId = mi.Id
+                WHERE oi.OrderId IN (
+                    SELECT TRY_CAST(value AS INT)
+                    FROM STRING_SPLIT(@OrderIds, ',')
+                    WHERE TRY_CAST(value AS INT) IS NOT NULL
+                )
+                AND ISNULL(oi.Status, 0) <> 5
+                ORDER BY oi.OrderId, oi.Id;";
+
+            using var command = new SqlCommand(sql, connection);
+            command.Parameters.AddWithValue("@OrderIds", orderIds);
+
+            using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var orderId = reader.GetInt32(reader.GetOrdinal("OrderId"));
+                if (!orderLookup.TryGetValue(orderId, out var order))
+                {
+                    continue;
+                }
+
+                order.MenuItems.Add(new OrderReportMenuItem
+                {
+                    Name = reader.IsDBNull(reader.GetOrdinal("MenuItemName")) ? "Unknown Item" : reader.GetString(reader.GetOrdinal("MenuItemName")),
+                    Quantity = reader.IsDBNull(reader.GetOrdinal("Quantity")) ? 0 : reader.GetInt32(reader.GetOrdinal("Quantity")),
+                    UnitPrice = reader.IsDBNull(reader.GetOrdinal("UnitPrice")) ? 0 : reader.GetDecimal(reader.GetOrdinal("UnitPrice"))
+                });
             }
         }
 

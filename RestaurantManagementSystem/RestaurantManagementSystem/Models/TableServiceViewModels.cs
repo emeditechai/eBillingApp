@@ -16,8 +16,8 @@ namespace RestaurantManagementSystem.Models
         [Display(Name = "Table")]
         public int TableId { get; set; }
         
-        [Required(ErrorMessage = "Server is required")]
-        [Display(Name = "Assign Server")]
+        [Required(ErrorMessage = "Cashier is required")]
+        [Display(Name = "Assign Cashier")]
         public int ServerId { get; set; }
         
         [Required(ErrorMessage = "Guest name is required")]

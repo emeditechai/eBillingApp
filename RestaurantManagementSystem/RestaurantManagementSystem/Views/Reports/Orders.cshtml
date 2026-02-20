@@ -40,9 +40,9 @@
                                 <input asp-for="Filter.ToDate" class="form-control" type="date" />
                             </div>
                             <div class="col-md-2">
-                                <label asp-for="Filter.UserId" class="form-label">Waiter</label>
+                                <label asp-for="Filter.UserId" class="form-label">Cashier</label>
                                 <select asp-for="Filter.UserId" asp-items="Model.AvailableUsers" class="form-select">
-                                    <option value="">All Waiters</option>
+                                    <option value="">All Cashiers</option>
                                 </select>
                             </div>
                             <div class="col-md-2">
@@ -261,10 +261,11 @@
                                 <tr>
                                     <th>Order #</th>
                                     <th>Customer</th>
-                                    <th>Waiter</th>
+                                    <th>Cashier</th>
                                     <th>Type</th>
                                     <th>Status</th>
                                     <th>Items</th>
+                                    <th>Menu Items (Price)</th>
                                     <th>Amount</th>
                                     <th>Created</th>
                                     <th>Prep Time</th>
@@ -291,6 +292,22 @@
                                             <td>
                                                 <span class="badge bg-secondary">@order.ItemCount items</span>
                                                 <small class="text-muted d-block">Qty: @order.TotalQuantity</small>
+                                            </td>
+                                            <td>
+                                                @if (order.HasMenuItems)
+                                                {
+                                                    @foreach (var menuItem in order.MenuItems)
+                                                    {
+                                                        <div class="small">
+                                                            <span class="text-muted">@menuItem.Quantity x</span> @menuItem.Name
+                                                            <span class="fw-semibold">(@menuItem.FormattedUnitPrice)</span>
+                                                        </div>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
                                             </td>
                                             <td>
                                                 <strong>@order.FormattedTotalAmount</strong>
@@ -322,7 +339,7 @@
                                         @if (order.HasSpecialInstructions)
                                         {
                                             <tr class="table-secondary">
-                                                <td colspan="10">
+                                                <td colspan="11">
                                                     <small><strong>Special Instructions:</strong> @order.SpecialInstructions</small>
                                                 </td>
                                             </tr>
@@ -332,7 +349,7 @@
                                 else
                                 {
                                     <tr>
-                                        <td colspan="10" class="text-center py-4">
+                                        <td colspan="11" class="text-center py-4">
                                             <i class="fas fa-shopping-cart fa-2x text-muted mb-2"></i>
                                             <div class="text-muted">No orders found for the selected criteria</div>
                                         </td>

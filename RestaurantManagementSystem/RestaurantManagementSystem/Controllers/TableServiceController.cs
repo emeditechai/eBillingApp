@@ -86,19 +86,19 @@ namespace RestaurantManagementSystem.Controllers
                         model.TargetTurnTime
                     );
                     
-                    // If turnover started successfully, assign server
+                    // If turnover started successfully, assign cashier
                     if (turnoverResult.Success)
                     {
                         var assignResult = AssignServerToTable(model.TableId, model.ServerId, GetCurrentUserId());
                         
                         if (assignResult.Success)
                         {
-                            TempData["SuccessMessage"] = "Guest seated and server assigned successfully.";
+                            TempData["SuccessMessage"] = "Guest seated and cashier assigned successfully.";
                             return RedirectToAction(nameof(Dashboard));
                         }
                         else
                         {
-                            ModelState.AddModelError("", $"Error assigning server: {assignResult.Message}");
+                            ModelState.AddModelError("", $"Error assigning cashier: {assignResult.Message}");
                         }
                     }
                     else
@@ -239,7 +239,7 @@ namespace RestaurantManagementSystem.Controllers
                         resetTables = command.ExecuteNonQuery();
                     }
                     
-                    // Clear any server assignments
+                    // Clear any cashier assignments
                     using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(@"
                         UPDATE ServerAssignments 
                         SET IsActive = 0,
@@ -249,7 +249,7 @@ namespace RestaurantManagementSystem.Controllers
                         command.ExecuteNonQuery();
                     }
                     
-                    TempData["SuccessMessage"] = $"Force reset completed: {departedTurnovers} turnovers departed, {resetTables} tables reset to available. All server assignments cleared.";
+                    TempData["SuccessMessage"] = $"Force reset completed: {departedTurnovers} turnovers departed, {resetTables} tables reset to available. All cashier assignments cleared.";
                 }
             }
             catch (Exception ex)

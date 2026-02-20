@@ -25,7 +25,7 @@ namespace RestaurantManagementSystem.Models
         [DataType(DataType.Date)]
         public DateTime? EndDate { get; set; } = DateTime.Today;
 
-        [Display(Name = "Server/User")]
+        [Display(Name = "Cashier/User")]
         public int? UserId { get; set; }
     }
 
