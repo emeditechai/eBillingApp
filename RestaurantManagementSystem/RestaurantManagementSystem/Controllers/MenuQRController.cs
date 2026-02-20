@@ -334,7 +334,7 @@ namespace RestaurantManagementSystem.Controllers
             // Fallback if no settings found
             return new RestaurantInfo
             {
-                Name = "Restaurant Management System",
+                Name = "Billing Management Application",
                 ContactNumber = "+1 (555) 123-4567",
                 Address = "123 Restaurant Street, Food City, FC 12345",
                 Email = "info@restaurant.com",

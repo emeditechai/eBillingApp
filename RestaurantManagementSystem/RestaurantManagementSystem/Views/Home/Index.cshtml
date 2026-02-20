@@ -211,8 +211,8 @@
     
     .stats-card.sales::after { background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); }
     .stats-card.orders::after { background: linear-gradient(90deg, #f093fb 0%, #f5576c 100%); }
-    .stats-card.tables::after { background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%); }
-    .stats-card.reservations::after { background: linear-gradient(90deg, #43e97b 0%, #38f9d7 100%); }
+    .stats-card.menu::after { background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%); }
+    .stats-card.cancellation::after { background: linear-gradient(90deg, #f97316 0%, #ef4444 100%); }
     
     .stats-card:hover::after {
         opacity: 1;
@@ -232,8 +232,8 @@
     
     .stats-card.sales::before { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
     .stats-card.orders::before { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-    .stats-card.tables::before { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-    .stats-card.reservations::before { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+    .stats-card.menu::before { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+    .stats-card.cancellation::before { background: linear-gradient(135deg, #f97316 0%, #ef4444 100%); }
     
     .stats-card:hover {
         transform: translateY(-8px) scale(1.02);
@@ -281,8 +281,8 @@
     
     .stats-card.sales .icon { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
     .stats-card.orders .icon { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-    .stats-card.tables .icon { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-    .stats-card.reservations .icon { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+    .stats-card.menu .icon { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+    .stats-card.cancellation .icon { background: linear-gradient(135deg, #f97316 0%, #ef4444 100%); }
     
     .stats-card:hover .icon {
         transform: scale(1.15) rotate(-8deg);
@@ -358,13 +358,13 @@
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
-    .stats-card.tables p.number { 
+    .stats-card.menu p.number { 
         background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
-    .stats-card.reservations p.number { 
-        background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    .stats-card.cancellation p.number { 
+        background: linear-gradient(135deg, #f97316 0%, #ef4444 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
@@ -655,19 +655,19 @@
                 </div>
             </div>
             <div class="col-md-3 col-sm-6 mb-3">
-                <div class="stats-card tables py-2">
-                    <div class="sparkline"><canvas id="spark-tables"></canvas></div>
-                    <span class="icon"><i class="fas fa-chair"></i></span>
-                    <h3>Active Tables</h3>
-                    <p class="number">@Model.ActiveTables</p>
+                <div class="stats-card menu py-2">
+                    <div class="sparkline"><canvas id="spark-menu"></canvas></div>
+                    <span class="icon"><i class="fas fa-hamburger"></i></span>
+                    <h3>Total Menu Item Count</h3>
+                    <p class="number">@Model.TotalMenuItemsCount</p>
                 </div>
             </div>
             <div class="col-md-3 col-sm-6 mb-3">
-                <div class="stats-card reservations py-2">
-                    <div class="sparkline"><canvas id="spark-reservations"></canvas></div>
-                    <span class="icon"><i class="fas fa-calendar-check"></i></span>
-                    <h3>Upcoming Reservations</h3>
-                    <p class="number">@Model.UpcomingReservations</p>
+                <div class="stats-card cancellation py-2">
+                    <div class="sparkline"><canvas id="spark-cancellation"></canvas></div>
+                    <span class="icon"><i class="fas fa-ban"></i></span>
+                    <h3>Today's Cancellation Count</h3>
+                    <p class="number">@Model.TodayCancellationCount</p>
                 </div>
             </div>
         </div>    <!-- Quick Action Buttons -->
@@ -681,11 +681,6 @@
                         <span class="qa-label">New Order</span>
                         <span class="hotkey-badge">Shift+F</span>
                     </a>
-                    <a href="/Reservation/Create" class="quick-action-btn qa-reservation" aria-label="Create Reservation">
-                        <span class="qa-badge">@Model.UpcomingReservations</span>
-                        <div class="qa-icon"><i class="fas fa-calendar-plus"></i></div>
-                        <span class="qa-label">Reservation</span>
-                    </a>
                     <a href="/Order/Estimation" class="quick-action-btn qa-menu" id="menuItemsBtn" target="_blank" rel="noopener">
                         <div class="qa-icon"><i class="fas fa-hamburger"></i></div>
                         <span class="qa-label">Menu Items</span>
@@ -695,10 +690,10 @@
                         <span class="qa-label">POS Order</span>
                         <span class="hotkey-badge">New Tab</span>
                     </a>
-                    <a href="/TableService/Dashboard" class="quick-action-btn qa-tables" target="_blank" rel="noopener">
-                        <div class="qa-icon"><i class="fas fa-th-large"></i></div>
-                        <span class="qa-label">Available Table</span>
-                        <span class="hotkey-badge">Shift+T</span>
+                    <a href="/Order/Dashboard" class="quick-action-btn qa-dashboard" target="_blank" rel="noopener">
+                        <div class="qa-icon"><i class="fas fa-file-invoice"></i></div>
+                        <span class="qa-label">Order Dashboard</span>
+                        <span class="hotkey-badge">New Tab</span>
                     </a>
                 </div>
             </div>
@@ -878,12 +873,11 @@
                 // for orders, scale sales to approximate counts
                 var ordersArr = salesArr.map(function(v){ return Math.max(0, Math.round(v / 250)); });
                 createSmallSpark('spark-orders', ordersArr, 'rgba(255,255,255,0.95)');
-                // tables: small fluctuation proxy (mod of sales)
-                var tablesArr = salesArr.map(function(v,i){ return Math.max(0, Math.round((v/1000) + (i%3))); });
-                createSmallSpark('spark-tables', tablesArr, 'rgba(255,255,255,0.95)');
-                // reservations: use small derived proxy
-                var resArr = salesArr.map(function(v,i){ return Math.max(0, Math.round((v/1200) + ((i+1)%2))); });
-                createSmallSpark('spark-reservations', resArr, 'rgba(255,255,255,0.95)');
+                // menu item count and cancellation: lightweight proxy series
+                var menuArr = salesArr.map(function(v,i){ return Math.max(0, Math.round((v/900) + (i%2))); });
+                createSmallSpark('spark-menu', menuArr, 'rgba(255,255,255,0.95)');
+                var cancellationArr = salesArr.map(function(v,i){ return Math.max(0, Math.round((v/2000) + ((i+2)%2))); });
+                createSmallSpark('spark-cancellation', cancellationArr, 'rgba(255,255,255,0.95)');
             } catch (e) {
                 console.warn('Sparkline init error', e);
             }
@@ -1071,7 +1065,7 @@
                     </head>
                     <body>
                         <div class="header">
-                            <div class="company-name">Restaurant Management System</div>
+                            <div class="company-name">Billing Management Application</div>
                             <div class="estimate-title">ORDER ESTIMATE</div>
                         </div>
                         

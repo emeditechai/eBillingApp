@@ -353,7 +353,7 @@ $(document).ready(function() {
             </style>
         </head><body>
             <div class='doc-header'>
-                <h2>Restaurant Management System</h2>
+                <h2>Billing Management Application</h2>
                 <h3>ORDER ESTIMATE</h3>
                 <div class='meta'>Estimate #: ${estimateNo} | Date: ${date.toLocaleDateString()} | Price Type: ${priceTypeLabel()} | ${meta}</div>
             </div>

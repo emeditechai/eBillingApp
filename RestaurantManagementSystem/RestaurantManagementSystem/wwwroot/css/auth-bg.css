@@ -3,11 +3,14 @@
     position: fixed;
     inset: 0;
     z-index: 0;
-    /* Primary: local image if present. Fallback: Unsplash restaurant interior to ensure visible background in dev. */
-    background-image: url('/images/login-bg-restaurant.jpg'), url('https://images.unsplash.com/photo-1541542684-42d6b6f5b1b6?q=80&w=1600&auto=format&fit=crop&ixlib=rb-4.0.3&s=8f5e9a5b6c0b1f1e8a2c3e4d5f6a7b8c');
-    background-size: cover, cover;
-    background-position: center center, center center;
-    background-repeat: no-repeat, no-repeat;
+    background-image:
+        url('/images/login-bg-restaurant.avif'),
+        url('/images/login-bg-restaurant.png'),
+        url('/images/login-bg-restaurant.jpeg'),
+        url('/images/login-bg-restaurant.jpg');
+    background-size: cover, cover, cover, cover;
+    background-position: center center, center center, center center, center center;
+    background-repeat: no-repeat, no-repeat, no-repeat, no-repeat;
     background-attachment: fixed;
     filter: saturate(0.9) contrast(0.92);
 }

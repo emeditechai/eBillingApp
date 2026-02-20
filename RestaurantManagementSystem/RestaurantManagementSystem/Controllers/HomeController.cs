@@ -53,6 +53,8 @@ namespace RestaurantManagementSystem.Controllers
             // Get live dashboard data from database
             var dashboardStats = await GetDashboardStatsAsync(userIdNumeric, canViewAllDashboardData);
             var recentOrders = await GetRecentOrdersAsync(userIdNumeric, canViewAllDashboardData);
+            var totalMenuItemsCount = await GetTotalMenuItemsCountAsync();
+            var todayCancellationCount = await GetTodayCancellationCountAsync(userIdNumeric, canViewAllDashboardData);
             
             // Get last login date from database
             DateTime? lastLoginDate = await GetLastLoginDateAsync(userId);
@@ -109,6 +111,8 @@ namespace RestaurantManagementSystem.Controllers
                 TodayOrders = dashboardStats.TodayOrders,
                 ActiveTables = dashboardStats.ActiveTables,
                 UpcomingReservations = dashboardStats.UpcomingReservations,
+                TotalMenuItemsCount = totalMenuItemsCount,
+                TodayCancellationCount = todayCancellationCount,
                 RecentOrders = recentOrders,
                 LowInventoryItems = new List<InventoryItemViewModel>
                 {
@@ -190,6 +194,69 @@ namespace RestaurantManagementSystem.Controllers
                 _logger?.LogError(ex, "Error getting dashboard stats via stored procedure");
             }
             return (0m, 0, 0, 0);
+        }
+
+        private async Task<int> GetTotalMenuItemsCountAsync()
+        {
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                using var command = new SqlCommand(@"
+                    IF OBJECT_ID('dbo.MenuItems', 'U') IS NULL
+                        SELECT 0;
+                    ELSE
+                        SELECT COUNT(1) FROM dbo.MenuItems;", connection);
+
+                var result = await command.ExecuteScalarAsync();
+                return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error getting total menu items count");
+                return 0;
+            }
+        }
+
+        private async Task<int> GetTodayCancellationCountAsync(int? userId, bool canViewAll)
+        {
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                using var command = new SqlCommand(@"
+                    IF OBJECT_ID('dbo.Orders', 'U') IS NULL
+                    BEGIN
+                        SELECT 0;
+                    END
+                    ELSE
+                    BEGIN
+                        SELECT COUNT(1)
+                        FROM dbo.Orders
+                        WHERE Status = 4
+                          AND CAST(
+                                CASE
+                                    WHEN COL_LENGTH('dbo.Orders','UpdatedAt') IS NOT NULL
+                                        THEN ISNULL(UpdatedAt, CreatedAt)
+                                    ELSE CreatedAt
+                                END
+                              AS date) = CAST(GETDATE() AS date)
+                          AND (@CanViewAll = 1 OR @UserId IS NULL OR UserId = @UserId);
+                    END", connection);
+
+                command.Parameters.AddWithValue("@UserId", userId.HasValue ? userId.Value : (object)DBNull.Value);
+                command.Parameters.AddWithValue("@CanViewAll", canViewAll);
+
+                var result = await command.ExecuteScalarAsync();
+                return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error getting today's cancellation count");
+                return 0;
+            }
         }
 
         private static decimal SafeGetDecimal(SqlDataReader reader, string name)

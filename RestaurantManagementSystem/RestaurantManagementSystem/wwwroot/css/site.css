@@ -308,6 +308,7 @@ footer.footer {
 .quick-action-btn.qa-menu { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
 .quick-action-btn.qa-pos { background: linear-gradient(135deg, #ffb347 0%, #ffcc33 100%); }
 .quick-action-btn.qa-tables { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+.quick-action-btn.qa-dashboard { background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%); }
 
 /* Reservation badge */
 .qa-badge {

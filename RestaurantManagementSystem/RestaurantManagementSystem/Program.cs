@@ -10,6 +10,7 @@ using RestaurantManagementSystem.Utilities;
 using System.Globalization;
 using Microsoft.AspNetCore.Localization;
 using System.Collections.Generic;
+using Microsoft.AspNetCore.StaticFiles;
 
 namespace RestaurantManagementSystem
 {
@@ -110,7 +111,17 @@ namespace RestaurantManagementSystem
             }
 
             app.UseHttpsRedirection();
-            app.UseStaticFiles();
+
+            var staticFileContentTypes = new FileExtensionContentTypeProvider();
+            if (!staticFileContentTypes.Mappings.ContainsKey(".avif"))
+            {
+                staticFileContentTypes.Mappings[".avif"] = "image/avif";
+            }
+
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                ContentTypeProvider = staticFileContentTypes
+            });
             app.UseRouting();
 
             app.UseSession();

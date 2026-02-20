@@ -51,7 +51,7 @@ namespace RestaurantManagementSystem.Controllers
                         SmtpPort = 587,
                         EnableSSL = true,
                         IsActive = false,
-                        FromName = "Restaurant Management System",
+                        FromName = "Billing Management Application",
                         FromEmail = "noreply@restaurant.com"
                     };
                 }
@@ -242,12 +242,12 @@ namespace RestaurantManagementSystem.Controllers
                     {
                         message.From = new MailAddress(config.FromEmail, config.FromName);
                         message.To.Add(request.TestEmail);
-                        message.Subject = "Test Email from Restaurant Management System";
+                        message.Subject = "Test Email from Billing Management Application";
                         emailBody = $@"
                             <html>
                             <body style='font-family: Arial, sans-serif; padding: 20px;'>
                                 <h2 style='color: #4CAF50;'>✓ Test Email Successful</h2>
-                                <p>This is a test email from Restaurant Management System.</p>
+                                <p>This is a test email from Billing Management Application.</p>
                                 <div style='background-color: #f5f5f5; padding: 15px; border-left: 4px solid #2196F3; margin: 20px 0;'>
                                     <p style='margin: 5px 0;'><strong>SMTP Server:</strong> {config.SmtpServer}</p>
                                     <p style='margin: 5px 0;'><strong>SMTP Port:</strong> {config.SmtpPort}</p>
@@ -275,7 +275,7 @@ namespace RestaurantManagementSystem.Controllers
                         {
                             FromEmail = config.FromEmail,
                             ToEmail = request.TestEmail,
-                            Subject = "Test Email from Restaurant Management System",
+                            Subject = "Test Email from Billing Management Application",
                             EmailBody = emailBody,
                             SmtpServer = smtpServerUsed,
                             SmtpPort = config.SmtpPort,
@@ -306,7 +306,7 @@ namespace RestaurantManagementSystem.Controllers
                 {
                     FromEmail = config?.FromEmail ?? "N/A",
                     ToEmail = request.TestEmail,
-                    Subject = "Test Email from Restaurant Management System",
+                    Subject = "Test Email from Billing Management Application",
                     EmailBody = emailBody,
                     SmtpServer = smtpServerUsed ?? config?.SmtpServer ?? "N/A",
                     SmtpPort = config?.SmtpPort ?? 0,
@@ -381,7 +381,7 @@ namespace RestaurantManagementSystem.Controllers
                 {
                     FromEmail = config?.FromEmail ?? "N/A",
                     ToEmail = request.TestEmail,
-                    Subject = "Test Email from Restaurant Management System",
+                    Subject = "Test Email from Billing Management Application",
                     EmailBody = emailBody,
                     SmtpServer = smtpServerUsed ?? config?.SmtpServer ?? "N/A",
                     SmtpPort = config?.SmtpPort ?? 0,
@@ -451,7 +451,7 @@ namespace RestaurantManagementSystem.Controllers
                 {
                     FromEmail = config?.FromEmail ?? "N/A",
                     ToEmail = request.TestEmail,
-                    Subject = "Test Email from Restaurant Management System",
+                    Subject = "Test Email from Billing Management Application",
                     EmailBody = emailBody,
                     SmtpServer = smtpServerUsed ?? config?.SmtpServer ?? "N/A",
                     SmtpPort = config?.SmtpPort ?? 0,

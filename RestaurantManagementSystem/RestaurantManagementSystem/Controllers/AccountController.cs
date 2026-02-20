@@ -599,8 +599,8 @@ ORDER BY Id ASC";
                 <table role='presentation' cellspacing='0' cellpadding='0' border='0' width='560' style='width:100%;max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 10px 25px rgba(0,0,0,0.08);'>
                     <tr>
                         <td style='padding:22px 24px;background:linear-gradient(135deg,#ff3b30,#ff2d55);'>
-                            <div style='font-family:Segoe UI,Arial,sans-serif;font-size:22px;font-weight:700;letter-spacing:0.2px;color:#ffffff;'>eRestoPOS</div>
-                            <div style='font-family:Segoe UI,Arial,sans-serif;font-size:13px;color:rgba(255,255,255,0.92);margin-top:4px;'>Restaurant Management System</div>
+                            <div style='font-family:Segoe UI,Arial,sans-serif;font-size:22px;font-weight:700;letter-spacing:0.2px;color:#ffffff;'>eGenBillingAPP</div>
+                            <div style='font-family:Segoe UI,Arial,sans-serif;font-size:13px;color:rgba(255,255,255,0.92);margin-top:4px;'>Billing Management Application</div>
                         </td>
                     </tr>
 
@@ -636,7 +636,7 @@ ORDER BY Id ASC";
                     <tr>
                         <td style='padding:16px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;'>
                             <div style='font-family:Segoe UI,Arial,sans-serif;font-size:12px;line-height:1.6;color:#6b7280;'>
-                                &copy; {year} Restaurant Management System. All rights reserved.
+                                &copy; {year} Billing Management Application. All rights reserved.
                             </div>
                         </td>
                     </tr>

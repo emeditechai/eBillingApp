@@ -4843,7 +4843,7 @@ END", connection))
                 
                 ViewBag.RestaurantSettings = settings ?? new RestaurantSettings
                 {
-                    RestaurantName = "Restaurant Management System",
+                    RestaurantName = "Billing Management Application",
                     GSTCode = "Not Configured",
                     StreetAddress = "",
                     City = "",
@@ -5191,7 +5191,7 @@ END", connection))
 
                 ViewBag.RestaurantSettings = settings ?? new RestaurantSettings
                 {
-                    RestaurantName = "Restaurant Management System",
+                    RestaurantName = "Billing Management Application",
                     GSTCode = "Not Configured",
                     StreetAddress = "",
                     City = "",

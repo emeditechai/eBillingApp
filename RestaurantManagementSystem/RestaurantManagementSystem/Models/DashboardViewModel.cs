@@ -18,6 +18,8 @@ namespace RestaurantManagementSystem.Models
         public int TodayOrders { get; set; }
         public int ActiveTables { get; set; }
         public int UpcomingReservations { get; set; }
+        public int TotalMenuItemsCount { get; set; }
+        public int TodayCancellationCount { get; set; }
         public List<DashboardOrderViewModel> RecentOrders { get; set; } = new List<DashboardOrderViewModel>();
         public List<InventoryItemViewModel> LowInventoryItems { get; set; } = new List<InventoryItemViewModel>();
         public List<MenuItemPopularityViewModel> PopularMenuItems { get; set; } = new List<MenuItemPopularityViewModel>();

@@ -39,7 +39,7 @@
 }
 
 .login-header {
-    background: linear-gradient(to right, #ff4b2b, #ff416c);
+    background: linear-gradient(to right, #0ea5e9, #2563eb);
     color: white;
     padding: 30px 20px;
     text-align: center;
@@ -116,18 +116,18 @@
 }
 
 .btn-primary {
-    background: linear-gradient(to right, #ff4b2b, #ff416c);
+    background: linear-gradient(to right, #0ea5e9, #2563eb);
     border: none;
     padding: 12px;
     font-weight: 600;
     letter-spacing: 0.5px;
-    box-shadow: 0 4px 15px rgba(255, 75, 43, 0.4);
+    box-shadow: 0 4px 15px rgba(37, 99, 235, 0.35);
     transition: all 0.3s ease;
 }
 
 .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(255, 75, 43, 0.5);
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.45);
 }
 
 .btn-block {

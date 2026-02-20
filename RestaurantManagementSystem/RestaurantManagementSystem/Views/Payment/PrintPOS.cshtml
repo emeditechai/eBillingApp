@@ -2,7 +2,7 @@
 @{
     Layout = null; // render standalone (remove site header/navigation)
     ViewData["Title"] = "POS Print";
-    var settings = ViewBag.RestaurantSettings as RestaurantManagementSystem.Models.RestaurantSettings ?? new RestaurantManagementSystem.Models.RestaurantSettings { RestaurantName = "Restaurant Management System" };
+    var settings = ViewBag.RestaurantSettings as RestaurantManagementSystem.Models.RestaurantSettings ?? new RestaurantManagementSystem.Models.RestaurantSettings { RestaurantName = "Billing Management Application" };
     var counterDisplay = (ViewBag.PosCounterDisplay as string) ?? string.Empty;
     var posLocationValue = Model.OrderType == 0
         ? (Model.TableName ?? string.Empty)
