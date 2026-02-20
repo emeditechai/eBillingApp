@@ -107,22 +107,6 @@
         border-bottom: 1px solid var(--pos-border-soft);
     }
     .pos-product-img-fallback { width: 100%; height: 110px; background: var(--bs-light); }
-    .pos-product-badge {
-        position: absolute;
-        top: .65rem;
-        right: .65rem;
-        padding: .15rem .45rem;
-        border-radius: 999px;
-        font-size: .65rem;
-        font-weight: 600;
-        color: #fff;
-        text-transform: uppercase;
-        letter-spacing: .04em;
-        background: rgba(var(--pos-accent-rgb), .9);
-        box-shadow: 0 4px 8px rgba(15, 23, 42, .18);
-    }
-    .pos-product-badge.value { background: linear-gradient(120deg, #38bdf8, #0ea5e9); }
-    .pos-product-badge.premium { background: linear-gradient(120deg, #fb923c, #f97316); }
     .pos-cart-item { padding: .65rem .75rem; }
     .pos-qty-input-group { width: 130px; }
     .pos-qty-input-group .form-control {
@@ -452,12 +436,6 @@
                             var takeoutPrice = mi.TakeoutPrice;
                             var deliveryPrice = mi.DeliveryPrice;
                             var img = mi.ImagePath;
-                            var vibeTags = new List<string>();
-                            if (basePrice <= 65m) { vibeTags.Add("value"); }
-                            if (basePrice >= 120m) { vibeTags.Add("premium"); }
-                            var tagsAttr = string.Join(' ', vibeTags);
-                            var badgeLabel = vibeTags.Contains("premium") ? "Signature" : (vibeTags.Contains("value") ? "Value" : string.Empty);
-                            var badgeClass = vibeTags.Contains("premium") ? "premium" : (vibeTags.Contains("value") ? "value" : string.Empty);
 
                             <div class="col pos-product" 
                                  data-category="@catId"
@@ -466,14 +444,9 @@
                                  data-price="@basePrice"
                                  data-takeout-price="@(takeoutPrice.HasValue ? takeoutPrice.Value.ToString("F2") : "")"
                                  data-delivery-price="@(deliveryPrice.HasValue ? deliveryPrice.Value.ToString("F2") : "")"
-                                 data-id="@mi.Id"
-                                 data-tags="@tagsAttr">
+                                 data-id="@mi.Id">
                                 <div class="card h-100 shadow-sm pos-product-card" role="button" tabindex="0">
                                         <div class="pos-img-wrap">
-                                            @if (!string.IsNullOrEmpty(badgeLabel))
-                                            {
-                                                <span class="pos-product-badge @badgeClass">@badgeLabel</span>
-                                            }
                                             @if (!string.IsNullOrWhiteSpace(img))
                                             {
                                                 <div class="pos-img-skeleton"></div>
