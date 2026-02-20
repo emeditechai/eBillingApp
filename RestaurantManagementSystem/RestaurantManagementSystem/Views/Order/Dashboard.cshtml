@@ -3,16 +3,16 @@
     ViewData["Title"] = "Order Dashboard";
 }
 
-<div class="container-fluid p-3" style="background: linear-gradient(135deg, #1e293b 0%, #334155 50%, #0f172a 100%); min-height:100vh;">
+<div class="container-fluid p-3 order-dashboard-shell">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 style="color: #22d3ee; text-shadow: 0 2px 10px rgba(34,211,238,0.3);">
-            <i class="fas fa-utensils me-2"></i>@ViewData["Title"]
+        <h1 class="dashboard-title">
+            <i class="fas fa-file-invoice-dollar me-2"></i>@ViewData["Title"]
         </h1>
         <div class="d-flex align-items-center gap-2">
-            <a href="@Url.Action("Form", "Feedback")" class="btn" style="border-radius: 50%; width: 48px; height: 48px; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(34,211,238,.4); background: linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%); color: white; border: none;" target="_blank" rel="noopener noreferrer" title="Open Feedback Form">
+            <a href="@Url.Action("Form", "Feedback")" class="btn dashboard-icon-btn" target="_blank" rel="noopener noreferrer" title="Open Feedback Form">
                 <i class="fas fa-comment-dots"></i>
             </a>
-            <a asp-action="Create" class="btn text-white" style="background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%); box-shadow: 0 4px 15px rgba(59,130,246,.4); border: none;" target="_blank" rel="noopener noreferrer">
+            <a asp-action="Create" class="btn dashboard-primary-btn" target="_blank" rel="noopener noreferrer">
                 <i class="fas fa-plus-circle"></i> New Order
             </a>
         </div>
@@ -34,11 +34,44 @@
         </div>
     }
 
-    @* Compact styling with teal theme *@
+    @* Billing-focused visual redesign (UI only) *@
     <style>
-        .card { border-radius: 8px; }
-        .card-header { padding: .5rem .75rem; }
-        .card-body { padding: .75rem; }
+        .order-dashboard-shell {
+            background: linear-gradient(135deg, #eef5ff 0%, #f8fbff 55%, #f4f7fb 100%);
+            min-height: 100vh;
+        }
+        .dashboard-title {
+            color: #0f3f66;
+            text-shadow: 0 2px 10px rgba(15,63,102,0.12);
+            margin-bottom: 0;
+            font-weight: 700;
+        }
+        .dashboard-icon-btn {
+            border-radius: 50%;
+            width: 46px;
+            height: 46px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 18px rgba(37,99,235,.20);
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: #fff;
+            border: none;
+        }
+        .dashboard-primary-btn {
+            background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+            box-shadow: 0 8px 18px rgba(37,99,235,.25);
+            border: none;
+            color: #fff;
+        }
+        .dashboard-card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, .08);
+            border-radius: 12px;
+        }
+        .card-header { padding: .6rem .9rem; }
+        .card-body { padding: .8rem; }
         table.table { font-size: .9rem; }
         table.table td, table.table th { padding: .4rem .5rem; vertical-align: middle; }
         thead.sticky th { position: sticky; top: 0; z-index: 2; }
@@ -48,39 +81,73 @@
         .badge { font-size: .75rem; }
         .btn-group .btn { padding: .2rem .4rem; }
         .table-container { max-height: 28vh; overflow: auto; }
-        .food-metric-card { border-left: 4px solid #0d9488; }
+        .metric-card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 10px 24px rgba(15,23,42,.12);
+            color: #fff;
+        }
+        .metric-open { background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%); }
+        .metric-progress { background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%); }
+        .metric-ready { background: linear-gradient(135deg, #10b981 0%, #0891b2 100%); }
+        .metric-sales { background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%); }
+        .metric-label {
+            display: flex;
+            align-items: center;
+            gap: .4rem;
+            opacity: .95;
+        }
+        .section-header {
+            color: #fff;
+            border: none;
+        }
+        .section-header-active { background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%); }
+        .section-header-cancel { background: linear-gradient(135deg, #dc2626 0%, #f97316 100%); }
+        .section-header-complete { background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%); }
+        .section-pill {
+            background: rgba(255,255,255,.22);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,.3);
+            font-weight: 600;
+        }
+        .thead-active { background: linear-gradient(135deg, #1d4ed8 0%, #0284c7 100%); color: #fff; }
+        .thead-cancel { background: linear-gradient(135deg, #b91c1c 0%, #ea580c 100%); color: #fff; }
+        .thead-complete { background: linear-gradient(135deg, #0f766e 0%, #0ea5a5 100%); color: #fff; }
+        .summary-chip-walking { background-color: #0d9488; font-size: .85rem; }
+        .summary-chip-b2c { background-color: #2563eb; font-size: .85rem; }
+        .summary-chip-delivery { background-color: #7c3aed; font-size: .85rem; }
     </style>
 
     @* Metrics row with modern contrasting gradient theme *@
     <div class="row mb-3">
         <div class="col-md-3">
-            <div class="card text-white metric-card food-metric-card" style="background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); box-shadow: 0 8px 20px rgba(59,130,246,.3); border: none;">
+            <div class="card metric-card metric-open">
                 <div class="card-body">
-                    <h5 style="opacity: 0.9;">Open Orders</h5>
+                    <h5 class="metric-label"><i class="fas fa-receipt"></i>Open Orders</h5>
                     <h2>@Model.OpenOrdersCount</h2>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-white metric-card food-metric-card" style="background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%); box-shadow: 0 8px 20px rgba(245,158,11,.3); border: none;">
+            <div class="card metric-card metric-progress">
                 <div class="card-body">
-                    <h5 style="opacity: 0.9;">In Progress</h5>
+                    <h5 class="metric-label"><i class="fas fa-spinner"></i>In Progress</h5>
                     <h2>@Model.InProgressOrdersCount</h2>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-white metric-card food-metric-card" style="background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%); box-shadow: 0 8px 20px rgba(16,185,129,.3); border: none;">
+            <div class="card metric-card metric-ready">
                 <div class="card-body">
-                    <h5 style="opacity: 0.9;">Ready</h5>
+                    <h5 class="metric-label"><i class="fas fa-check-circle"></i>Ready</h5>
                     <h2>@Model.ReadyOrdersCount</h2>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-white metric-card food-metric-card" style="background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%); box-shadow: 0 8px 20px rgba(139,92,246,.3); border: none;">
+            <div class="card metric-card metric-sales">
                 <div class="card-body">
-                    <h5 style="opacity: 0.9;">Today's Sales</h5>
+                    <h5 class="metric-label"><i class="fas fa-chart-line"></i>Today's Sales</h5>
                     <h2>₹@Model.TotalSales.ToString("F2")</h2>
                 </div>
             </div>
@@ -95,7 +162,7 @@
     }
     <div class="row mb-3">
         <div class="col-12">
-            <div class="card" style="background: rgba(255,255,255,0.95); border: none; box-shadow: 0 8px 30px rgba(0,0,0,.15);">
+            <div class="card dashboard-card">
                 <div class="card-body d-flex align-items-center justify-content-between flex-wrap" style="gap: .75rem; padding: .75rem;">
                     <div class="d-flex align-items-center" style="gap:.5rem;">
                         <span class="small fw-semibold" style="color:#0f172a;"><i class="fas fa-filter me-1"></i>Counter</span>
@@ -117,12 +184,12 @@
     @* Active Orders *@
     <div class="row">
         <div class="col-12">
-            <div class="card" style="background: rgba(255,255,255,0.95); border: none; box-shadow: 0 8px 30px rgba(0,0,0,.15);">
-                <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%); color: white; border: none;">
-                    <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Active Orders (All Pending Orders)</h5>
+            <div class="card dashboard-card">
+                <div class="card-header d-flex justify-content-between align-items-center section-header section-header-active">
+                    <h5 class="mb-0"><i class="fas fa-clipboard-list me-2"></i>Active Orders (All Pending Orders)</h5>
                     <div class="d-flex align-items-center" style="gap:.5rem">
                         <small>Food orders only</small>
-                        <span class="badge rounded-pill px-3" style="background: rgba(255,255,255,.2); backdrop-filter: blur(10px); color: white; border: 1px solid rgba(255,255,255,.3);" title="Active orders">@((Model.ActiveOrders?.Count() ?? 0).ToString()) Records</span>
+                        <span class="badge rounded-pill px-3 section-pill" title="Active orders">@((Model.ActiveOrders?.Count() ?? 0).ToString()) Records</span>
                     </div>
                 </div>
                 <div class="card-body">
@@ -131,7 +198,7 @@
                         <div id="activeOrdersTypeFilter" class="mb-2"></div>
                         <div class="table-responsive table-container">
                             <table class="table table-striped table-hover" id="activeOrders">
-                                <thead class="sticky" style="background: linear-gradient(135deg, #1e40af 0%, #06b6d4 100%); color: white;">
+                                <thead class="sticky thead-active">
                                     <tr class="text-center">
                                         <th>Order #</th>
                                         <th>Type</th>
@@ -222,12 +289,12 @@
     @* Cancelled Orders Section *@
     <div class="row mt-3">
         <div class="col-12">
-            <div class="card" style="background: rgba(255,255,255,0.95); border: none; box-shadow: 0 8px 30px rgba(0,0,0,.15);">
-                <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #dc2626 0%, #f97316 100%); color: white; border: none;">
+            <div class="card dashboard-card">
+                <div class="card-header d-flex justify-content-between align-items-center section-header section-header-cancel">
                     <h5 class="mb-0"><i class="fas fa-ban me-2"></i>Cancelled Orders</h5>
                     <div class="d-flex align-items-center" style="gap:.5rem">
                         <small>Today's cancelled orders</small>
-                        <span class="badge rounded-pill px-3" style="background: rgba(255,255,255,.2); backdrop-filter: blur(10px); color: white; border: 1px solid rgba(255,255,255,.3);" title="Cancelled orders">@((Model.CancelledOrders?.Count() ?? 0).ToString()) Records</span>
+                        <span class="badge rounded-pill px-3 section-pill" title="Cancelled orders">@((Model.CancelledOrders?.Count() ?? 0).ToString()) Records</span>
                     </div>
                 </div>
                 <div class="card-body">
@@ -235,7 +302,7 @@
                     {
                         <div class="table-responsive table-container">
                             <table class="table table-striped table-hover" id="cancelledOrders">
-                                <thead class="sticky" style="background: linear-gradient(135deg, #dc2626 0%, #f97316 100%); color: white;">
+                                <thead class="sticky thead-cancel">
                                     <tr class="text-center">
                                         <th>Order #</th>
                                         <th>Type</th>
@@ -293,8 +360,8 @@
     @* Completed Orders Section *@
     <div class="row mt-3">
         <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(90deg, #0d9488 60%, #14b8a6 100%); color: white;">
+            <div class="card dashboard-card">
+                <div class="card-header d-flex justify-content-between align-items-center section-header section-header-complete">
                     <h5 class="mb-0"><i class="fas fa-check-circle me-2"></i>Completed Orders</h5>
                     <form class="d-flex align-items-center" method="get" asp-action="Dashboard" style="gap:.5rem">
                         <label class="small mb-0">From</label>
@@ -310,7 +377,7 @@
                     {
                         <div class="table-responsive table-container">
                             <table class="table table-sm table-striped table-hover" id="completedOrders">
-                                <thead class="sticky" style="background: linear-gradient(90deg, #0d9488 60%, #14b8a6 100%); color: white;">
+                                <thead class="sticky thead-complete">
                                     <tr class="text-center">
                                         <th>Order #</th>
                                         <th>Type</th>
@@ -355,13 +422,13 @@
                                         var takeoutCount = Model.CompletedOrders.Count(o => o.OrderType == 1);
                                         var deliveryCount = Model.CompletedOrders.Count(o => o.OrderType == 2);
                                     }
-                                    <span class="badge" style="background-color: #0d9488; font-size: 0.85rem;">
+                                    <span class="badge summary-chip-walking">
                                         <i class="fas fa-utensils me-1"></i>Walking: @dineInCount
                                     </span>
-                                    <span class="badge" style="background-color: #059669; font-size: 0.85rem;">
+                                    <span class="badge summary-chip-b2c">
                                         <i class="fas fa-shopping-bag me-1"></i>B2C: @takeoutCount
                                     </span>
-                                    <span class="badge" style="background-color: #0891b2; font-size: 0.85rem;">
+                                    <span class="badge summary-chip-delivery">
                                         <i class="fas fa-motorcycle me-1"></i>Delivery: @deliveryCount
                                     </span>
                                 </div>

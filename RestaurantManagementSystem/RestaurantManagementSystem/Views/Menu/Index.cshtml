@@ -60,7 +60,6 @@
                                 <th>Item Group</th>
                                 <th>Sub Category</th>
                                 <th>Price</th>
-                                <th>Prep Time</th>
                                 <th>Status</th>
                                 <th>Actions</th>
                             </tr>
@@ -101,7 +100,6 @@
                                             }
                                         </div>
                                     </td>
-                                    <td>@item.PreparationTimeMinutes min</td>
                                     <td>
                                         @if (item.IsAvailable)
                                         {
@@ -119,9 +117,6 @@
                                             </a>
                                             <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-primary">
                                                 <i class="fa fa-edit"></i>
-                                            </a>
-                                            <a asp-controller="Recipe" asp-action="Create" asp-route-menuItemId="@item.Id" class="btn btn-sm btn-secondary recipe-link" data-menu-id="@item.Id">
-                                                <i class="fa fa-book"></i> Recipe
                                             </a>
                                             <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-sm btn-danger">
                                                 <i class="fa fa-trash"></i>
@@ -154,19 +149,9 @@
                     null,                      // Item Group
                     null,                      // Sub Category
                     null,                      // Price
-                    null,                      // Prep Time
                     null,                      // Status
                     { "orderable": false }    // Actions
                 ]
-            });
-
-            // Ensure DB objects exist before navigating to recipe page
-            $(document).on('click', 'a.recipe-link', function (e) {
-                e.preventDefault();
-                const href = $(this).attr('href');
-                fetch('/Recipe/SetupRecipeScripts')
-                    .then(() => { window.location.href = href; })
-                    .catch(() => { window.location.href = href; });
             });
         });
     </script>

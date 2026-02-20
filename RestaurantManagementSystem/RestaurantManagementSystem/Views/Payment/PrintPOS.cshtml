@@ -4,6 +4,13 @@
     ViewData["Title"] = "POS Print";
     var settings = ViewBag.RestaurantSettings as RestaurantManagementSystem.Models.RestaurantSettings ?? new RestaurantManagementSystem.Models.RestaurantSettings { RestaurantName = "Restaurant Management System" };
     var counterDisplay = (ViewBag.PosCounterDisplay as string) ?? string.Empty;
+    var posLocationValue = Model.OrderType == 0
+        ? (Model.TableName ?? string.Empty)
+        : (Model.OrderType == 4
+            ? (string.IsNullOrWhiteSpace(Model.RoomNo)
+                ? (Model.RoomId.HasValue ? Model.RoomId.Value.ToString() : string.Empty)
+                : Model.RoomNo)
+            : string.Empty);
 }
 <!DOCTYPE html>
 <html>
@@ -49,16 +56,10 @@
         <div><strong>Name:</strong> ____________________________</div>
         <div style="display:flex; justify-content:space-between; margin-top:6px;">
             <div>Date: @DateTime.Now.ToString("dd/MM/yy")</div>
-            <div>
-                @Model.OrderTypeDisplay:
-                @(
-                    Model.OrderType == 0
-                        ? Model.TableName
-                        : (Model.OrderType == 4
-                            ? (string.IsNullOrWhiteSpace(Model.RoomNo) ? (Model.RoomId.HasValue ? Model.RoomId.Value.ToString() : "N/A") : Model.RoomNo)
-                            : "N/A")
-                 )
-            </div>
+            @if (!string.IsNullOrWhiteSpace(posLocationValue))
+            {
+                <div>@Model.OrderTypeDisplay: @posLocationValue</div>
+            }
         </div>
         <div style="display:flex; justify-content:space-between; margin-top:2px;">
             <div>Time: @DateTime.Now.ToString("HH:mm")</div>
