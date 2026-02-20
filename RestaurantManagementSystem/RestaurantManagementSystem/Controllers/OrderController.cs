@@ -103,6 +103,57 @@ END", connection))
             return isRequired;
         }
 
+        private string GetPosBillFormatFromSettings()
+        {
+            string billFormat = "A4";
+
+            try
+            {
+                using (var connection = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+IF OBJECT_ID('dbo.RestaurantSettings','U') IS NULL
+BEGIN
+    SELECT CAST('A4' AS nvarchar(10));
+END
+ELSE
+BEGIN
+    SELECT TOP 1
+        CASE
+            WHEN COL_LENGTH('dbo.RestaurantSettings','BillFormat') IS NULL THEN CAST('A4' AS nvarchar(10))
+            ELSE ISNULL(NULLIF(LTRIM(RTRIM(BillFormat)), ''), 'A4')
+        END
+    FROM dbo.RestaurantSettings
+    ORDER BY Id DESC;
+END", connection))
+                    {
+                        var val = cmd.ExecuteScalar();
+                        if (val != null && val != DBNull.Value)
+                        {
+                            billFormat = val.ToString()?.Trim() ?? "A4";
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                billFormat = "A4";
+            }
+
+            if (string.Equals(billFormat, "POS", StringComparison.OrdinalIgnoreCase))
+            {
+                return "POS";
+            }
+
+            if (string.Equals(billFormat, "A5", StringComparison.OrdinalIgnoreCase))
+            {
+                return "A5";
+            }
+
+            return "A4";
+        }
+
         private List<int> GetAllowedOrderTypeIdsFromSettings()
         {
             var userId = User?.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anon";
@@ -2692,6 +2743,7 @@ END", connection))
         public IActionResult POSOrder(int? orderId = null)
         {
             ViewData["Title"] = "POS Order";
+            ViewBag.PosBillFormat = GetPosBillFormatFromSettings();
 
             var isCounterRequired = GetIsCounterRequiredForPos();
 

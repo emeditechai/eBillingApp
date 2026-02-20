@@ -2,9 +2,115 @@
 @{
     ViewData["Title"] = "Print Bill";
     Layout = "_PrintLayout";
+    var billPageFormat = (ViewBag.BillPageFormat ?? "A4").ToString();
+    var isA5Format = string.Equals(billPageFormat, "A5", StringComparison.OrdinalIgnoreCase);
 }
 
 <!-- CSS moved to bill-style.css -->
+
+@if (isA5Format)
+{
+    <style>
+        @@media screen {
+            .container.p-3 {
+                width: 210mm;
+                min-height: 148mm;
+                margin: 10px auto;
+                background: #fff;
+                box-shadow: 0 0 0 1px #ddd;
+                padding: 6mm !important;
+            }
+        }
+
+        @@media print {
+            @@page {
+                size: 210mm 148mm;
+                margin: 3mm;
+            }
+
+            html,
+            body {
+                width: 210mm;
+                height: 148mm;
+            }
+
+            body {
+                font-size: 8.5pt;
+                line-height: 1.12;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .container.p-3 {
+                width: 100% !important;
+                max-width: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            .bill-header {
+                margin-bottom: 4px;
+                padding-bottom: 3px;
+            }
+
+            .bill-header h2 {
+                font-size: 13pt;
+                margin-bottom: 1px;
+            }
+
+            .bill-header p {
+                font-size: 7.6pt;
+                line-height: 1.05;
+                margin-bottom: 1px;
+            }
+
+            .bill-title {
+                margin-top: 3px;
+                margin-bottom: 3px;
+                padding-bottom: 2px;
+                font-size: 10.5pt;
+            }
+
+            .row.mb-4 {
+                margin-bottom: .2rem !important;
+            }
+
+            h5 {
+                font-size: 9pt;
+                margin-top: 2px !important;
+                margin-bottom: 2px !important;
+            }
+
+            p {
+                margin-bottom: .08rem;
+            }
+
+            .table {
+                margin-bottom: .2rem;
+            }
+
+            .table th,
+            .table td {
+                padding: .06rem .16rem !important;
+                font-size: 7.7pt;
+                line-height: 1.08;
+                vertical-align: middle;
+            }
+
+            .bill-footer {
+                margin-top: 3px;
+                padding-top: 2px;
+                font-size: 7.4pt;
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+
+            .d-print-none {
+                display: none !important;
+            }
+        }
+    </style>
+}
 
 <div class="container p-3">
     <div class="text-center bill-header">

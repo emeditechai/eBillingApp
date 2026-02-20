@@ -4762,7 +4762,7 @@ END", connection))
         }
         
         // GET: Payment/PrintBill
-    public IActionResult PrintBill(int orderId, decimal? discount = null, string discountType = null)
+    public IActionResult PrintBill(int orderId, decimal? discount = null, string discountType = null, string format = null)
         {
             try
             {
@@ -4853,6 +4853,13 @@ END", connection))
                     PhoneNumber = "",
                     Email = ""
                 };
+
+                var settingsBillFormat = settings?.BillFormat;
+                var requestedFormat = string.IsNullOrWhiteSpace(format) ? settingsBillFormat : format;
+                var normalizedFormat = string.Equals(requestedFormat, "A5", StringComparison.OrdinalIgnoreCase)
+                    ? "A5"
+                    : "A4";
+                ViewBag.BillPageFormat = normalizedFormat;
                 
                 // Check if this is a BAR order
                 bool isBarOrder = false;

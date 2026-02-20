@@ -277,6 +277,13 @@
                                         <span class="hotkey-badge ms-2">Shift+P</span>
                                     </a>
                                 }
+                                else if (string.Equals(billFormat, "A5", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <a id="printA5Link" asp-action="PrintBill" asp-route-orderId="@Model.OrderId" asp-route-format="A5" class="btn btn-outline-success btn-lg" target="_blank">
+                                        <i class="fas fa-print me-1"></i> Print Bill(A5)
+                                        <span class="hotkey-badge ms-2">Shift+P</span>
+                                    </a>
+                                }
                                 else
                                 {
                                     <a id="printA4Link" asp-action="PrintBill" asp-route-orderId="@Model.OrderId" class="btn btn-outline-success btn-lg" target="_blank">
@@ -316,10 +323,20 @@
                                 }
                                 @if (!string.Equals(billFormat, "POS", StringComparison.OrdinalIgnoreCase))
                                 {
-                                    <a id="printA4Link" asp-action="PrintBill" asp-route-orderId="@Model.OrderId" class="btn btn-outline-success btn-lg" target="_blank">
-                                        <i class="fas fa-print me-1"></i> Print Bill(A4)
-                                        <span class="hotkey-badge ms-2">Shift+P</span>
-                                    </a>
+                                    if (string.Equals(billFormat, "A5", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <a id="printA5Link" asp-action="PrintBill" asp-route-orderId="@Model.OrderId" asp-route-format="A5" class="btn btn-outline-success btn-lg" target="_blank">
+                                            <i class="fas fa-print me-1"></i> Print Bill(A5)
+                                            <span class="hotkey-badge ms-2">Shift+P</span>
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <a id="printA4Link" asp-action="PrintBill" asp-route-orderId="@Model.OrderId" class="btn btn-outline-success btn-lg" target="_blank">
+                                            <i class="fas fa-print me-1"></i> Print Bill(A4)
+                                            <span class="hotkey-badge ms-2">Shift+P</span>
+                                        </a>
+                                    }
                                 }
                                 @if (string.Equals(billFormat, "POS", StringComparison.OrdinalIgnoreCase))
                                 {
@@ -741,7 +758,7 @@
         })();
 
         // Printing is handled by server-rendered actions:
-        // - /Payment/PrintBill/{orderId} (A4)
+        // - /Payment/PrintBill/{orderId} (A4/A5 via format)
         // - /Payment/PrintPOS/{orderId} (POS receipt)
         // Anchor buttons on the page open these in a new tab/window.
         function openPrintBill(orderId) {
@@ -759,6 +776,7 @@
             const discPrefix = document.getElementById('discPrefix');
             const processLink = document.getElementById('processPaymentLink');
             const printA4 = document.getElementById('printA4Link');
+            const printA5 = document.getElementById('printA5Link');
             const printPOS = document.getElementById('printPOSLink');
             const summary = document.getElementById('paymentSummary');
             if (!applyBtn || !input || !processLink || !summary) return;
@@ -902,6 +920,7 @@
                     }
                 };
                 applyParam(printA4);
+                applyParam(printA5);
                 applyParam(printPOS);
             }
 

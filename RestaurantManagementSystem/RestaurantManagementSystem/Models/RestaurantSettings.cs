@@ -109,7 +109,7 @@ namespace RestaurantManagementSystem.Models
         [Required(ErrorMessage = "Bill Format is required")]
         [Display(Name = "Bill Format")]
         [StringLength(10)]
-        public string BillFormat { get; set; } = "A4"; // A4 or POS
+        public string BillFormat { get; set; } = "A4"; // A4, A5 or POS
         
         [Display(Name = "Created On")]
         public DateTime CreatedAt { get; set; } = DateTime.Now;
