@@ -15,6 +15,11 @@ namespace RestaurantManagementSystem.Controllers
             {
                 if (existingConnection != null)
                 {
+                    if (!GetIsSaleFromInventoryEnabled(existingConnection))
+                    {
+                        return;
+                    }
+
                     ApplyStockOutForCompletedOrder(orderId, existingConnection);
                     return;
                 }
@@ -22,6 +27,12 @@ namespace RestaurantManagementSystem.Controllers
                 using (var connection = new SqlConnection(_connectionString))
                 {
                     connection.Open();
+
+                    if (!GetIsSaleFromInventoryEnabled(connection))
+                    {
+                        return;
+                    }
+
                     ApplyStockOutForCompletedOrder(orderId, connection);
                 }
             }
@@ -103,7 +114,7 @@ HAVING SUM(CAST(oi.Quantity AS decimal(18,3))) > 0", connection))
 SELECT COUNT(1)
 FROM dbo.InventoryStockMovements
 WHERE MovementType = 'OUT'
-  AND ReferenceType = 'SALE'
+    AND UPPER(ReferenceType) IN ('SALE', 'ORDER')
   AND OrderId = @OrderId
   AND MenuItemId = @MenuItemId
   AND GodownId = @GodownId", connection, transaction))
@@ -128,7 +139,7 @@ INSERT INTO dbo.InventoryStockMovements
 )
 VALUES
 (
-    'OUT', 'SALE', @OrderId, @OrderId, @MenuItemId, @GodownId,
+    'OUT', 'ORDER', @OrderId, @OrderId, @MenuItemId, @GodownId,
     @Quantity, @UnitCost, NULL, @Notes, @CreatedBy, SYSUTCDATETIME()
 );
 SELECT CAST(SCOPE_IDENTITY() AS INT);", connection, transaction))
@@ -194,6 +205,29 @@ ORDER BY CASE WHEN UPPER(GodownCode) = 'MAIN' THEN 0 ELSE 1 END, Id", connection
                 }
 
                 return Convert.ToInt32(result);
+            }
+        }
+
+        private static bool GetIsSaleFromInventoryEnabled(SqlConnection connection)
+        {
+            using (var cmd = new SqlCommand(@"
+IF OBJECT_ID('dbo.RestaurantSettings','U') IS NULL
+BEGIN
+    SELECT CAST(0 AS bit);
+END
+ELSE
+BEGIN
+    SELECT TOP 1
+        CASE
+            WHEN COL_LENGTH('dbo.RestaurantSettings','IsSaleFromInventory') IS NULL THEN CAST(0 AS bit)
+            ELSE CAST(ISNULL(IsSaleFromInventory, 0) AS bit)
+        END
+    FROM dbo.RestaurantSettings
+    ORDER BY Id DESC;
+END", connection))
+            {
+                var val = cmd.ExecuteScalar();
+                return val != null && val != DBNull.Value && Convert.ToBoolean(val);
             }
         }
     }

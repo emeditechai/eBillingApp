@@ -20,6 +20,7 @@
     var posPrintButtonText = posBillFormat == "POS"
         ? "Print POS Bill"
         : (posBillFormat == "A5" ? "Print A5 Bill" : "Print A4 Bill");
+    var posUseInventorySale = (ViewBag.PosUseInventorySale is bool useInv) && useInv;
     var posInitialPrintUrl = hasOrder
         ? (posBillFormat == "POS"
             ? Url.Action("PrintPOS", "Payment", new { orderId = orderId })
@@ -291,6 +292,14 @@
     }
 
     .pos-toast-container { z-index: 2000; }
+
+    .pos-stock-dot {
+        width: .6rem;
+        height: .6rem;
+        border-radius: 999px;
+        display: inline-block;
+        flex-shrink: 0;
+    }
 </style>
 
 <div class="container-fluid py-2 pos-shell">
@@ -436,6 +445,8 @@
                             var takeoutPrice = mi.TakeoutPrice;
                             var deliveryPrice = mi.DeliveryPrice;
                             var img = mi.ImagePath;
+                            var stockQty = mi.AvailableStockQty ?? 0m;
+                            var isOutOfStock = posUseInventorySale && stockQty <= 0;
 
                             <div class="col pos-product" 
                                  data-category="@catId"
@@ -444,6 +455,7 @@
                                  data-price="@basePrice"
                                  data-takeout-price="@(takeoutPrice.HasValue ? takeoutPrice.Value.ToString("F2") : "")"
                                  data-delivery-price="@(deliveryPrice.HasValue ? deliveryPrice.Value.ToString("F2") : "")"
+                                 data-stock-qty="@stockQty.ToString("0.###")"
                                  data-id="@mi.Id">
                                 <div class="card h-100 shadow-sm pos-product-card" role="button" tabindex="0">
                                         <div class="pos-img-wrap">
@@ -457,11 +469,17 @@
                                             </div>
                                         </div>
                                     <div class="card-body py-2">
-                                        <div class="fw-semibold text-truncate">@displayName</div>
+                                        <div class="fw-semibold text-truncate d-flex align-items-center gap-2">
+                                            <span class="text-truncate">@displayName</span>
+                                            @if (isOutOfStock)
+                                            {
+                                                <span class="pos-stock-dot bg-danger ms-auto" title="Out of stock" aria-label="Out of stock"></span>
+                                            }
+                                        </div>
                                         <div class="small text-muted" data-role="price">₹@basePrice.ToString("F2")</div>
                                     </div>
                                     <div class="card-footer bg-white border-0 pt-0">
-                                        <button type="button" class="btn btn-primary w-100 btn-sm pos-add-btn" @(hasOrder ? "" : "disabled")>
+                                        <button type="button" class="btn btn-primary w-100 btn-sm pos-add-btn" @((hasOrder && !isOutOfStock) ? "" : "disabled")>
                                             <i class="fas fa-plus me-1"></i> Add
                                         </button>
                                     </div>
@@ -831,6 +849,7 @@
             let lastAddedMenuItemId = 0;
             let lastAddedAt = 0;
             const posBillFormat = '@posBillFormat';
+            const posUseInventorySale = @((posUseInventorySale) ? "true" : "false");
             const summaryEls = {
                 order: document.getElementById('posSummaryOrderMini'),
                 type: document.getElementById('posSummaryTypeMini'),
@@ -1312,6 +1331,14 @@
                 });
             }
 
+            function isPosProductOutOfStock(addBtn){
+                if (!posUseInventorySale) return false;
+                const productEl = addBtn?.closest('.pos-product');
+                if (!productEl) return false;
+                const stockQty = parseFloat(productEl.getAttribute('data-stock-qty') || '0');
+                return !isFinite(stockQty) || stockQty <= 0;
+            }
+
             function getOrderTypeName(orderType){
                 return orderType === 2 ? 'Delivery' : 'B2C';
             }
@@ -1333,7 +1360,7 @@
 
                 // Immediately reflect enabled state without waiting for refresh
                 document.querySelectorAll('.pos-add-btn').forEach(b => {
-                    b.disabled = !hasActive || isLocked;
+                    b.disabled = !hasActive || isLocked || isPosProductOutOfStock(b);
                 });
 
                 const refreshBtn = document.getElementById('posRefreshBtn');
@@ -1361,7 +1388,7 @@
                 const res = await fetch('/Order/GetPOSOrderJson?orderId=' + orderId);
                 const data = await res.json();
                 if (!data || !data.success) {
-                    alert(data && data.message ? data.message : 'Refresh failed');
+                    showToast(data && data.message ? data.message : 'Refresh failed', 'danger');
                     return;
                 }
 
@@ -1578,7 +1605,7 @@
 
                 // Disable add buttons in product grid
                 document.querySelectorAll('.pos-add-btn').forEach(b => {
-                    b.disabled = isLocked || !orderId;
+                    b.disabled = isLocked || !orderId || isPosProductOutOfStock(b);
                 });
 
                 const refreshBtn = document.getElementById('posRefreshBtn');
@@ -1935,14 +1962,14 @@
                     await refresh();
                     return true;
                 } else {
-                    alert(data && data.message ? data.message : 'Remove failed');
+                    showToast(data && data.message ? data.message : 'Remove failed', 'danger');
                     return false;
                 }
             }
 
             async function addItem(menuItemId, qty, notes){
                 if (!orderId) {
-                    alert('Create an order first.');
+                    showToast('Create an order first.', 'danger');
                     return false;
                 }
                 const token = getToken();
@@ -1962,7 +1989,7 @@
                     await refresh();
                     return true;
                 }
-                alert(data && data.message ? data.message : 'Add failed');
+                showToast(data && data.message ? data.message : 'Add failed', 'danger');
                 return false;
             }
 
@@ -1981,15 +2008,25 @@
                 if (data && data.success) {
                     await refresh();
                 } else {
-                    alert(data && data.message ? data.message : 'Update failed');
+                    showToast(data && data.message ? data.message : 'Update failed', 'danger');
                 }
             }
 
             async function addItemById(menuItemId){
                 if (!orderId) {
-                    alert('Create an order first.');
+                    showToast('Create an order first.', 'danger');
                     return;
                 }
+
+                const productEl = document.querySelector(`.pos-product[data-id="${menuItemId}"]`);
+                if (posUseInventorySale && productEl) {
+                    const stockQty = parseFloat(productEl.getAttribute('data-stock-qty') || '0');
+                    if (!isFinite(stockQty) || stockQty <= 0) {
+                        showToast('Stock is not available for this item.', 'danger');
+                        return;
+                    }
+                }
+
                 const token = getToken();
                 const items = [{ OrderItemId: -1, MenuItemId: menuItemId, Quantity: 1, SpecialInstructions: '', IsNew: true, TempId: -1 }];
                 const res = await fetch('/Order/UpdateMultipleOrderItems?orderId=' + orderId, {
@@ -2006,7 +2043,7 @@
                     lastAddedAt = Date.now();
                     await refresh();
                 } else {
-                    alert(data && data.message ? data.message : 'Add failed');
+                    showToast(data && data.message ? data.message : 'Add failed', 'danger');
                 }
             }
 

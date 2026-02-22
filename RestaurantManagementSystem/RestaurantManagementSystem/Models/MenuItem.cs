@@ -100,6 +100,9 @@ namespace RestaurantManagementSystem.Models
 
     [Display(Name = "Not Available")]
     public bool NotAvailable { get; set; } = false; // Separate flag while retaining existing IsAvailable for backward compatibility
+
+        [Display(Name = "Available Stock")]
+        public decimal? AvailableStockQty { get; set; }
         
         // Navigation properties
         public virtual ICollection<MenuItemAllergen> Allergens { get; set; } = new List<MenuItemAllergen>();

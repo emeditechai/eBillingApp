@@ -19,6 +19,8 @@ namespace RestaurantManagementSystem.Controllers
 
         private const string IsCounterRequiredCacheKey = "RestaurantSettings.IsCounterRequired";
         private static readonly TimeSpan CounterRequiredCacheDuration = TimeSpan.FromMinutes(2);
+        private const string IsSaleFromInventoryCacheKey = "RestaurantSettings.IsSaleFromInventory";
+        private static readonly TimeSpan SaleFromInventoryCacheDuration = TimeSpan.FromMinutes(2);
 
         private readonly IConfiguration _configuration;
         private readonly string _connectionString;
@@ -152,6 +154,292 @@ END", connection))
             }
 
             return "A4";
+        }
+
+        private bool GetIsSaleFromInventoryEnabled(Microsoft.Data.SqlClient.SqlConnection? connection = null, Microsoft.Data.SqlClient.SqlTransaction? transaction = null)
+        {
+            if (connection != null)
+            {
+                return ReadIsSaleFromInventory(connection, transaction);
+            }
+
+            try
+            {
+                if (_cache != null && _cache.TryGetValue(IsSaleFromInventoryCacheKey, out bool cached))
+                {
+                    return cached;
+                }
+            }
+            catch
+            {
+            }
+
+            bool enabled;
+            try
+            {
+                using (var con = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+                {
+                    con.Open();
+                    enabled = ReadIsSaleFromInventory(con, null);
+                }
+            }
+            catch
+            {
+                enabled = false;
+            }
+
+            try
+            {
+                _cache?.Set(IsSaleFromInventoryCacheKey, enabled, new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = SaleFromInventoryCacheDuration,
+                    SlidingExpiration = SaleFromInventoryCacheDuration
+                });
+            }
+            catch
+            {
+            }
+
+            return enabled;
+        }
+
+        private static bool ReadIsSaleFromInventory(Microsoft.Data.SqlClient.SqlConnection connection, Microsoft.Data.SqlClient.SqlTransaction? transaction)
+        {
+            using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+IF OBJECT_ID('dbo.RestaurantSettings','U') IS NULL
+BEGIN
+    SELECT CAST(0 AS bit);
+END
+ELSE
+BEGIN
+    SELECT TOP 1
+        CASE
+            WHEN COL_LENGTH('dbo.RestaurantSettings','IsSaleFromInventory') IS NULL THEN CAST(0 AS bit)
+            ELSE CAST(ISNULL(IsSaleFromInventory, 0) AS bit)
+        END
+    FROM dbo.RestaurantSettings
+    ORDER BY Id DESC;
+END", connection, transaction))
+            {
+                var val = cmd.ExecuteScalar();
+                return val != null && val != DBNull.Value && Convert.ToBoolean(val);
+            }
+        }
+
+        private decimal GetAvailableStockForSale(int menuItemId, Microsoft.Data.SqlClient.SqlConnection connection, Microsoft.Data.SqlClient.SqlTransaction? transaction)
+        {
+            using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+IF OBJECT_ID('dbo.InventoryStock','U') IS NULL
+BEGIN
+    SELECT CAST(0 AS decimal(18,3));
+END
+ELSE
+BEGIN
+    SELECT CAST(ISNULL(SUM(ISNULL(s.QuantityOnHand, 0)), 0) AS decimal(18,3))
+    FROM dbo.InventoryStock s
+    LEFT JOIN dbo.InventoryGodowns g ON g.Id = s.GodownId
+    WHERE s.MenuItemId = @MenuItemId
+      AND (g.Id IS NULL OR ISNULL(g.IsActive, 1) = 1);
+END", connection, transaction))
+            {
+                cmd.Parameters.AddWithValue("@MenuItemId", menuItemId);
+                var val = cmd.ExecuteScalar();
+                return val == null || val == DBNull.Value ? 0m : Convert.ToDecimal(val);
+            }
+        }
+
+        private bool ValidateStockBeforeSaleAdd(int menuItemId, decimal requestedQuantity, Microsoft.Data.SqlClient.SqlConnection connection, Microsoft.Data.SqlClient.SqlTransaction? transaction, out string validationMessage)
+        {
+            validationMessage = string.Empty;
+
+            if (!GetIsSaleFromInventoryEnabled(connection, transaction))
+            {
+                return true;
+            }
+
+            if (menuItemId <= 0)
+            {
+                validationMessage = "Invalid menu item.";
+                return false;
+            }
+
+            var available = GetAvailableStockForSale(menuItemId, connection, transaction);
+            if (available <= 0)
+            {
+                validationMessage = "Stock is not available for this item.";
+                return false;
+            }
+
+            if (requestedQuantity > available)
+            {
+                validationMessage = $"Only {available:0.###} quantity available for this item.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private void SyncInventoryMovementsForOrder(int orderId, Microsoft.Data.SqlClient.SqlConnection connection, Microsoft.Data.SqlClient.SqlTransaction transaction)
+        {
+            if (orderId <= 0)
+            {
+                return;
+            }
+
+            if (!GetIsSaleFromInventoryEnabled(connection, transaction))
+            {
+                return;
+            }
+
+            var godownId = GetDefaultStockGodownIdForOrder(connection, transaction);
+            if (godownId <= 0)
+            {
+                return;
+            }
+
+            var createdBy = GetCurrentUserId();
+            var desired = new Dictionary<int, (decimal Qty, decimal UnitCost)>();
+            using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+SELECT
+    oi.MenuItemId,
+    CAST(SUM(CAST(ISNULL(oi.Quantity, 0) AS decimal(18,3))) AS decimal(18,3)) AS Qty,
+    CAST(MAX(CAST(ISNULL(oi.UnitPrice, 0) AS decimal(18,2))) AS decimal(18,2)) AS UnitCost
+FROM dbo.OrderItems oi
+WHERE oi.OrderId = @OrderId
+  AND ISNULL(oi.Status, 0) <> 5
+GROUP BY oi.MenuItemId", connection, transaction))
+            {
+                cmd.Parameters.AddWithValue("@OrderId", orderId);
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        var menuItemId = reader.IsDBNull(0) ? 0 : reader.GetInt32(0);
+                        if (menuItemId <= 0)
+                        {
+                            continue;
+                        }
+
+                        desired[menuItemId] =
+                        (
+                            reader.IsDBNull(1) ? 0m : reader.GetDecimal(1),
+                            reader.IsDBNull(2) ? 0m : reader.GetDecimal(2)
+                        );
+                    }
+                }
+            }
+
+            var netDeducted = new Dictionary<int, decimal>();
+            using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+SELECT
+    m.MenuItemId,
+    CAST(SUM(CASE WHEN UPPER(m.MovementType) = 'OUT' THEN ISNULL(m.Quantity, 0) ELSE (0 - ISNULL(m.Quantity, 0)) END) AS decimal(18,3)) AS NetQty
+FROM dbo.InventoryStockMovements m
+WHERE m.OrderId = @OrderId
+  AND m.GodownId = @GodownId
+  AND UPPER(m.ReferenceType) IN ('ORDER', 'ORDER_CANCEL')
+  AND UPPER(m.MovementType) IN ('OUT', 'IN')
+GROUP BY m.MenuItemId", connection, transaction))
+            {
+                cmd.Parameters.AddWithValue("@OrderId", orderId);
+                cmd.Parameters.AddWithValue("@GodownId", godownId);
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        var menuItemId = reader.IsDBNull(0) ? 0 : reader.GetInt32(0);
+                        if (menuItemId <= 0)
+                        {
+                            continue;
+                        }
+
+                        netDeducted[menuItemId] = reader.IsDBNull(1) ? 0m : reader.GetDecimal(1);
+                    }
+                }
+            }
+
+            var allMenuItemIds = new HashSet<int>(desired.Keys);
+            foreach (var menuItemId in netDeducted.Keys)
+            {
+                allMenuItemIds.Add(menuItemId);
+            }
+
+            foreach (var menuItemId in allMenuItemIds)
+            {
+                var targetQty = desired.TryGetValue(menuItemId, out var desiredEntry) ? desiredEntry.Qty : 0m;
+                var unitCost = desired.TryGetValue(menuItemId, out desiredEntry) ? desiredEntry.UnitCost : 0m;
+                var currentNetOut = netDeducted.TryGetValue(menuItemId, out var movedQty) ? movedQty : 0m;
+                var diff = targetQty - currentNetOut;
+
+                if (Math.Abs(diff) < 0.0005m)
+                {
+                    continue;
+                }
+
+                var movementType = diff > 0 ? "OUT" : "IN";
+                var referenceType = diff > 0 ? "ORDER" : "ORDER_CANCEL";
+                var quantity = Math.Abs(diff);
+                var signedStockChange = diff > 0 ? (0 - quantity) : quantity;
+                var notes = diff > 0 ? "Auto stock-out on order save" : "Auto stock-in on order/item cancel";
+
+                using (var movementCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+INSERT INTO dbo.InventoryStockMovements
+(
+    MovementType, ReferenceType, ReferenceId, OrderId, MenuItemId, GodownId,
+    Quantity, UnitCost, PartyId, Notes, CreatedBy, CreatedAt
+)
+VALUES
+(
+    @MovementType, @ReferenceType, @OrderId, @OrderId, @MenuItemId, @GodownId,
+    @Quantity, @UnitCost, NULL, @Notes, @CreatedBy, SYSUTCDATETIME()
+)", connection, transaction))
+                {
+                    movementCmd.Parameters.AddWithValue("@MovementType", movementType);
+                    movementCmd.Parameters.AddWithValue("@ReferenceType", referenceType);
+                    movementCmd.Parameters.AddWithValue("@OrderId", orderId);
+                    movementCmd.Parameters.AddWithValue("@MenuItemId", menuItemId);
+                    movementCmd.Parameters.AddWithValue("@GodownId", godownId);
+                    movementCmd.Parameters.AddWithValue("@Quantity", quantity);
+                    movementCmd.Parameters.AddWithValue("@UnitCost", unitCost > 0 ? unitCost : 0m);
+                    movementCmd.Parameters.AddWithValue("@Notes", notes);
+                    movementCmd.Parameters.AddWithValue("@CreatedBy", createdBy);
+                    movementCmd.ExecuteNonQuery();
+                }
+
+                using (var stockCmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+IF EXISTS (SELECT 1 FROM dbo.InventoryStock WITH (UPDLOCK, HOLDLOCK) WHERE MenuItemId = @MenuItemId AND GodownId = @GodownId)
+BEGIN
+    UPDATE dbo.InventoryStock
+    SET QuantityOnHand = ISNULL(QuantityOnHand, 0) + @SignedStockChange,
+        UpdatedAt = SYSUTCDATETIME()
+    WHERE MenuItemId = @MenuItemId
+      AND GodownId = @GodownId;
+END
+ELSE
+BEGIN
+    INSERT INTO dbo.InventoryStock (MenuItemId, GodownId, QuantityOnHand, UpdatedAt, LowLevelQty)
+    VALUES (@MenuItemId, @GodownId, @SignedStockChange, SYSUTCDATETIME(), NULL);
+END", connection, transaction))
+                {
+                    stockCmd.Parameters.AddWithValue("@MenuItemId", menuItemId);
+                    stockCmd.Parameters.AddWithValue("@GodownId", godownId);
+                    stockCmd.Parameters.AddWithValue("@SignedStockChange", signedStockChange);
+                    stockCmd.ExecuteNonQuery();
+                }
+            }
+        }
+
+        private static int GetDefaultStockGodownIdForOrder(Microsoft.Data.SqlClient.SqlConnection connection, Microsoft.Data.SqlClient.SqlTransaction? transaction)
+        {
+            using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
+SELECT TOP 1 Id
+FROM dbo.InventoryGodowns
+WHERE IsActive = 1
+ORDER BY CASE WHEN UPPER(GodownCode) = 'MAIN' THEN 0 ELSE 1 END, Id", connection, transaction))
+            {
+                var result = cmd.ExecuteScalar();
+                return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+            }
         }
 
         private List<int> GetAllowedOrderTypeIdsFromSettings()
@@ -787,7 +1075,10 @@ END", connection))
                 }
                 catch (Exception ex)
                 {
-                    ModelState.AddModelError("", $"An error occurred: {ex.Message}");
+                    if (!ModelState.Values.SelectMany(v => v.Errors).Any(e => string.Equals(e.ErrorMessage, ex.Message, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        ModelState.AddModelError("", $"An error occurred: {ex.Message}");
+                    }
                 }
             }
 
@@ -1185,6 +1476,7 @@ END", connection))
                     
                     // Get order type if orderId is provided
                     int orderType = 0; // Default to Dine-In
+                    var useInventoryStock = GetIsSaleFromInventoryEnabled(connection);
                     if (orderId.HasValue)
                     {
                         using (var typeCmd = new Microsoft.Data.SqlClient.SqlCommand("SELECT OrderType FROM Orders WHERE Id = @OrderId", connection))
@@ -1213,7 +1505,14 @@ END", connection))
                                                 ELSE Price  -- Dine-In (0) or default
                                             END AS Price
                                         FROM dbo.MenuItems
-                                        WHERE IsAvailable = 1 AND (menuitemgroupID = @GroupId)
+                                                                                WHERE IsAvailable = 1 AND (menuitemgroupID = @GroupId)
+                                                                                    AND (@UseInventory = 0 OR EXISTS (
+                                                                                                SELECT 1 FROM dbo.InventoryStock s
+                                                                                                LEFT JOIN dbo.InventoryGodowns g ON g.Id = s.GodownId
+                                                                                                WHERE s.MenuItemId = dbo.MenuItems.Id
+                                                                                                    AND ISNULL(s.QuantityOnHand, 0) > 0
+                                                                                                    AND (g.Id IS NULL OR ISNULL(g.IsActive, 1) = 1)
+                                                                                    ))
                                         ORDER BY Name
                                     END
                                     ELSE
@@ -1225,7 +1524,14 @@ END", connection))
                                                 ELSE Price  -- Dine-In (0) or default
                                             END AS Price
                                         FROM dbo.MenuItems
-                                        WHERE IsAvailable = 1 AND (menuitemgroupID = @GroupId)
+                                                                                WHERE IsAvailable = 1 AND (menuitemgroupID = @GroupId)
+                                                                                    AND (@UseInventory = 0 OR EXISTS (
+                                                                                                SELECT 1 FROM dbo.InventoryStock s
+                                                                                                LEFT JOIN dbo.InventoryGodowns g ON g.Id = s.GodownId
+                                                                                                WHERE s.MenuItemId = dbo.MenuItems.Id
+                                                                                                    AND ISNULL(s.QuantityOnHand, 0) > 0
+                                                                                                    AND (g.Id IS NULL OR ISNULL(g.IsActive, 1) = 1)
+                                                                                    ))
                                         ORDER BY Name
                                     END
                                  END
@@ -1241,7 +1547,14 @@ END", connection))
                                                 ELSE Price  -- Dine-In (0) or default
                                             END AS Price
                                         FROM dbo.MenuItems
-                                        WHERE IsAvailable = 1
+                                                                                WHERE IsAvailable = 1
+                                                                                    AND (@UseInventory = 0 OR EXISTS (
+                                                                                                SELECT 1 FROM dbo.InventoryStock s
+                                                                                                LEFT JOIN dbo.InventoryGodowns g ON g.Id = s.GodownId
+                                                                                                WHERE s.MenuItemId = dbo.MenuItems.Id
+                                                                                                    AND ISNULL(s.QuantityOnHand, 0) > 0
+                                                                                                    AND (g.Id IS NULL OR ISNULL(g.IsActive, 1) = 1)
+                                                                                    ))
                                         ORDER BY Name
                                     END
                                     ELSE
@@ -1253,7 +1566,14 @@ END", connection))
                                                 ELSE Price  -- Dine-In (0) or default
                                             END AS Price
                                         FROM dbo.MenuItems
-                                        WHERE IsAvailable = 1
+                                                                                WHERE IsAvailable = 1
+                                                                                    AND (@UseInventory = 0 OR EXISTS (
+                                                                                                SELECT 1 FROM dbo.InventoryStock s
+                                                                                                LEFT JOIN dbo.InventoryGodowns g ON g.Id = s.GodownId
+                                                                                                WHERE s.MenuItemId = dbo.MenuItems.Id
+                                                                                                    AND ISNULL(s.QuantityOnHand, 0) > 0
+                                                                                                    AND (g.Id IS NULL OR ISNULL(g.IsActive, 1) = 1)
+                                                                                    ))
                                         ORDER BY Name
                                     END
                                  END";
@@ -1261,6 +1581,7 @@ END", connection))
                     {
                         cmd.Parameters.AddWithValue("@GroupId", groupId);
                         cmd.Parameters.AddWithValue("@OrderType", orderType);
+                                                cmd.Parameters.AddWithValue("@UseInventory", useInventoryStock ? 1 : 0);
                         using (var r = cmd.ExecuteReader())
                         {
                             while (r.Read())
@@ -1768,6 +2089,12 @@ END", connection))
                     {
                         connection.Open();
 
+                        if (!ValidateStockBeforeSaleAdd(model.MenuItemId, model.Quantity, connection, null, out var stockValidationMessage))
+                        {
+                            ModelState.AddModelError("", stockValidationMessage);
+                            throw new InvalidOperationException(stockValidationMessage);
+                        }
+
                         using (Microsoft.Data.SqlClient.SqlTransaction transaction = connection.BeginTransaction())
                         {
                             try
@@ -1852,6 +2179,9 @@ END", connection))
                                             // Recalculate and persist GST fields after item addition
                                             UpdateOrderFinancials(model.OrderId, connection, transaction);
 
+                                            // Live inventory sync on order save
+                                            SyncInventoryMovementsForOrder(model.OrderId, connection, transaction);
+
                                             // All good, commit
                                             transaction.Commit();
                                             
@@ -1883,7 +2213,7 @@ END", connection))
                                             }
                                             catch { /* Audit logging should not break the main flow */ }
                                             
-                                            TempData["SuccessMessage"] = "Item added to order successfully.";
+                                            TempData["SuccessMessage"] = "Item added to order successfully. Inventory synced.";
                                             return RedirectToAction("Details", new { id = model.OrderId });
                                         }
                                         else
@@ -2490,8 +2820,11 @@ END", connection))
                                 }
                             }
 
+                            // Reconcile inventory for full order cancellation
+                            SyncInventoryMovementsForOrder(id, connection, transaction);
+
                             transaction.Commit();
-                            TempData["SuccessMessage"] = "Order cancelled successfully.";
+                            TempData["SuccessMessage"] = "Order cancelled successfully. Inventory synced.";
                         }
                         catch (Exception ex)
                         {
@@ -2624,8 +2957,11 @@ END", connection))
                                 updateOrderCommand.ExecuteNonQuery();
                             }
 
+                            // Reconcile inventory after item cancellation
+                            SyncInventoryMovementsForOrder(orderId, connection, transaction);
+
                             transaction.Commit();
-                            TempData["SuccessMessage"] = "Order item cancelled successfully.";
+                            TempData["SuccessMessage"] = "Order item cancelled successfully. Inventory synced.";
                         }
                         catch (Exception ex)
                         {
@@ -2701,15 +3037,24 @@ END", connection))
                 }
                 
                 // Get menu items for each category
+                                var useInventoryStock = GetIsSaleFromInventoryEnabled(connection);
                 foreach (var category in model.MenuCategories)
                 {
                     using (Microsoft.Data.SqlClient.SqlCommand command = new Microsoft.Data.SqlClient.SqlCommand(@"
                         SELECT Id, Name, Description, Price, IsAvailable, ImagePath
                         FROM MenuItems
                         WHERE CategoryId = @CategoryId AND IsAvailable = 1
+                                                    AND (@UseInventory = 0 OR EXISTS (
+                                                                SELECT 1 FROM dbo.InventoryStock s
+                                                                LEFT JOIN dbo.InventoryGodowns g ON g.Id = s.GodownId
+                                                                WHERE s.MenuItemId = MenuItems.Id
+                                                                    AND ISNULL(s.QuantityOnHand, 0) > 0
+                                                                    AND (g.Id IS NULL OR ISNULL(g.IsActive, 1) = 1)
+                                                    ))
                         ORDER BY Name", connection))
                     {
                         command.Parameters.AddWithValue("@CategoryId", category.CategoryId);
+                                                command.Parameters.AddWithValue("@UseInventory", useInventoryStock ? 1 : 0);
                         
                         using (Microsoft.Data.SqlClient.SqlDataReader reader = command.ExecuteReader())
                         {
@@ -2744,6 +3089,7 @@ END", connection))
         {
             ViewData["Title"] = "POS Order";
             ViewBag.PosBillFormat = GetPosBillFormatFromSettings();
+            ViewBag.PosUseInventorySale = GetIsSaleFromInventoryEnabled();
 
             var isCounterRequired = GetIsCounterRequiredForPos();
 
@@ -3511,6 +3857,8 @@ END", connection))
             if (order == null) return;
 
             // Cache is scoped per login/session so menu loads once per login.
+            // When inventory-based sale is enabled, bypass cache so stock badges stay current.
+            var useInventoryStock = GetIsSaleFromInventoryEnabled();
             var sessionToken = User?.FindFirst("SessionToken")?.Value;
             var userId = User?.FindFirstValue(ClaimTypes.NameIdentifier);
             var activeRoleId = User?.FindFirst("ActiveRoleId")?.Value;
@@ -3523,7 +3871,7 @@ END", connection))
             }
 
             var cacheKey = $"POS_MENU_FOODS:{cacheScope}";
-            if (_cache.TryGetValue(cacheKey, out List<MenuItem> cached) && cached != null && cached.Count > 0)
+            if (!useInventoryStock && _cache.TryGetValue(cacheKey, out List<MenuItem> cached) && cached != null && cached.Count > 0)
             {
                 order.AvailableMenuItems = cached.Select(mi => new MenuItem
                 {
@@ -3533,6 +3881,7 @@ END", connection))
                     TakeoutPrice = mi.TakeoutPrice,
                     DeliveryPrice = mi.DeliveryPrice,
                     ImagePath = mi.ImagePath,
+                    AvailableStockQty = mi.AvailableStockQty,
                     CategoryId = mi.CategoryId,
                     Category = mi.Category != null ? new Category { Id = mi.Category.Id, Name = mi.Category.Name } : null
                 }).ToList();
@@ -3588,6 +3937,13 @@ END", connection))
                             CASE WHEN COL_LENGTH('dbo.MenuItems', 'TakeoutPrice') IS NULL THEN NULL ELSE m.TakeoutPrice END AS TakeoutPrice,
                             CASE WHEN COL_LENGTH('dbo.MenuItems', 'DeliveryPrice') IS NULL THEN NULL ELSE m.DeliveryPrice END AS DeliveryPrice,
                             CASE WHEN COL_LENGTH('dbo.MenuItems', 'ImagePath') IS NULL THEN NULL ELSE m.ImagePath END AS ImagePath,
+                                                        CASE WHEN @UseInventory = 1 THEN CAST(ISNULL((
+                                                                SELECT SUM(ISNULL(s.QuantityOnHand, 0))
+                                                                FROM dbo.InventoryStock s
+                                                                LEFT JOIN dbo.InventoryGodowns g ON g.Id = s.GodownId
+                                                                WHERE s.MenuItemId = m.Id
+                                                                    AND (g.Id IS NULL OR ISNULL(g.IsActive, 1) = 1)
+                                                        ), 0) AS decimal(18,3)) ELSE NULL END AS AvailableStockQty,
                             m.CategoryId,
                             c.Name AS CategoryName
                         FROM dbo.MenuItems m
@@ -3602,6 +3958,7 @@ END", connection))
                         ORDER BY c.Name, m.Name;", connection))
                     {
                         cmd.Parameters.AddWithValue("@GroupId", (object?)foodsGroupId ?? DBNull.Value);
+                        cmd.Parameters.AddWithValue("@UseInventory", useInventoryStock ? 1 : 0);
 
                         using (var reader = cmd.ExecuteReader())
                         {
@@ -3617,14 +3974,15 @@ END", connection))
                                     TakeoutPrice = reader.IsDBNull(3) ? (decimal?)null : reader.GetDecimal(3),
                                     DeliveryPrice = reader.IsDBNull(4) ? (decimal?)null : reader.GetDecimal(4),
                                     ImagePath = reader.IsDBNull(5) ? null : reader.GetString(5),
-                                    CategoryId = reader.IsDBNull(6) ? 0 : reader.GetInt32(6),
-                                    Category = new Category { Name = reader.IsDBNull(7) ? string.Empty : reader.GetString(7) }
+                                    AvailableStockQty = reader.IsDBNull(6) ? null : reader.GetDecimal(6),
+                                    CategoryId = reader.IsDBNull(7) ? 0 : reader.GetInt32(7),
+                                    Category = new Category { Name = reader.IsDBNull(8) ? string.Empty : reader.GetString(8) }
                                 };
                                 hydrated.Add(item);
                             }
 
                             order.AvailableMenuItems.AddRange(hydrated);
-                            if (hydrated.Count > 0)
+                            if (!useInventoryStock && hydrated.Count > 0)
                             {
                                 _cache.Set(cacheKey, hydrated, new MemoryCacheEntryOptions
                                 {
@@ -4004,9 +4362,10 @@ END", connection))
                             // Recalculate financials excluding cancelled items
                             UpdateOrderItemGstDetails(orderId, connection, transaction);
                             UpdateOrderFinancials(orderId, connection, transaction);
+                            SyncInventoryMovementsForOrder(orderId, connection, transaction);
 
                             transaction.Commit();
-                            return Json(new { success = true, message = "Item cancelled successfully.", orderId });
+                            return Json(new { success = true, message = "Item cancelled successfully. Inventory synced.", orderId });
                         }
                         catch (Exception ex)
                         {
@@ -5596,6 +5955,20 @@ END", connection))
                             var existingItems = items.Where(i => !i.IsNew).ToList();
                             var newItems = items.Where(i => i.IsNew).ToList();
 
+                            foreach (var item in newItems)
+                            {
+                                if (!item.MenuItemId.HasValue)
+                                {
+                                    continue;
+                                }
+
+                                if (!ValidateStockBeforeSaleAdd(item.MenuItemId.Value, item.Quantity, connection, transaction, out var stockValidationMessage))
+                                {
+                                    transaction.Rollback();
+                                    return Json(new { success = false, message = stockValidationMessage });
+                                }
+                            }
+
                             // If we're adding at least one new item, assign OrderNumber now (first-save semantics)
                             string assignedOrderNumber = string.Empty;
                             if (newItems.Any())
@@ -5709,9 +6082,10 @@ END", connection))
                             // Recalculate order totals and GST (handles both BAR inclusive and Foods exclusive)
                             UpdateOrderItemGstDetails(orderId, connection, transaction);
                             UpdateOrderFinancials(orderId, connection, transaction);
+                            SyncInventoryMovementsForOrder(orderId, connection, transaction);
                             
                             transaction.Commit();
-                            return Json(new { success = true, message = "All items updated successfully.", orderNumber = assignedOrderNumber });
+                            return Json(new { success = true, message = "All items updated successfully. Inventory synced.", orderNumber = assignedOrderNumber });
                         }
                         catch (Exception ex)
                         {
@@ -5804,6 +6178,7 @@ END", connection))
                             // Recalculate and persist GST fields on submit
                             UpdateOrderItemGstDetails(orderId, connection, transaction);
                             UpdateOrderFinancials(orderId, connection, transaction);
+                            SyncInventoryMovementsForOrder(orderId, connection, transaction);
                             
                             transaction.Commit();
                         }
@@ -5815,7 +6190,7 @@ END", connection))
                     }
                 }
                 
-                TempData["SuccessMessage"] = "Order details saved successfully.";
+                TempData["SuccessMessage"] = "Order details saved successfully. Inventory synced.";
                 return RedirectToAction("Details", new { id = orderId });
             }
             catch (Exception ex)
