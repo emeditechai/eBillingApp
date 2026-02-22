@@ -1,0 +1,43 @@
+@model IEnumerable<RestaurantManagementSystem.Models.InventoryStockMovementListItem>
+@{
+    ViewData["Title"] = "Stock In";
+}
+
+<h2 class="mb-4">Stock In</h2>
+
+<a class="btn btn-success mb-3" asp-controller="Inventory" asp-action="StockInForm">
+    <i class="bi bi-plus-circle"></i> Add Stock In
+</a>
+
+@if (TempData["ResultMessage"] != null)
+{
+    <div class="alert alert-info">@TempData["ResultMessage"]</div>
+}
+
+<table class="table table-bordered table-striped">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Menu Item</th>
+            <th>Godown</th>
+            <th>Qty</th>
+            <th>Unit Cost</th>
+            <th>Party</th>
+            <th>Notes</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>@item.CreatedAt.ToLocalTime().ToString("dd-MMM-yyyy HH:mm")</td>
+                <td>@item.MenuItemName</td>
+                <td>@item.GodownName</td>
+                <td>@item.Quantity.ToString("0.###")</td>
+                <td>@(item.UnitCost.HasValue ? item.UnitCost.Value.ToString("0.00") : "-")</td>
+                <td>@(string.IsNullOrWhiteSpace(item.PartyName) ? "-" : item.PartyName)</td>
+                <td>@(string.IsNullOrWhiteSpace(item.Notes) ? "-" : item.Notes)</td>
+            </tr>
+        }
+    </tbody>
+</table>

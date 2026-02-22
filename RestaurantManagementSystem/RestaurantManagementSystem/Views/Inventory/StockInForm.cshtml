@@ -1,0 +1,75 @@
+@model RestaurantManagementSystem.Models.InventoryStockInEntryViewModel
+@{
+    ViewData["Title"] = "Add Stock In";
+}
+
+<h2 class="mb-4">Add Stock In</h2>
+
+<div class="card shadow-sm">
+    <div class="card-body py-3">
+        <form asp-action="StockInForm" asp-controller="Inventory" method="post">
+            @Html.AntiForgeryToken()
+
+            <div class="row g-2">
+                <div class="col-md-6">
+                    <label asp-for="MenuItemId" class="form-label mb-1 small"></label>
+                    <select asp-for="MenuItemId" asp-items="Model.MenuItems" class="form-select form-select-sm">
+                        <option value="">-- Select Menu Item --</option>
+                    </select>
+                    <span asp-validation-for="MenuItemId" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label asp-for="GodownId" class="form-label mb-1 small"></label>
+                    <select asp-for="GodownId" asp-items="Model.Godowns" class="form-select form-select-sm">
+                        <option value="">-- Select Godown --</option>
+                    </select>
+                    <span asp-validation-for="GodownId" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-3">
+                    <label asp-for="Quantity" class="form-label mb-1 small"></label>
+                    <input asp-for="Quantity" class="form-control form-control-sm" type="number" step="0.001" min="0.001" />
+                    <span asp-validation-for="Quantity" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-3">
+                    <label asp-for="UnitCost" class="form-label mb-1 small"></label>
+                    <input asp-for="UnitCost" class="form-control form-control-sm" type="number" step="0.01" min="0" />
+                    <span asp-validation-for="UnitCost" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-3">
+                    <label asp-for="PartyId" class="form-label mb-1 small"></label>
+                    <select asp-for="PartyId" asp-items="Model.Parties" class="form-select form-select-sm">
+                        <option value="">-- Optional Party --</option>
+                    </select>
+                    <span asp-validation-for="PartyId" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-3">
+                    <label asp-for="LowLevelQty" class="form-label mb-1 small"></label>
+                    <input asp-for="LowLevelQty" class="form-control form-control-sm" type="number" step="0.001" min="0" />
+                    <span asp-validation-for="LowLevelQty" class="text-danger small"></span>
+                </div>
+
+                <div class="col-12">
+                    <label asp-for="Notes" class="form-label mb-1 small"></label>
+                    <textarea asp-for="Notes" class="form-control form-control-sm" rows="2"></textarea>
+                    <span asp-validation-for="Notes" class="text-danger small"></span>
+                </div>
+            </div>
+
+            <div asp-validation-summary="ModelOnly" class="text-danger small mt-2"></div>
+
+            <div class="mt-2">
+                <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                <a href="@Url.Action("StockIn", "Inventory")" class="btn btn-secondary btn-sm">Back</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

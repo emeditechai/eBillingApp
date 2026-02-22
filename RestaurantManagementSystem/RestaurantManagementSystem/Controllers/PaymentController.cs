@@ -1276,6 +1276,8 @@ END", connection))
                                             }
                                         }
                                         catch { /* don't block the happy path if this fails */ }
+
+                                        TryApplyStockOutForCompletedOrder(model.OrderId, connection);
                                         if (wantsJson)
                                         {
                                             return Ok(new { success = true, message = "Payment processed successfully.", orderId = model.OrderId });
@@ -1831,6 +1833,8 @@ END", connection))
                         }
                     }
                     
+                    TryApplyStockOutForCompletedOrder(model.OrderId);
+
                     // Auto-send bill email if order was completed (after transaction commit)
                     try
                     {
@@ -2364,6 +2368,7 @@ END", connection))
                                     // Auto-send bill email if order was completed
                                     try
                                     {
+                                        TryApplyStockOutForCompletedOrder(orderId, connection);
                                         await SendAutoBillEmailAsync(orderId, connection);
                                     }
                                     catch (Exception emailEx)
@@ -2633,6 +2638,7 @@ END", connection))
                                     // Auto-send bill email if order was completed
                                     try
                                     {
+                                        TryApplyStockOutForCompletedOrder(orderId, connection);
                                         await SendAutoBillEmailAsync(orderId, connection);
                                     }
                                     catch (Exception emailEx)
