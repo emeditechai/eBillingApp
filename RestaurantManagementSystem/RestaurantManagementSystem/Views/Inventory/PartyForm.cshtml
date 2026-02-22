@@ -1,0 +1,80 @@
+@model RestaurantManagementSystem.Models.InventoryParty
+@using Microsoft.AspNetCore.Mvc.Rendering
+@{
+    ViewData["Title"] = Model.Id == 0 ? "Add Party" : "Edit Party";
+    var partyTypes = ViewBag.PartyTypes as List<SelectListItem> ?? new List<SelectListItem>();
+}
+
+<h2 class="mb-4">@ViewData["Title"]</h2>
+
+<form asp-action="PartyForm" asp-controller="Inventory" method="post">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="Id" />
+
+    <div class="mb-3">
+        <label asp-for="PartyCode" class="form-label"></label>
+        <input asp-for="PartyCode" class="form-control" autocomplete="off" />
+        <span asp-validation-for="PartyCode" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="PartyName" class="form-label"></label>
+        <input asp-for="PartyName" class="form-control" autocomplete="off" />
+        <span asp-validation-for="PartyName" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="PartyType" class="form-label"></label>
+        <select asp-for="PartyType" asp-items="partyTypes" class="form-select">
+            <option value="">-- Select Party Type --</option>
+        </select>
+        <span asp-validation-for="PartyType" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="PhoneNumber" class="form-label"></label>
+        <input asp-for="PhoneNumber" class="form-control" autocomplete="off" />
+        <span asp-validation-for="PhoneNumber" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Email" class="form-label"></label>
+        <input asp-for="Email" class="form-control" autocomplete="off" />
+        <span asp-validation-for="Email" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Address" class="form-label"></label>
+        <textarea asp-for="Address" class="form-control" rows="3"></textarea>
+        <span asp-validation-for="Address" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3 form-check">
+        <input asp-for="IsActive" class="form-check-input" />
+        <label asp-for="IsActive" class="form-check-label"></label>
+    </div>
+
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="@Url.Action("PartyMaster", "Inventory")" class="btn btn-secondary">Back</a>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        $(document).ready(function () {
+            var isView = '@ViewBag.IsView' === 'True';
+            if (isView) {
+                $('#PartyCode').prop('disabled', true);
+                $('#PartyName').prop('disabled', true);
+                $('#PartyType').prop('disabled', true);
+                $('#PhoneNumber').prop('disabled', true);
+                $('#Email').prop('disabled', true);
+                $('#Address').prop('disabled', true);
+                $('#IsActive').prop('disabled', true);
+                $('button[type=submit]').prop('disabled', true).addClass('disabled');
+            }
+        });
+    </script>
+}

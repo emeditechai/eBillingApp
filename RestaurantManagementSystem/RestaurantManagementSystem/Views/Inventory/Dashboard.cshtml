@@ -1,0 +1,32 @@
+@{
+    ViewData["Title"] = "Inventory Dashboard";
+}
+
+<h2 class="mb-4">Inventory Dashboard</h2>
+
+@if (TempData["ResultMessage"] != null)
+{
+    <div class="alert alert-info">@TempData["ResultMessage"]</div>
+}
+
+<div class="row g-3">
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body d-flex flex-column">
+                <h5 class="card-title">Godown Master</h5>
+                <p class="card-text text-muted">Manage godown list with create and edit options.</p>
+                <a class="btn btn-primary mt-auto" asp-controller="Inventory" asp-action="GodownMaster">Open Godown Master</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body d-flex flex-column">
+                <h5 class="card-title">Party Master</h5>
+                <p class="card-text text-muted">Manage vendor, suppliers and traders master records.</p>
+                <a class="btn btn-primary mt-auto" asp-controller="Inventory" asp-action="PartyMaster">Open Party Master</a>
+            </div>
+        </div>
+    </div>
+</div>
