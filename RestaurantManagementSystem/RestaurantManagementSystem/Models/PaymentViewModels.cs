@@ -85,7 +85,7 @@ namespace RestaurantManagementSystem.Models
         
         [Required]
         [Display(Name = "Amount")]
-        [Range(0.01, 10000)]
+        [Range(typeof(decimal), "0.01", "9999999999999999")]
         public decimal Amount { get; set; }
 
     // Original calculated amount before rounding (sent to DB as the payment amount)
@@ -93,7 +93,7 @@ namespace RestaurantManagementSystem.Models
     public decimal OriginalAmount { get; set; }
         
         [Display(Name = "Tip Amount")]
-        [Range(0, 10000)]
+        [Range(typeof(decimal), "0", "9999999999999999")]
         public decimal TipAmount { get; set; }
         
         [Display(Name = "Card Number (last 4 digits)")]
@@ -117,7 +117,7 @@ namespace RestaurantManagementSystem.Models
     public string UPIReference { get; set; }
 
     [Display(Name = "Discount Amount")]
-    [Range(0, 10000)]
+    [Range(typeof(decimal), "0", "9999999999999999")]
     public decimal DiscountAmount { get; set; }
         
         [Display(Name = "Notes")]
@@ -151,10 +151,10 @@ namespace RestaurantManagementSystem.Models
         public int PaymentMethodId { get; set; }
 
         [Required]
-        [Range(0.01, 1000000)]
+        [Range(typeof(decimal), "0.01", "9999999999999999")]
         public decimal Amount { get; set; }
 
-        [Range(0, 1000000)]
+        [Range(typeof(decimal), "0", "9999999999999999")]
         public decimal TipAmount { get; set; }
 
         [StringLength(4)]

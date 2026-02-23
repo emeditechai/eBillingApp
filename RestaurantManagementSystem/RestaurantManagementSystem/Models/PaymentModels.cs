@@ -41,23 +41,23 @@ namespace RestaurantManagementSystem.Models
         public string PaymentMethodDisplay { get; set; }
         
         [Required]
-        [Range(0.01, 10000)]
+        [Range(typeof(decimal), "0.01", "9999999999999999")]
         public decimal Amount { get; set; }
         
-        [Range(0, 10000)]
+        [Range(typeof(decimal), "0", "9999999999999999")]
         public decimal TipAmount { get; set; }
         
         // GST-related columns for storing calculated GST information
-        [Range(0, 10000)]
+        [Range(typeof(decimal), "0", "9999999999999999")]
         public decimal? GSTAmount { get; set; }
         
-        [Range(0, 10000)]
+        [Range(typeof(decimal), "0", "9999999999999999")]
         public decimal? CGSTAmount { get; set; }
         
-        [Range(0, 10000)]
+        [Range(typeof(decimal), "0", "9999999999999999")]
         public decimal? SGSTAmount { get; set; }
         
-        [Range(0, 10000)]
+        [Range(typeof(decimal), "0", "9999999999999999")]
         public decimal? DiscAmount { get; set; }
         
         [Range(0, 100)]
@@ -69,7 +69,7 @@ namespace RestaurantManagementSystem.Models
         [Range(0, 100)]
         public decimal? SGST_Perc { get; set; }
         
-        [Range(0, 10000)]
+        [Range(typeof(decimal), "0", "9999999999999999")]
         public decimal? Amount_ExclGST { get; set; }
 
     [Range(-1000, 1000)]
@@ -123,15 +123,15 @@ namespace RestaurantManagementSystem.Models
         public int OrderId { get; set; }
         
         [Required]
-        [Range(0.01, 10000)]
+        [Range(typeof(decimal), "0.01", "9999999999999999")]
         public decimal Amount { get; set; }
         
         [Required]
-        [Range(0, 10000)]
+        [Range(typeof(decimal), "0", "9999999999999999")]
         public decimal TaxAmount { get; set; }
         
         [Required]
-        [Range(0.01, 10000)]
+        [Range(typeof(decimal), "0.01", "9999999999999999")]
         public decimal TotalAmount => Amount + TaxAmount;
         
         public int Status { get; set; } // 0=Open, 1=Paid, 2=Voided
@@ -178,7 +178,7 @@ namespace RestaurantManagementSystem.Models
         public int Quantity { get; set; }
         
         [Required]
-        [Range(0.01, 10000)]
+        [Range(typeof(decimal), "0.01", "9999999999999999")]
         public decimal Amount { get; set; }
         
         // Navigation properties
