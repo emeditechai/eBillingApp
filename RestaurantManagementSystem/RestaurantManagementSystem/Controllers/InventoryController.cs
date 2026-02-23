@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Data.SqlClient;
 using RestaurantManagementSystem.Models;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -94,7 +95,8 @@ namespace RestaurantManagementSystem.Controllers
                 var model = new InventoryStockInEntryViewModel
                 {
                     Quantity = 1,
-                    UnitCost = 0
+                    UnitCost = 0,
+                    LowLevelQty = 0
                 };
 
                 PopulateStockInLookups(model);
@@ -113,6 +115,7 @@ namespace RestaurantManagementSystem.Controllers
         {
             try
             {
+                model.InvoiceNo = string.IsNullOrWhiteSpace(model.InvoiceNo) ? null : model.InvoiceNo.Trim();
                 model.Notes = string.IsNullOrWhiteSpace(model.Notes) ? null : model.Notes.Trim();
 
                 if (model.MenuItemId <= 0)
@@ -130,11 +133,23 @@ namespace RestaurantManagementSystem.Controllers
                     ModelState.AddModelError(nameof(InventoryStockInEntryViewModel.Quantity), "Quantity should be greater than zero.");
                 }
 
+                if (model.UnitCost < 0)
+                {
+                    ModelState.AddModelError(nameof(InventoryStockInEntryViewModel.UnitCost), "Unit Cost should be at least zero.");
+                }
+
+                if (model.LowLevelQty < 0)
+                {
+                    ModelState.AddModelError(nameof(InventoryStockInEntryViewModel.LowLevelQty), "Low Level Qty should be at least zero.");
+                }
+
                 if (!ModelState.IsValid)
                 {
                     PopulateStockInLookups(model);
                     return View(model);
                 }
+
+                model.Notes = BuildStockInNotes(model.InvoiceNo, model.Notes);
 
                 var saved = SaveStockIn(model);
                 TempData["ResultMessage"] = saved ? "Stock in entry saved successfully." : "Stock in entry failed.";
@@ -146,6 +161,34 @@ namespace RestaurantManagementSystem.Controllers
                 PopulateStockInLookups(model);
                 return View(model);
             }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Administrator")]
+        public IActionResult DeleteStockIn(int id)
+        {
+            try
+            {
+                if (id <= 0)
+                {
+                    TempData["ResultMessage"] = "Invalid stock-in entry.";
+                    return RedirectToAction(nameof(StockIn));
+                }
+
+                var cancelled = DeleteStockInMovement(id, out var resultMessage);
+                TempData["ResultMessage"] = cancelled
+                    ? "Stock-in entry cancelled successfully. Inventory synced."
+                    : (string.IsNullOrWhiteSpace(resultMessage)
+                        ? "Stock-in entry not found or already cancelled."
+                        : resultMessage);
+            }
+            catch (Exception ex)
+            {
+                TempData["ResultMessage"] = $"Failed to cancel stock-in entry: {ex.Message}";
+            }
+
+            return RedirectToAction(nameof(StockIn));
         }
 
         public IActionResult PartyForm(int? id, bool isView = false)
@@ -411,6 +454,8 @@ ORDER BY sm.CreatedAt DESC, sm.Id DESC", connection))
                     {
                         var godownId = ToInt32(reader.GetValue(7));
                         var godownName = reader.IsDBNull(8) ? string.Empty : reader.GetString(8);
+                        var rawNotes = reader.IsDBNull(13) ? null : reader.GetString(13);
+                        var (invoiceNo, notes) = ExtractInvoiceNoAndNotes(rawNotes);
 
                         list.Add(new InventoryStockMovementListItem
                         {
@@ -427,7 +472,8 @@ ORDER BY sm.CreatedAt DESC, sm.Id DESC", connection))
                             UnitCost = ToNullableDecimal(reader.GetValue(10)),
                             PartyId = ToNullableInt32(reader.GetValue(11)),
                             PartyName = reader.IsDBNull(12) ? string.Empty : reader.GetString(12),
-                            Notes = reader.IsDBNull(13) ? null : reader.GetString(13),
+                            InvoiceNo = invoiceNo,
+                            Notes = notes,
                             CreatedBy = ToNullableInt32(reader.GetValue(14)),
                             CreatedAt = reader.IsDBNull(15) ? DateTime.UtcNow : reader.GetDateTime(15)
                         });
@@ -466,7 +512,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);", connection, transaction))
                             movementCommand.Parameters.AddWithValue("@MenuItemId", model.MenuItemId);
                             movementCommand.Parameters.AddWithValue("@GodownId", model.GodownId);
                             movementCommand.Parameters.AddWithValue("@Quantity", model.Quantity);
-                            movementCommand.Parameters.AddWithValue("@UnitCost", (object?)model.UnitCost ?? DBNull.Value);
+                            movementCommand.Parameters.AddWithValue("@UnitCost", model.UnitCost);
                             movementCommand.Parameters.AddWithValue("@PartyId", (object?)model.PartyId ?? DBNull.Value);
                             movementCommand.Parameters.AddWithValue("@Notes", (object?)model.Notes ?? DBNull.Value);
                             movementCommand.Parameters.AddWithValue("@CreatedBy", createdBy);
@@ -479,7 +525,7 @@ BEGIN
     UPDATE dbo.InventoryStock
     SET QuantityOnHand = ISNULL(QuantityOnHand, 0) + @Quantity,
         UpdatedAt = SYSUTCDATETIME(),
-        LowLevelQty = CASE WHEN @LowLevelQty IS NULL THEN LowLevelQty ELSE @LowLevelQty END
+        LowLevelQty = @LowLevelQty
     WHERE MenuItemId = @MenuItemId AND GodownId = @GodownId;
 END
 ELSE
@@ -495,8 +541,136 @@ WHERE Id = @MovementId;", connection, transaction))
                             stockCommand.Parameters.AddWithValue("@MenuItemId", model.MenuItemId);
                             stockCommand.Parameters.AddWithValue("@GodownId", model.GodownId);
                             stockCommand.Parameters.AddWithValue("@Quantity", model.Quantity);
-                            stockCommand.Parameters.AddWithValue("@LowLevelQty", (object?)model.LowLevelQty ?? DBNull.Value);
+                            stockCommand.Parameters.AddWithValue("@LowLevelQty", model.LowLevelQty);
                             stockCommand.Parameters.AddWithValue("@MovementId", movementId);
+                            stockCommand.ExecuteNonQuery();
+                        }
+
+                        transaction.Commit();
+                        return true;
+                    }
+                    catch
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
+                }
+            }
+        }
+
+        private bool DeleteStockInMovement(int movementId, out string resultMessage)
+        {
+            resultMessage = string.Empty;
+
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                connection.Open();
+                using (var transaction = connection.BeginTransaction())
+                {
+                    try
+                    {
+                        int menuItemId;
+                        int godownId;
+                        decimal quantity;
+                                                decimal unitCost;
+                                                string? existingNotes;
+                                                int createdBy;
+                                                DateTime createdAtUtc;
+
+                        using (var readCommand = new SqlCommand(@"
+SELECT TOP 1 MenuItemId, GodownId, Quantity, UnitCost, Notes, CreatedAt
+FROM dbo.InventoryStockMovements WITH (UPDLOCK, HOLDLOCK)
+WHERE Id = @Id
+  AND UPPER(MovementType) = 'IN'
+  AND UPPER(ReferenceType) = 'STOCK_IN'", connection, transaction))
+                        {
+                            readCommand.Parameters.AddWithValue("@Id", movementId);
+                            using (var reader = readCommand.ExecuteReader())
+                            {
+                                if (!reader.Read())
+                                {
+                                    transaction.Rollback();
+                                    return false;
+                                }
+
+                                menuItemId = ToInt32(reader.GetValue(0));
+                                godownId = ToInt32(reader.GetValue(1));
+                                quantity = reader.IsDBNull(2) ? 0 : ToDecimal(reader.GetValue(2));
+                                unitCost = reader.IsDBNull(3) ? 0 : ToDecimal(reader.GetValue(3));
+                                existingNotes = reader.IsDBNull(4) ? null : reader.GetString(4);
+                                createdAtUtc = reader.IsDBNull(5) ? DateTime.UtcNow : reader.GetDateTime(5);
+                            }
+                        }
+
+                        if (createdAtUtc < DateTime.UtcNow.AddMinutes(-3))
+                        {
+                            transaction.Rollback();
+                            resultMessage = "Stock-in entry can only be cancelled within 3 minutes of creation.";
+                            return false;
+                        }
+
+                        createdBy = GetCurrentUserIdOrDefault();
+
+                        using (var cancelCommand = new SqlCommand(@"
+UPDATE dbo.InventoryStockMovements
+SET MovementType = 'CANCELLED',
+    ReferenceType = 'STOCK_IN_CANCELLED',
+    Notes = @CancelledNotes
+WHERE Id = @Id", connection, transaction))
+                        {
+                            var cancelledNotes = string.IsNullOrWhiteSpace(existingNotes)
+                                ? $"Cancelled stock-in entry #{movementId}"
+                                : $"{existingNotes} | Cancelled stock-in entry #{movementId}";
+
+                            cancelCommand.Parameters.AddWithValue("@Id", movementId);
+                            cancelCommand.Parameters.AddWithValue("@CancelledNotes", cancelledNotes);
+                            var affected = cancelCommand.ExecuteNonQuery();
+                            if (affected <= 0)
+                            {
+                                transaction.Rollback();
+                                return false;
+                            }
+                        }
+
+                        using (var reverseMovementCommand = new SqlCommand(@"
+INSERT INTO dbo.InventoryStockMovements
+(
+    MovementType, ReferenceType, ReferenceId, OrderId, MenuItemId, GodownId, Quantity,
+    UnitCost, PartyId, Notes, CreatedBy, CreatedAt
+)
+VALUES
+(
+    'OUT', 'STOCK_IN_CANCELLED', @ReferenceId, NULL, @MenuItemId, @GodownId, @Quantity,
+    @UnitCost, NULL, @Notes, @CreatedBy, SYSUTCDATETIME()
+)", connection, transaction))
+                        {
+                            reverseMovementCommand.Parameters.AddWithValue("@ReferenceId", movementId);
+                            reverseMovementCommand.Parameters.AddWithValue("@MenuItemId", menuItemId);
+                            reverseMovementCommand.Parameters.AddWithValue("@GodownId", godownId);
+                            reverseMovementCommand.Parameters.AddWithValue("@Quantity", quantity);
+                            reverseMovementCommand.Parameters.AddWithValue("@UnitCost", unitCost);
+                            reverseMovementCommand.Parameters.AddWithValue("@Notes", $"Reversal for cancelled stock-in entry #{movementId}");
+                            reverseMovementCommand.Parameters.AddWithValue("@CreatedBy", createdBy);
+                            reverseMovementCommand.ExecuteNonQuery();
+                        }
+
+                        using (var stockCommand = new SqlCommand(@"
+IF EXISTS (SELECT 1 FROM dbo.InventoryStock WITH (UPDLOCK, HOLDLOCK) WHERE MenuItemId = @MenuItemId AND GodownId = @GodownId)
+BEGIN
+    UPDATE dbo.InventoryStock
+    SET QuantityOnHand = ISNULL(QuantityOnHand, 0) - @Quantity,
+        UpdatedAt = SYSUTCDATETIME()
+    WHERE MenuItemId = @MenuItemId AND GodownId = @GodownId;
+END
+ELSE
+BEGIN
+    INSERT INTO dbo.InventoryStock (MenuItemId, GodownId, QuantityOnHand, UpdatedAt, LowLevelQty)
+    VALUES (@MenuItemId, @GodownId, (0 - @Quantity), SYSUTCDATETIME(), NULL);
+END", connection, transaction))
+                        {
+                            stockCommand.Parameters.AddWithValue("@MenuItemId", menuItemId);
+                            stockCommand.Parameters.AddWithValue("@GodownId", godownId);
+                            stockCommand.Parameters.AddWithValue("@Quantity", quantity);
                             stockCommand.ExecuteNonQuery();
                         }
 
@@ -579,6 +753,62 @@ ORDER BY PartyName", connection))
                     }
                 }
             }
+        }
+
+        private static string? BuildStockInNotes(string? invoiceNo, string? notes)
+        {
+            var normalizedInvoice = string.IsNullOrWhiteSpace(invoiceNo) ? null : invoiceNo.Trim();
+            var normalizedNotes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+
+            if (string.IsNullOrWhiteSpace(normalizedInvoice))
+            {
+                return normalizedNotes;
+            }
+
+            if (string.IsNullOrWhiteSpace(normalizedNotes))
+            {
+                return $"Invoice No: {normalizedInvoice}";
+            }
+
+            return $"Invoice No: {normalizedInvoice} | Note: {normalizedNotes}";
+        }
+
+        private static (string? InvoiceNo, string? Notes) ExtractInvoiceNoAndNotes(string? rawNotes)
+        {
+            if (string.IsNullOrWhiteSpace(rawNotes))
+            {
+                return (null, null);
+            }
+
+            var text = rawNotes.Trim();
+            const string invoicePrefix = "Invoice No:";
+            const string noteDelimiter = "| Note:";
+
+            if (!text.StartsWith(invoicePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return (null, text);
+            }
+
+            var payload = text.Substring(invoicePrefix.Length).Trim();
+            if (string.IsNullOrWhiteSpace(payload))
+            {
+                return (null, null);
+            }
+
+            var delimiterIndex = payload.IndexOf(noteDelimiter, StringComparison.OrdinalIgnoreCase);
+            if (delimiterIndex < 0)
+            {
+                return (payload, null);
+            }
+
+            var invoiceNo = payload.Substring(0, delimiterIndex).Trim();
+            var noteText = payload.Substring(delimiterIndex + noteDelimiter.Length).Trim();
+
+            return
+            (
+                string.IsNullOrWhiteSpace(invoiceNo) ? null : invoiceNo,
+                string.IsNullOrWhiteSpace(noteText) ? null : noteText
+            );
         }
 
         private int GetCurrentUserIdOrDefault()

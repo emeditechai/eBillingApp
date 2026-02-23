@@ -17,16 +17,22 @@ namespace RestaurantManagementSystem.Models
         [Range(typeof(decimal), "0.001", "9999999")]
         public decimal Quantity { get; set; }
 
+        [Required]
         [Range(typeof(decimal), "0", "9999999")]
         [Display(Name = "Unit Cost")]
-        public decimal? UnitCost { get; set; }
+        public decimal UnitCost { get; set; }
 
         [Display(Name = "Party")]
         public int? PartyId { get; set; }
 
+        [Required]
         [Display(Name = "Low Level Qty")]
         [Range(typeof(decimal), "0", "9999999")]
-        public decimal? LowLevelQty { get; set; }
+        public decimal LowLevelQty { get; set; }
+
+        [Display(Name = "Invoice No")]
+        [StringLength(100)]
+        public string? InvoiceNo { get; set; }
 
         [StringLength(500)]
         public string? Notes { get; set; }
@@ -51,6 +57,7 @@ namespace RestaurantManagementSystem.Models
         public decimal? UnitCost { get; set; }
         public int? PartyId { get; set; }
         public string PartyName { get; set; } = string.Empty;
+        public string? InvoiceNo { get; set; }
         public string? Notes { get; set; }
         public int? CreatedBy { get; set; }
         public DateTime CreatedAt { get; set; }

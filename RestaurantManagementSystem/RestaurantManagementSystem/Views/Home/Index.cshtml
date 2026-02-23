@@ -565,9 +565,142 @@
     .quick-actions-section:hover h4::after {
         width: 80px;
     }
+
+    /* ERP dashboard refresh overrides */
+    body {
+        background: #f4f6f9;
+        color: #1f2937;
+    }
+
+    .dashboard-header {
+        background: linear-gradient(135deg, #1f4f8f 0%, #2563a6 100%);
+        border-radius: 0 0 12px 12px;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.18);
+    }
+
+    .dashboard-header::before,
+    .dashboard-header::after {
+        display: none;
+    }
+
+    .dashboard-header .brand-logo-wrapper {
+        background: rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        box-shadow: none;
+    }
+
+    .stats-card {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+        min-height: 128px;
+    }
+
+    .stats-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
+    }
+
+    .stats-card::before,
+    .stats-card::after,
+    .sparkline {
+        display: none;
+    }
+
+    .stats-card .icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        box-shadow: none;
+    }
+
+    .stats-card h3 {
+        font-size: 0.78rem;
+        letter-spacing: 0.4px;
+        color: #6b7280;
+        margin-bottom: 8px;
+    }
+
+    .stats-card p.number,
+    .stats-card.sales p.number,
+    .stats-card.orders p.number,
+    .stats-card.menu p.number,
+    .stats-card.cancellation p.number {
+        background: none;
+        -webkit-text-fill-color: #111827;
+        color: #111827;
+        font-size: 2rem;
+    }
+
+    .quick-actions-section {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+    }
+
+    .quick-actions {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .quick-action-btn {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        border: 1px solid #dbe3ee;
+        background: #f8fafc;
+        border-radius: 10px;
+        padding: 14px 12px;
+        color: #1f2937;
+        transition: all 0.2s ease;
+    }
+
+    .quick-action-btn:hover {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+        transform: translateY(-1px);
+        color: #1d4ed8;
+    }
+
+    .qa-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #1f4f8f;
+        color: #ffffff;
+        flex: 0 0 34px;
+    }
+
+    .qa-label {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: inherit;
+    }
+
+    .hotkey-badge {
+        position: static;
+        margin-left: auto;
+        background: #e2e8f0;
+        border: 1px solid #cbd5e1;
+        color: #334155;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        padding: 2px 8px;
+        box-shadow: none;
+    }
     
     /* Responsive */
     @@media (max-width: 768px) { 
+        .quick-actions {
+            grid-template-columns: 1fr;
+        }
         .live-clock { 
             position: static; 
             margin: 8px 0 0; 
@@ -610,7 +743,7 @@
             </div>
             @* Removed in favor of single consolidated Help button under navbar brand *@
             <div class="d-flex justify-content-between align-items-start mb-2 pt-2">
-                <h1 class="me-3"><i class="fas fa-utensils me-2" aria-hidden="true"></i>@Model.RestaurantName Dashboard</h1>
+                <h1 class="me-3"><i class="fas fa-file-invoice-dollar me-2" aria-hidden="true"></i>@Model.RestaurantName Billing Dashboard</h1>
             </div>
             <p>Welcome back, <strong>@Model.UserFullName</strong>!</p>
             <div class="d-flex justify-content-end">
@@ -650,15 +783,15 @@
                 <div class="stats-card orders py-2">
                     <div class="sparkline"><canvas id="spark-orders"></canvas></div>
                     <span class="icon"><i class="fas fa-shopping-cart"></i></span>
-                    <h3>Today's Orders</h3>
+                    <h3>Today's Bills</h3>
                     <p class="number">@Model.TodayOrders</p>
                 </div>
             </div>
             <div class="col-md-3 col-sm-6 mb-3">
                 <div class="stats-card menu py-2">
                     <div class="sparkline"><canvas id="spark-menu"></canvas></div>
-                    <span class="icon"><i class="fas fa-hamburger"></i></span>
-                    <h3>Total Menu Item Count</h3>
+                    <span class="icon"><i class="fas fa-box"></i></span>
+                    <h3>Total Items</h3>
                     <p class="number">@Model.TotalMenuItemsCount</p>
                 </div>
             </div>
@@ -666,7 +799,7 @@
                 <div class="stats-card cancellation py-2">
                     <div class="sparkline"><canvas id="spark-cancellation"></canvas></div>
                     <span class="icon"><i class="fas fa-ban"></i></span>
-                    <h3>Today's Cancellation Count</h3>
+                    <h3>Cancelled Bills Today</h3>
                     <p class="number">@Model.TodayCancellationCount</p>
                 </div>
             </div>
@@ -674,25 +807,25 @@
     <div class="row mb-4">
         <div class="col-12">
             <div class="quick-actions-section">
-                <h4><i class="fas fa-bolt me-2"></i>Quick Actions</h4>
+                <h4><i class="fas fa-th-large me-2"></i>Billing Shortcuts</h4>
                 <div class="quick-actions">
                     <a href="/Order/Create" class="quick-action-btn qa-order">
                         <div class="qa-icon"><i class="fas fa-utensils"></i></div>
-                        <span class="qa-label">New Order</span>
+                        <span class="qa-label">New Bill</span>
                         <span class="hotkey-badge">Shift+F</span>
                     </a>
                     <a href="/Order/Estimation" class="quick-action-btn qa-menu" id="menuItemsBtn" target="_blank" rel="noopener">
-                        <div class="qa-icon"><i class="fas fa-hamburger"></i></div>
-                        <span class="qa-label">Menu Items</span>
+                        <div class="qa-icon"><i class="fas fa-list"></i></div>
+                        <span class="qa-label">Item Estimation</span>
                     </a>
                     <a href="/Order/POSOrder" class="quick-action-btn qa-pos" target="_blank" rel="noopener" aria-label="Open POS Order">
                         <div class="qa-icon"><i class="fas fa-cash-register"></i></div>
-                        <span class="qa-label">POS Order</span>
+                        <span class="qa-label">POS Billing</span>
                         <span class="hotkey-badge">New Tab</span>
                     </a>
                     <a href="/Order/Dashboard" class="quick-action-btn qa-dashboard" target="_blank" rel="noopener">
                         <div class="qa-icon"><i class="fas fa-file-invoice"></i></div>
-                        <span class="qa-label">Order Dashboard</span>
+                        <span class="qa-label">Billing Dashboard</span>
                         <span class="hotkey-badge">New Tab</span>
                     </a>
                 </div>

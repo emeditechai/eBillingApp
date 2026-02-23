@@ -1,6 +1,8 @@
 @model IEnumerable<RestaurantManagementSystem.Models.InventoryStockMovementListItem>
 @{
     ViewData["Title"] = "Stock In";
+    var isAdministrator = User.IsInRole("Administrator")
+        || string.Equals(User?.FindFirst("ActiveRoleName")?.Value, "Administrator", StringComparison.OrdinalIgnoreCase);
 }
 
 <h2 class="mb-4">Stock In</h2>
@@ -23,7 +25,12 @@
             <th>Qty</th>
             <th>Unit Cost</th>
             <th>Party</th>
+            <th>Invoice No</th>
             <th>Notes</th>
+            @if (isAdministrator)
+            {
+                <th>Action</th>
+            }
         </tr>
     </thead>
     <tbody>
@@ -36,8 +43,53 @@
                 <td>@item.Quantity.ToString("0.###")</td>
                 <td>@(item.UnitCost.HasValue ? item.UnitCost.Value.ToString("0.00") : "-")</td>
                 <td>@(string.IsNullOrWhiteSpace(item.PartyName) ? "-" : item.PartyName)</td>
+                <td>@(string.IsNullOrWhiteSpace(item.InvoiceNo) ? "-" : item.InvoiceNo)</td>
                 <td>@(string.IsNullOrWhiteSpace(item.Notes) ? "-" : item.Notes)</td>
+                @if (isAdministrator)
+                {
+                    <td>
+                        <form asp-controller="Inventory" asp-action="DeleteStockIn" method="post" class="d-inline js-stockin-cancel-form">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@item.Id" />
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Cancel Stock In">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                }
             </tr>
         }
     </tbody>
 </table>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        (function () {
+            const forms = document.querySelectorAll('.js-stockin-cancel-form');
+            if (!forms || forms.length === 0) {
+                return;
+            }
+
+            forms.forEach(function (form) {
+                form.addEventListener('submit', function (event) {
+                    event.preventDefault();
+
+                    Swal.fire({
+                        title: 'Cancel Stock In Entry?',
+                        text: 'This will revert inventory stock.',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Yes, Cancel',
+                        cancelButtonText: 'No',
+                        confirmButtonColor: '#d33'
+                    }).then(function (result) {
+                        if (result.isConfirmed) {
+                            form.submit();
+                        }
+                    });
+                });
+            });
+        })();
+    </script>
+}

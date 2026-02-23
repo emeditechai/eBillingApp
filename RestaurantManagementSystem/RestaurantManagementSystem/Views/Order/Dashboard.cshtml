@@ -13,7 +13,7 @@
                 <i class="fas fa-comment-dots"></i>
             </a>
             <a asp-action="Create" class="btn dashboard-primary-btn" target="_blank" rel="noopener noreferrer">
-                <i class="fas fa-plus-circle"></i> New Order
+                <i class="fas fa-plus-circle"></i> New Bill
             </a>
         </div>
     </div>
@@ -37,38 +37,37 @@
     @* Billing-focused visual redesign (UI only) *@
     <style>
         .order-dashboard-shell {
-            background: linear-gradient(135deg, #eef5ff 0%, #f8fbff 55%, #f4f7fb 100%);
+            background: #f4f6f9;
             min-height: 100vh;
         }
         .dashboard-title {
-            color: #0f3f66;
-            text-shadow: 0 2px 10px rgba(15,63,102,0.12);
+            color: #1f2937;
             margin-bottom: 0;
             font-weight: 700;
         }
         .dashboard-icon-btn {
-            border-radius: 50%;
-            width: 46px;
-            height: 46px;
+            border-radius: 10px;
+            width: 42px;
+            height: 42px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 8px 18px rgba(37,99,235,.20);
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            box-shadow: 0 2px 8px rgba(15, 23, 42, .10);
+            background: #2563eb;
             color: #fff;
             border: none;
         }
         .dashboard-primary-btn {
-            background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
-            box-shadow: 0 8px 18px rgba(37,99,235,.25);
+            background: #2563eb;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, .10);
             border: none;
             color: #fff;
         }
         .dashboard-card {
             background: #fff;
             border: 1px solid #e2e8f0;
-            box-shadow: 0 8px 24px rgba(15, 23, 42, .08);
-            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, .06);
+            border-radius: 10px;
         }
         .card-header { padding: .6rem .9rem; }
         .card-body { padding: .8rem; }
@@ -82,37 +81,38 @@
         .btn-group .btn { padding: .2rem .4rem; }
         .table-container { max-height: 28vh; overflow: auto; }
         .metric-card {
-            border: none;
-            border-radius: 12px;
-            box-shadow: 0 10px 24px rgba(15,23,42,.12);
-            color: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, .06);
+            color: #111827;
         }
-        .metric-open { background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%); }
-        .metric-progress { background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%); }
-        .metric-ready { background: linear-gradient(135deg, #10b981 0%, #0891b2 100%); }
-        .metric-sales { background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%); }
+        .metric-open { background: #eef4ff; }
+        .metric-progress { background: #fff7ed; }
+        .metric-ready { background: #ecfeff; }
+        .metric-sales { background: #f5f3ff; }
         .metric-label {
             display: flex;
             align-items: center;
             gap: .4rem;
-            opacity: .95;
+            color: #4b5563;
+            opacity: 1;
         }
         .section-header {
-            color: #fff;
-            border: none;
+            color: #1f2937;
+            border-bottom: 1px solid #e5e7eb;
         }
-        .section-header-active { background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%); }
-        .section-header-cancel { background: linear-gradient(135deg, #dc2626 0%, #f97316 100%); }
-        .section-header-complete { background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%); }
+        .section-header-active { background: #eff6ff; }
+        .section-header-cancel { background: #fef2f2; }
+        .section-header-complete { background: #f0fdfa; }
         .section-pill {
-            background: rgba(255,255,255,.22);
-            color: #fff;
-            border: 1px solid rgba(255,255,255,.3);
+            background: #fff;
+            color: #374151;
+            border: 1px solid #d1d5db;
             font-weight: 600;
         }
-        .thead-active { background: linear-gradient(135deg, #1d4ed8 0%, #0284c7 100%); color: #fff; }
-        .thead-cancel { background: linear-gradient(135deg, #b91c1c 0%, #ea580c 100%); color: #fff; }
-        .thead-complete { background: linear-gradient(135deg, #0f766e 0%, #0ea5a5 100%); color: #fff; }
+        .thead-active { background: #dbeafe; color: #1e3a8a; }
+        .thead-cancel { background: #fee2e2; color: #991b1b; }
+        .thead-complete { background: #ccfbf1; color: #134e4a; }
         .summary-chip-walking { background-color: #0d9488; font-size: .85rem; }
         .summary-chip-b2c { background-color: #2563eb; font-size: .85rem; }
         .summary-chip-delivery { background-color: #7c3aed; font-size: .85rem; }
