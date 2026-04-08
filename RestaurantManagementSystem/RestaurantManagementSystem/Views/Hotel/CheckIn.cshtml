@@ -1,0 +1,169 @@
+@model RestaurantManagementSystem.Models.CheckInViewModel
+@{
+    ViewData["Title"] = $"Check In - {Model.Booking?.BookingNumber}";
+}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-sign-in-alt me-2"></i>Check In Guest</h2>
+        <a asp-action="BookingDetails" asp-route-id="@Model.Booking?.Id" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Back to Booking
+        </a>
+    </div>
+
+    <form asp-action="CheckIn" asp-route-id="@Model.Booking?.Id" method="post">
+        <div class="row">
+            <!-- Booking Summary -->
+            <div class="col-lg-6 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="fas fa-receipt me-2"></i>Booking Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <small class="text-muted d-block">Booking Number</small>
+                                <strong>@Model.Booking?.BookingNumber</strong>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block">Room</small>
+                                <strong>@Model.Room?.RoomNumber - @Model.Room?.RoomType?.Name</strong>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <small class="text-muted d-block">Check-in Date</small>
+                                <strong>@Model.Booking?.CheckInDate.ToString("dd MMM yyyy")</strong>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block">Check-out Date</small>
+                                <strong>@Model.Booking?.CheckOutDate.ToString("dd MMM yyyy")</strong>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <small class="text-muted d-block">Number of Nights</small>
+                                <strong>@Model.Booking?.NumberOfNights</strong>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block">Total Guests</small>
+                                <strong>@Model.Booking?.NumberOfAdults adults, @Model.Booking?.NumberOfChildren children</strong>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="row">
+                            <div class="col-6">
+                                <small class="text-muted d-block">Total Amount</small>
+                                <h4 class="text-primary mb-0">₹@Model.Booking?.TotalAmount.ToString("N2")</h4>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block">Advance Paid</small>
+                                <h4 class="text-success mb-0">₹@Model.Booking?.AdvancePayment.ToString("N2")</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Guest Information -->
+            <div class="col-lg-6 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="fas fa-user me-2"></i>Guest Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <h4 class="mb-3">@Model.Guest?.FullName</h4>
+                        <div class="mb-2">
+                            <i class="fas fa-envelope text-muted me-2"></i>@Model.Guest?.Email
+                        </div>
+                        <div class="mb-2">
+                            <i class="fas fa-phone text-muted me-2"></i>@Model.Guest?.Phone
+                        </div>
+                        @if (!string.IsNullOrEmpty(Model.Guest?.Address))
+                        {
+                            <div class="mb-2">
+                                <i class="fas fa-map-marker-alt text-muted me-2"></i>@Model.Guest?.Address
+                            </div>
+                        }
+                        <hr>
+                        <div class="row">
+                            <div class="col-6">
+                                <small class="text-muted d-block">ID Type</small>
+                                <strong>@(Model.Guest?.IdType ?? "Not provided")</strong>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block">ID Number</small>
+                                <strong>@(Model.Guest?.IdNumber ?? "Not provided")</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Check-in Form -->
+        <div class="row">
+            <div class="col-12 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-warning">
+                        <h5 class="mb-0"><i class="fas fa-clipboard-check me-2"></i>Check-in Verification</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <div class="form-check form-check-lg">
+                                    <input class="form-check-input" type="checkbox" name="IdVerified" id="idVerified" value="true">
+                                    <label class="form-check-label" for="idVerified">
+                                        <strong>ID Verified</strong>
+                                        <br><small class="text-muted">Guest identity document has been verified</small>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <div class="form-check form-check-lg">
+                                    <input class="form-check-input" type="checkbox" name="KeyCardIssued" id="keyCardIssued" value="true">
+                                    <label class="form-check-label" for="keyCardIssued">
+                                        <strong>Key Card Issued</strong>
+                                        <br><small class="text-muted">Room key card has been issued to guest</small>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label"><strong>Deposit Amount (Optional)</strong></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">₹</span>
+                                    <input type="number" name="DepositAmount" class="form-control" value="0" min="0" step="0.01" />
+                                </div>
+                                <small class="text-muted">Additional payment received at check-in</small>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-12 mb-3">
+                                <label class="form-label"><strong>Check-in Notes</strong></label>
+                                <textarea name="Notes" class="form-control" rows="3" placeholder="Any notes about the check-in..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="row">
+            <div class="col-12 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <a asp-action="BookingDetails" asp-route-id="@Model.Booking?.Id" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-1"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-sign-in-alt me-1"></i> Complete Check-in
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>

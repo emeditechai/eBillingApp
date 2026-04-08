@@ -1,0 +1,241 @@
+@model RestaurantManagementSystem.Models.CheckOutViewModel
+@{
+    ViewData["Title"] = $"Check Out - {Model.Booking?.BookingNumber}";
+}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-sign-out-alt me-2"></i>Check Out Guest</h2>
+        <a asp-action="BookingDetails" asp-route-id="@Model.Booking?.Id" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Back to Booking
+        </a>
+    </div>
+
+    <form asp-action="CheckOut" asp-route-id="@Model.Booking?.Id" method="post">
+        <div class="row">
+            <!-- Stay Summary -->
+            <div class="col-lg-6 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="fas fa-receipt me-2"></i>Stay Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <small class="text-muted d-block">Booking Number</small>
+                                <strong>@Model.Booking?.BookingNumber</strong>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block">Room</small>
+                                <strong>@Model.Room?.RoomNumber - @Model.Room?.RoomType?.Name</strong>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <small class="text-muted d-block">Check-in</small>
+                                <strong>@Model.Booking?.ActualCheckIn?.ToString("dd MMM yyyy HH:mm")</strong>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block">Check-out</small>
+                                <strong>Now</strong>
+                            </div>
+                        </div>
+                        <hr>
+                        <h5>Guest: @Model.Guest?.FullName</h5>
+                        <div class="mb-2">
+                            <i class="fas fa-phone text-muted me-2"></i>@Model.Guest?.Phone
+                        </div>
+                        <div class="mb-2">
+                            <i class="fas fa-envelope text-muted me-2"></i>@Model.Guest?.Email
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charges Summary -->
+            <div class="col-lg-6 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-warning">
+                        <h5 class="mb-0"><i class="fas fa-file-invoice-dollar me-2"></i>Charges Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-borderless">
+                            <tbody>
+                                <tr>
+                                    <td>Room Charges</td>
+                                    <td class="text-end">₹@Model.RoomCharges.ToString("N2")</td>
+                                </tr>
+                                <tr>
+                                    <td>Amount Already Paid</td>
+                                    <td class="text-end text-success">-₹@Model.AmountPaid.ToString("N2")</td>
+                                </tr>
+                                <tr class="table-light">
+                                    <td><strong>Balance Before Extra Charges</strong></td>
+                                    <td class="text-end"><strong>₹@Model.BalanceDue.ToString("N2")</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Charges -->
+        <div class="row">
+            <div class="col-12 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="fas fa-plus-circle me-2"></i>Additional Charges</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Minibar Charges</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">₹</span>
+                                    <input type="number" name="MinibarCharges" id="minibar" class="form-control extra-charge" value="0" min="0" step="0.01" />
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Laundry Charges</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">₹</span>
+                                    <input type="number" name="LaundryCharges" id="laundry" class="form-control extra-charge" value="0" min="0" step="0.01" />
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Restaurant Charges</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">₹</span>
+                                    <input type="number" name="RestaurantCharges" id="restaurant" class="form-control extra-charge" value="0" min="0" step="0.01" />
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Other Charges</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">₹</span>
+                                    <input type="number" name="OtherCharges" id="other" class="form-control extra-charge" value="0" min="0" step="0.01" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Final Bill -->
+        <div class="row">
+            <div class="col-lg-6 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="fas fa-calculator me-2"></i>Final Bill</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-borderless">
+                            <tbody>
+                                <tr>
+                                    <td>Room Charges</td>
+                                    <td class="text-end">₹@Model.RoomCharges.ToString("N2")</td>
+                                </tr>
+                                <tr>
+                                    <td>Extra Charges</td>
+                                    <td class="text-end" id="extraChargesDisplay">₹0.00</td>
+                                </tr>
+                                <tr class="table-light">
+                                    <td><strong>Grand Total</strong></td>
+                                    <td class="text-end"><strong id="grandTotal">₹@Model.RoomCharges.ToString("N2")</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Amount Paid</td>
+                                    <td class="text-end text-success">-₹@Model.AmountPaid.ToString("N2")</td>
+                                </tr>
+                                <tr class="table-primary">
+                                    <td><strong>Final Balance Due</strong></td>
+                                    <td class="text-end"><strong class="text-danger" id="finalBalance">₹@Model.BalanceDue.ToString("N2")</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Checkout Verification -->
+            <div class="col-lg-6 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0"><i class="fas fa-clipboard-check me-2"></i>Check-out Verification</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" name="RoomInspected" id="roomInspected" value="true">
+                            <label class="form-check-label" for="roomInspected">
+                                <strong>Room Inspected</strong>
+                                <br><small class="text-muted">Room has been inspected for damages</small>
+                            </label>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" name="KeyReturned" id="keyReturned" value="true">
+                            <label class="form-check-label" for="keyReturned">
+                                <strong>Key Card Returned</strong>
+                                <br><small class="text-muted">Guest has returned all room keys</small>
+                            </label>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label"><strong>Check-out Notes</strong></label>
+                            <textarea name="Notes" class="form-control" rows="3" placeholder="Any notes about the check-out..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="row">
+            <div class="col-12 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <a asp-action="BookingDetails" asp-route-id="@Model.Booking?.Id" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-1"></i> Cancel
+                            </a>
+                            <div>
+                                <button type="button" class="btn btn-outline-primary me-2" onclick="window.print()">
+                                    <i class="fas fa-print me-1"></i> Print Invoice
+                                </button>
+                                <button type="submit" class="btn btn-info btn-lg">
+                                    <i class="fas fa-sign-out-alt me-1"></i> Complete Check-out
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            var roomCharges = @Model.RoomCharges;
+            var amountPaid = @Model.AmountPaid;
+            
+            function calculateTotals() {
+                var minibar = parseFloat($('#minibar').val()) || 0;
+                var laundry = parseFloat($('#laundry').val()) || 0;
+                var restaurant = parseFloat($('#restaurant').val()) || 0;
+                var other = parseFloat($('#other').val()) || 0;
+                
+                var extraCharges = minibar + laundry + restaurant + other;
+                var grandTotal = roomCharges + extraCharges;
+                var finalBalance = grandTotal - amountPaid;
+                
+                $('#extraChargesDisplay').text('₹' + extraCharges.toFixed(2));
+                $('#grandTotal').text('₹' + grandTotal.toFixed(2));
+                $('#finalBalance').text('₹' + finalBalance.toFixed(2));
+            }
+            
+            $('.extra-charge').on('input', calculateTotals);
+        });
+    </script>
+}

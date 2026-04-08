@@ -1,0 +1,290 @@
+@model RestaurantManagementSystem.Models.BookingFormViewModel
+@{
+    ViewData["Title"] = "Create Booking";
+}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-calendar-plus me-2"></i>Create New Booking</h2>
+        <div>
+            <a asp-action="SearchRooms" class="btn btn-outline-secondary">
+                <i class="fas fa-search me-1"></i> Search Rooms
+            </a>
+            <a asp-action="Bookings" class="btn btn-outline-secondary">
+                <i class="fas fa-list me-1"></i> All Bookings
+            </a>
+        </div>
+    </div>
+
+    <form asp-action="CreateBooking" method="post">
+        <div class="row">
+            <!-- Guest Information -->
+            <div class="col-lg-6 mb-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="fas fa-user me-2"></i>Guest Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="IsNewGuest" id="newGuest" value="true" checked="@Model.IsNewGuest" onchange="toggleGuestForm(true)">
+                                <label class="form-check-label" for="newGuest">New Guest</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="IsNewGuest" id="existingGuest" value="false" checked="@(!Model.IsNewGuest)" onchange="toggleGuestForm(false)">
+                                <label class="form-check-label" for="existingGuest">Existing Guest</label>
+                            </div>
+                        </div>
+
+                        <!-- Existing Guest Selection -->
+                        <div id="existingGuestSelect" style="display: none;">
+                            <div class="mb-3">
+                                <label class="form-label">Select Guest</label>
+                                <select name="SelectedGuestId" class="form-select">
+                                    <option value="">-- Select Guest --</option>
+                                    @foreach (var guest in Model.ExistingGuests)
+                                    {
+                                        <option value="@guest.Id">@guest.FullName - @guest.Phone</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- New Guest Form -->
+                        <div id="newGuestForm">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">First Name <span class="text-danger">*</span></label>
+                                    <input type="text" name="Guest.FirstName" class="form-control" value="@Model.Guest.FirstName" required />
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Last Name <span class="text-danger">*</span></label>
+                                    <input type="text" name="Guest.LastName" class="form-control" value="@Model.Guest.LastName" required />
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Email <span class="text-danger">*</span></label>
+                                    <input type="email" name="Guest.Email" class="form-control" value="@Model.Guest.Email" required />
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Phone <span class="text-danger">*</span></label>
+                                    <input type="tel" name="Guest.Phone" class="form-control" value="@Model.Guest.Phone" required />
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Address</label>
+                                <textarea name="Guest.Address" class="form-control" rows="2">@Model.Guest.Address</textarea>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">City</label>
+                                    <input type="text" name="Guest.City" class="form-control" value="@Model.Guest.City" />
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Country</label>
+                                    <input type="text" name="Guest.Country" class="form-control" value="@(Model.Guest.Country ?? "India")" />
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">ID Type</label>
+                                    <select name="Guest.IdType" class="form-select">
+                                        <option value="">Select ID Type</option>
+                                        <option value="Aadhar">Aadhar Card</option>
+                                        <option value="Passport">Passport</option>
+                                        <option value="DrivingLicense">Driving License</option>
+                                        <option value="VoterId">Voter ID</option>
+                                        <option value="PAN">PAN Card</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">ID Number</label>
+                                    <input type="text" name="Guest.IdNumber" class="form-control" value="@Model.Guest.IdNumber" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Booking Details -->
+            <div class="col-lg-6 mb-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="fas fa-calendar me-2"></i>Booking Details</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Check-in Date <span class="text-danger">*</span></label>
+                                <input type="date" name="Booking.CheckInDate" id="checkInDate" class="form-control" 
+                                       value="@Model.Booking.CheckInDate.ToString("yyyy-MM-dd")" 
+                                       min="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Check-out Date <span class="text-danger">*</span></label>
+                                <input type="date" name="Booking.CheckOutDate" id="checkOutDate" class="form-control" 
+                                       value="@Model.Booking.CheckOutDate.ToString("yyyy-MM-dd")" 
+                                       min="@DateTime.Today.AddDays(1).ToString("yyyy-MM-dd")" required />
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Select Room <span class="text-danger">*</span></label>
+                            <select name="Booking.RoomId" id="roomSelect" class="form-select" required>
+                                <option value="">-- Select Room --</option>
+                                @foreach (var room in Model.AvailableRooms)
+                                {
+                                    <option value="@room.Id" 
+                                            data-price="@room.RoomType?.BasePrice"
+                                            selected="@(Model.Booking.RoomId == room.Id)">
+                                        Room @room.RoomNumber - @room.RoomType?.Name (₹@room.RoomType?.BasePrice.ToString("N0")/night)
+                                    </option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Number of Adults <span class="text-danger">*</span></label>
+                                <select name="Booking.NumberOfAdults" class="form-select" required>
+                                    @for (int i = 1; i <= 10; i++)
+                                    {
+                                        <option value="@i" selected="@(Model.Booking.NumberOfAdults == i)">@i</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Number of Children</label>
+                                <select name="Booking.NumberOfChildren" class="form-select">
+                                    @for (int i = 0; i <= 5; i++)
+                                    {
+                                        <option value="@i" selected="@(Model.Booking.NumberOfChildren == i)">@i</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Booking Source</label>
+                            <select name="Booking.BookingSource" class="form-select">
+                                <option value="Direct" selected="@(Model.Booking.BookingSource == "Direct")">Direct</option>
+                                <option value="Phone" selected="@(Model.Booking.BookingSource == "Phone")">Phone</option>
+                                <option value="Website" selected="@(Model.Booking.BookingSource == "Website")">Website</option>
+                                <option value="WalkIn" selected="@(Model.Booking.BookingSource == "WalkIn")">Walk-in</option>
+                                <option value="Agent" selected="@(Model.Booking.BookingSource == "Agent")">Travel Agent</option>
+                                <option value="OTA" selected="@(Model.Booking.BookingSource == "OTA")">OTA (Online)</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Special Requests</label>
+                            <textarea name="Booking.SpecialRequests" class="form-control" rows="3" 
+                                      placeholder="Any special requests or preferences...">@Model.Booking.SpecialRequests</textarea>
+                        </div>
+
+                        <!-- Price Summary -->
+                        <div class="card bg-light border-0 mt-3">
+                            <div class="card-body">
+                                <h6 class="mb-3">Price Summary</h6>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Room Rate:</span>
+                                    <span id="roomRate">₹0.00</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Number of Nights:</span>
+                                    <span id="numNights">0</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Subtotal:</span>
+                                    <span id="subtotal">₹0.00</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>GST (18%):</span>
+                                    <span id="taxAmount">₹0.00</span>
+                                </div>
+                                <hr>
+                                <div class="d-flex justify-content-between">
+                                    <strong>Total Amount:</strong>
+                                    <strong id="totalAmount" class="text-primary">₹0.00</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-end mb-4">
+            <a asp-action="Bookings" class="btn btn-outline-secondary me-2">
+                <i class="fas fa-times me-1"></i> Cancel
+            </a>
+            <button type="submit" class="btn btn-success btn-lg">
+                <i class="fas fa-check me-1"></i> Create Booking
+            </button>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        function toggleGuestForm(isNew) {
+            if (isNew) {
+                $('#newGuestForm').show();
+                $('#existingGuestSelect').hide();
+                $('#newGuestForm input').prop('required', true);
+            } else {
+                $('#newGuestForm').hide();
+                $('#existingGuestSelect').show();
+                $('#newGuestForm input').prop('required', false);
+            }
+        }
+
+        function calculatePrice() {
+            var checkIn = new Date($('#checkInDate').val());
+            var checkOut = new Date($('#checkOutDate').val());
+            var roomPrice = parseFloat($('#roomSelect option:selected').data('price')) || 0;
+            
+            if (checkIn && checkOut && checkOut > checkIn) {
+                var nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
+                var subtotal = roomPrice * nights;
+                var tax = subtotal * 0.18;
+                var total = subtotal + tax;
+                
+                $('#roomRate').text('₹' + roomPrice.toFixed(2));
+                $('#numNights').text(nights);
+                $('#subtotal').text('₹' + subtotal.toFixed(2));
+                $('#taxAmount').text('₹' + tax.toFixed(2));
+                $('#totalAmount').text('₹' + total.toFixed(2));
+            }
+        }
+
+        $(document).ready(function() {
+            // Initial calculation
+            calculatePrice();
+            
+            // Recalculate on change
+            $('#checkInDate, #checkOutDate, #roomSelect').change(function() {
+                calculatePrice();
+            });
+            
+            // Update checkout min date when checkin changes
+            $('#checkInDate').change(function() {
+                var checkIn = new Date($(this).val());
+                checkIn.setDate(checkIn.getDate() + 1);
+                var minCheckout = checkIn.toISOString().split('T')[0];
+                $('#checkOutDate').attr('min', minCheckout);
+                
+                if ($('#checkOutDate').val() < minCheckout) {
+                    $('#checkOutDate').val(minCheckout);
+                }
+            });
+            
+            // Handle guest type toggle
+            $('input[name="IsNewGuest"]').change(function() {
+                toggleGuestForm($(this).val() === 'true');
+            });
+        });
+    </script>
+}

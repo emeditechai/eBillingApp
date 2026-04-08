@@ -1,0 +1,200 @@
+@model RestaurantManagementSystem.Models.BookingListViewModel
+@{
+    ViewData["Title"] = "Hotel Bookings";
+}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-calendar-alt me-2"></i>Hotel Bookings</h2>
+        <div>
+            <a asp-action="Dashboard" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i> Dashboard
+            </a>
+            <a asp-action="CreateBooking" class="btn btn-success">
+                <i class="fas fa-plus me-1"></i> New Booking
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label">From Date</label>
+                    <input type="date" name="fromDate" class="form-control" value="@Model.FromDate?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">To Date</label>
+                    <input type="date" name="toDate" class="form-control" value="@Model.ToDate?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">All Status</option>
+                        <option value="0" selected="@(Model.Status == BookingStatus.Pending)">Pending</option>
+                        <option value="1" selected="@(Model.Status == BookingStatus.Confirmed)">Confirmed</option>
+                        <option value="2" selected="@(Model.Status == BookingStatus.CheckedIn)">Checked In</option>
+                        <option value="3" selected="@(Model.Status == BookingStatus.CheckedOut)">Checked Out</option>
+                        <option value="4" selected="@(Model.Status == BookingStatus.Cancelled)">Cancelled</option>
+                        <option value="5" selected="@(Model.Status == BookingStatus.NoShow)">No Show</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Search</label>
+                    <input type="text" name="search" class="form-control" placeholder="Booking #, Guest name, Email..." value="@Model.SearchTerm" />
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="fas fa-filter me-1"></i> Filter
+                    </button>
+                    <a asp-action="Bookings" class="btn btn-outline-secondary">
+                        <i class="fas fa-times me-1"></i> Clear
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Results Summary -->
+    <div class="mb-3">
+        <span class="text-muted">Showing <strong>@Model.Bookings.Count</strong> bookings</span>
+    </div>
+
+    <!-- Bookings Table -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-body">
+            @if (Model.Bookings.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover" id="bookingsTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Booking #</th>
+                                <th>Guest</th>
+                                <th>Room</th>
+                                <th>Check-in</th>
+                                <th>Check-out</th>
+                                <th>Nights</th>
+                                <th>Status</th>
+                                <th>Amount</th>
+                                <th>Payment</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var booking in Model.Bookings)
+                            {
+                                var statusClass = booking.Status switch
+                                {
+                                    BookingStatus.Pending => "warning",
+                                    BookingStatus.Confirmed => "primary",
+                                    BookingStatus.CheckedIn => "success",
+                                    BookingStatus.CheckedOut => "secondary",
+                                    BookingStatus.Cancelled => "danger",
+                                    BookingStatus.NoShow => "dark",
+                                    _ => "secondary"
+                                };
+                                var paymentClass = booking.PaymentStatus switch
+                                {
+                                    PaymentStatus.Pending => "warning",
+                                    PaymentStatus.PartiallyPaid => "info",
+                                    PaymentStatus.Paid => "success",
+                                    PaymentStatus.Refunded => "secondary",
+                                    _ => "secondary"
+                                };
+                                <tr>
+                                    <td>
+                                        <a asp-action="BookingDetails" asp-route-id="@booking.Id" class="fw-bold">
+                                            @booking.BookingNumber
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <div>@booking.Guest?.FullName</div>
+                                        <small class="text-muted">@booking.Guest?.Phone</small>
+                                    </td>
+                                    <td>
+                                        <div>@booking.Room?.RoomNumber</div>
+                                        <small class="text-muted">@booking.Room?.RoomType?.Name</small>
+                                    </td>
+                                    <td>@booking.CheckInDate.ToString("dd MMM yyyy")</td>
+                                    <td>@booking.CheckOutDate.ToString("dd MMM yyyy")</td>
+                                    <td>@booking.NumberOfNights</td>
+                                    <td><span class="badge bg-@statusClass">@booking.Status</span></td>
+                                    <td>₹@booking.TotalAmount.ToString("N0")</td>
+                                    <td><span class="badge bg-@paymentClass">@booking.PaymentStatus</span></td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a asp-action="BookingDetails" asp-route-id="@booking.Id" class="btn btn-outline-primary" title="View Details">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            @if (booking.Status == BookingStatus.Confirmed)
+                                            {
+                                                <a asp-action="CheckIn" asp-route-id="@booking.Id" class="btn btn-success" title="Check In">
+                                                    <i class="fas fa-sign-in-alt"></i>
+                                                </a>
+                                            }
+                                            @if (booking.Status == BookingStatus.CheckedIn)
+                                            {
+                                                <a asp-action="CheckOut" asp-route-id="@booking.Id" class="btn btn-info" title="Check Out">
+                                                    <i class="fas fa-sign-out-alt"></i>
+                                                </a>
+                                            }
+                                            @if (booking.Status == BookingStatus.Pending || booking.Status == BookingStatus.Confirmed)
+                                            {
+                                                <button type="button" class="btn btn-outline-danger cancel-booking" data-id="@booking.Id" title="Cancel">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-5">
+                    <i class="fas fa-calendar-times fa-4x text-muted mb-3"></i>
+                    <h4>No bookings found</h4>
+                    <p class="text-muted">No bookings match your search criteria.</p>
+                    <a asp-action="CreateBooking" class="btn btn-success">
+                        <i class="fas fa-plus me-1"></i> Create New Booking
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Initialize DataTable
+            $('#bookingsTable').DataTable({
+                order: [[3, 'desc']],
+                pageLength: 25,
+                language: {
+                    search: "Quick Search:"
+                }
+            });
+            
+            // Handle booking cancellation
+            $('.cancel-booking').click(function() {
+                var bookingId = $(this).data('id');
+                if (confirm('Are you sure you want to cancel this booking?')) {
+                    $.post('@Url.Action("CancelBooking")', { id: bookingId }, function(response) {
+                        if (response.success) {
+                            toastr.success(response.message);
+                            location.reload();
+                        } else {
+                            toastr.error(response.message);
+                        }
+                    });
+                }
+            });
+        });
+    </script>
+}

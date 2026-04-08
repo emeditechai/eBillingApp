@@ -1,0 +1,131 @@
+@model RestaurantManagementSystem.Models.GuestListViewModel
+@{
+    ViewData["Title"] = "Hotel Guests";
+}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-users me-2"></i>Hotel Guests</h2>
+        <div>
+            <a asp-action="Dashboard" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i> Dashboard
+            </a>
+            <a asp-action="CreateGuest" class="btn btn-primary">
+                <i class="fas fa-plus me-1"></i> Add Guest
+            </a>
+        </div>
+    </div>
+
+    <!-- Search -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-9">
+                    <label class="form-label">Search Guests</label>
+                    <input type="text" name="search" class="form-control" placeholder="Search by name, email, or phone..." value="@Model.SearchTerm" />
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="fas fa-search me-1"></i> Search
+                    </button>
+                    <a asp-action="Guests" class="btn btn-outline-secondary">
+                        <i class="fas fa-times me-1"></i> Clear
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Results Summary -->
+    <div class="mb-3">
+        <span class="text-muted">Showing <strong>@Model.TotalCount</strong> guests</span>
+    </div>
+
+    <!-- Guests Table -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-body">
+            @if (Model.Guests.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover" id="guestsTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>City</th>
+                                <th>Country</th>
+                                <th>VIP</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var guest in Model.Guests)
+                            {
+                                <tr>
+                                    <td>
+                                        <a asp-action="GuestDetails" asp-route-id="@guest.Id" class="fw-bold">
+                                            @guest.FullName
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <a href="mailto:@guest.Email">@guest.Email</a>
+                                    </td>
+                                    <td>
+                                        <a href="tel:@guest.Phone">@guest.Phone</a>
+                                    </td>
+                                    <td>@guest.City</td>
+                                    <td>@guest.Country</td>
+                                    <td>
+                                        @if (guest.IsVip)
+                                        {
+                                            <span class="badge bg-warning"><i class="fas fa-star"></i> VIP</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a asp-action="GuestDetails" asp-route-id="@guest.Id" class="btn btn-outline-primary" title="View">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <a asp-action="EditGuest" asp-route-id="@guest.Id" class="btn btn-outline-secondary" title="Edit">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <a asp-action="CreateBooking" asp-route-guestId="@guest.Id" class="btn btn-outline-success" title="Book">
+                                                <i class="fas fa-calendar-plus"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-5">
+                    <i class="fas fa-users fa-4x text-muted mb-3"></i>
+                    <h4>No guests found</h4>
+                    <p class="text-muted">No guests match your search criteria.</p>
+                    <a asp-action="CreateGuest" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i> Add New Guest
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('#guestsTable').DataTable({
+                order: [[0, 'asc']],
+                pageLength: 25,
+                language: {
+                    search: "Quick Search:"
+                }
+            });
+        });
+    </script>
+}

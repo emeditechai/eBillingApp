@@ -1,0 +1,140 @@
+@model RestaurantManagementSystem.Models.HotelRoom
+@{
+    ViewData["Title"] = Model.Id > 0 ? "Edit Room" : "Add New Room";
+    var isEdit = Model.Id > 0;
+    var roomTypes = ViewBag.RoomTypes as List<RestaurantManagementSystem.Models.RoomType>;
+}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas @(isEdit ? "fa-edit" : "fa-plus") me-2"></i>@ViewData["Title"]</h2>
+        <a asp-action="Rooms" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Back to Rooms
+        </a>
+    </div>
+
+    <form asp-action="@(isEdit ? "EditRoom" : "CreateRoom")" method="post">
+        @if (isEdit)
+        {
+            <input type="hidden" name="Id" value="@Model.Id" />
+        }
+
+        <div class="row">
+            <div class="col-lg-6 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="fas fa-door-open me-2"></i>Room Details</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Room Number <span class="text-danger">*</span></label>
+                                <input type="text" name="RoomNumber" class="form-control" value="@Model.RoomNumber" required placeholder="e.g., 101, 202" />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Floor <span class="text-danger">*</span></label>
+                                <select name="Floor" class="form-select" required>
+                                    @for (int i = 1; i <= 20; i++)
+                                    {
+                                        <option value="@i" selected="@(Model.Floor == i)">Floor @i</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Room Type <span class="text-danger">*</span></label>
+                            <select name="RoomTypeId" class="form-select" required>
+                                <option value="">-- Select Room Type --</option>
+                                @if (roomTypes != null)
+                                {
+                                    @foreach (var type in roomTypes)
+                                    {
+                                        <option value="@type.Id" selected="@(Model.RoomTypeId == type.Id)">
+                                            @type.Name - ₹@type.BasePrice.ToString("N0")/night
+                                        </option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        @if (isEdit)
+                        {
+                            <div class="mb-3">
+                                <label class="form-label">Status</label>
+                                <select name="Status" class="form-select">
+                                    <option value="0" selected="@(Model.Status == RoomStatus.Available)">Available</option>
+                                    <option value="1" selected="@(Model.Status == RoomStatus.Occupied)">Occupied</option>
+                                    <option value="2" selected="@(Model.Status == RoomStatus.Reserved)">Reserved</option>
+                                    <option value="3" selected="@(Model.Status == RoomStatus.Maintenance)">Maintenance</option>
+                                    <option value="4" selected="@(Model.Status == RoomStatus.Cleaning)">Cleaning</option>
+                                    <option value="5" selected="@(Model.Status == RoomStatus.OutOfOrder)">Out of Order</option>
+                                </select>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="fas fa-star me-2"></i>Features</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" name="HasView" id="hasView" value="true" checked="@Model.HasView">
+                            <label class="form-check-label" for="hasView">
+                                <strong><i class="fas fa-mountain me-1"></i>Has View</strong>
+                            </label>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">View Type</label>
+                            <select name="ViewType" class="form-select">
+                                <option value="">-- No View --</option>
+                                <option value="City" selected="@(Model.ViewType == "City")">City View</option>
+                                <option value="Garden" selected="@(Model.ViewType == "Garden")">Garden View</option>
+                                <option value="Pool" selected="@(Model.ViewType == "Pool")">Pool View</option>
+                                <option value="Mountain" selected="@(Model.ViewType == "Mountain")">Mountain View</option>
+                                <option value="Ocean" selected="@(Model.ViewType == "Ocean")">Ocean View</option>
+                                <option value="Lake" selected="@(Model.ViewType == "Lake")">Lake View</option>
+                                <option value="Panoramic" selected="@(Model.ViewType == "Panoramic")">Panoramic View</option>
+                            </select>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" name="IsAccessible" id="isAccessible" value="true" checked="@Model.IsAccessible">
+                            <label class="form-check-label" for="isAccessible">
+                                <strong><i class="fas fa-wheelchair me-1"></i>Wheelchair Accessible</strong>
+                            </label>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" name="IsSmoking" id="isSmoking" value="true" checked="@Model.IsSmoking">
+                            <label class="form-check-label" for="isSmoking">
+                                <strong><i class="fas fa-smoking me-1"></i>Smoking Allowed</strong>
+                            </label>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Notes</label>
+                            <textarea name="Notes" class="form-control" rows="3" placeholder="Any special notes about this room...">@Model.Notes</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <a asp-action="Rooms" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-1"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-save me-1"></i> @(isEdit ? "Update Room" : "Add Room")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>

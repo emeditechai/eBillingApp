@@ -1,0 +1,307 @@
+@model RestaurantManagementSystem.Models.RoomDetailsViewModel
+@{
+    ViewData["Title"] = $"Room {Model.Room?.RoomNumber}";
+    var statusClass = Model.Room?.Status switch
+    {
+        RoomStatus.Available => "success",
+        RoomStatus.Occupied => "danger",
+        RoomStatus.Reserved => "warning",
+        RoomStatus.Maintenance => "secondary",
+        RoomStatus.Cleaning => "info",
+        _ => "dark"
+    };
+}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-door-open me-2"></i>Room @Model.Room?.RoomNumber</h2>
+            <span class="badge bg-@statusClass fs-6">@Model.Room?.Status</span>
+        </div>
+        <div>
+            <a asp-action="Rooms" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i> Back to Rooms
+            </a>
+            <a asp-action="EditRoom" asp-route-id="@Model.Room?.Id" class="btn btn-primary">
+                <i class="fas fa-edit me-1"></i> Edit Room
+            </a>
+            @if (Model.Room?.Status == RoomStatus.Available)
+            {
+                <a asp-action="CreateBooking" asp-route-roomId="@Model.Room?.Id" class="btn btn-success">
+                    <i class="fas fa-calendar-plus me-1"></i> Book Room
+                </a>
+            }
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Room Information -->
+        <div class="col-lg-4 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Room Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <h1 class="display-4 mb-0">@Model.Room?.RoomNumber</h1>
+                        <span class="text-muted">Floor @Model.Room?.Floor</span>
+                    </div>
+                    <hr>
+                    <div class="row mb-2">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Room Type</small>
+                            <strong>@Model.RoomType?.Name</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Bed Type</small>
+                            <strong><i class="fas fa-bed me-1"></i>@Model.RoomType?.BedType</strong>
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Max Occupancy</small>
+                            <strong><i class="fas fa-users me-1"></i>@Model.RoomType?.MaxOccupancy guests</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Room Size</small>
+                            <strong><i class="fas fa-ruler-combined me-1"></i>@(Model.RoomType?.RoomSize ?? 0) sq ft</strong>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="text-center">
+                        <h3 class="text-primary mb-0">₹@(Model.RoomType?.BasePrice.ToString("N0") ?? "0")</h3>
+                        <small class="text-muted">per night</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Room Features -->
+        <div class="col-lg-4 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-star me-2"></i>Room Features</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        @if (Model.Room?.HasView == true)
+                        {
+                            <span class="badge bg-success me-2 mb-2">
+                                <i class="fas fa-mountain me-1"></i>@Model.Room?.ViewType View
+                            </span>
+                        }
+                        @if (Model.Room?.IsAccessible == true)
+                        {
+                            <span class="badge bg-primary me-2 mb-2">
+                                <i class="fas fa-wheelchair me-1"></i>Accessible
+                            </span>
+                        }
+                        @if (Model.Room?.IsSmoking == true)
+                        {
+                            <span class="badge bg-secondary me-2 mb-2">
+                                <i class="fas fa-smoking me-1"></i>Smoking Allowed
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-success me-2 mb-2">
+                                <i class="fas fa-smoking-ban me-1"></i>Non-Smoking
+                            </span>
+                        }
+                    </div>
+                    
+                    <h6 class="mt-4 mb-3">Amenities</h6>
+                    @if (Model.Amenities?.Any() == true)
+                    {
+                        <div class="row">
+                            @foreach (var amenity in Model.Amenities)
+                            {
+                                <div class="col-6 mb-2">
+                                    <i class="fas @amenity.Icon text-primary me-2"></i>@amenity.Name
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted">No amenities listed</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Room Status -->
+        <div class="col-lg-4 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0"><i class="fas fa-cog me-2"></i>Room Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Current Status</label>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-sm status-btn @(Model.Room?.Status == RoomStatus.Available ? "btn-success" : "btn-outline-success")" 
+                                    data-status="0" data-id="@Model.Room?.Id">
+                                <i class="fas fa-door-open me-1"></i>Available
+                            </button>
+                            <button type="button" class="btn btn-sm status-btn @(Model.Room?.Status == RoomStatus.Maintenance ? "btn-secondary" : "btn-outline-secondary")" 
+                                    data-status="3" data-id="@Model.Room?.Id">
+                                <i class="fas fa-wrench me-1"></i>Maintenance
+                            </button>
+                            <button type="button" class="btn btn-sm status-btn @(Model.Room?.Status == RoomStatus.Cleaning ? "btn-info" : "btn-outline-info")" 
+                                    data-status="4" data-id="@Model.Room?.Id">
+                                <i class="fas fa-broom me-1"></i>Cleaning
+                            </button>
+                            <button type="button" class="btn btn-sm status-btn @(Model.Room?.Status == RoomStatus.OutOfOrder ? "btn-dark" : "btn-outline-dark")" 
+                                    data-status="5" data-id="@Model.Room?.Id">
+                                <i class="fas fa-ban me-1"></i>Out of Order
+                            </button>
+                        </div>
+                    </div>
+                    
+                    @if (!string.IsNullOrEmpty(Model.Room?.Notes))
+                    {
+                        <hr>
+                        <h6>Notes</h6>
+                        <p class="text-muted">@Model.Room.Notes</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Current Booking -->
+    @if (Model.CurrentBooking != null)
+    {
+        <div class="row">
+            <div class="col-12 mb-4">
+                <div class="card border-0 shadow-sm border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="mb-0"><i class="fas fa-bed me-2"></i>Current Guest</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <small class="text-muted d-block">Booking #</small>
+                                <strong>
+                                    <a asp-action="BookingDetails" asp-route-id="@Model.CurrentBooking.Id">
+                                        @Model.CurrentBooking.BookingNumber
+                                    </a>
+                                </strong>
+                            </div>
+                            <div class="col-md-3">
+                                <small class="text-muted d-block">Guest</small>
+                                <strong>@Model.CurrentBooking.Guest?.FullName</strong>
+                            </div>
+                            <div class="col-md-2">
+                                <small class="text-muted d-block">Check-in</small>
+                                <strong>@Model.CurrentBooking.ActualCheckIn?.ToString("dd MMM HH:mm")</strong>
+                            </div>
+                            <div class="col-md-2">
+                                <small class="text-muted d-block">Check-out</small>
+                                <strong>@Model.CurrentBooking.CheckOutDate.ToString("dd MMM yyyy")</strong>
+                            </div>
+                            <div class="col-md-2 text-end">
+                                <a asp-action="CheckOut" asp-route-id="@Model.CurrentBooking.Id" class="btn btn-info">
+                                    <i class="fas fa-sign-out-alt me-1"></i> Check Out
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Upcoming Bookings -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Upcoming Bookings</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.UpcomingBookings?.Any() == true)
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Booking #</th>
+                                        <th>Guest</th>
+                                        <th>Check-in</th>
+                                        <th>Check-out</th>
+                                        <th>Nights</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var booking in Model.UpcomingBookings)
+                                    {
+                                        var bookingStatusClass = booking.Status switch
+                                        {
+                                            BookingStatus.Pending => "warning",
+                                            BookingStatus.Confirmed => "primary",
+                                            _ => "secondary"
+                                        };
+                                        <tr>
+                                            <td>
+                                                <a asp-action="BookingDetails" asp-route-id="@booking.Id">
+                                                    @booking.BookingNumber
+                                                </a>
+                                            </td>
+                                            <td>@booking.Guest?.FullName</td>
+                                            <td>@booking.CheckInDate.ToString("dd MMM yyyy")</td>
+                                            <td>@booking.CheckOutDate.ToString("dd MMM yyyy")</td>
+                                            <td>@booking.NumberOfNights</td>
+                                            <td><span class="badge bg-@bookingStatusClass">@booking.Status</span></td>
+                                            <td>
+                                                <a asp-action="BookingDetails" asp-route-id="@booking.Id" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4">
+                            <i class="fas fa-calendar-check fa-3x text-muted mb-3"></i>
+                            <p>No upcoming bookings for this room</p>
+                            @if (Model.Room?.Status == RoomStatus.Available)
+                            {
+                                <a asp-action="CreateBooking" asp-route-roomId="@Model.Room?.Id" class="btn btn-success">
+                                    <i class="fas fa-calendar-plus me-1"></i> Book This Room
+                                </a>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('.status-btn').click(function() {
+                var roomId = $(this).data('id');
+                var status = $(this).data('status');
+                
+                $.post('@Url.Action("UpdateRoomStatus")', { id: roomId, status: status }, function(response) {
+                    if (response.success) {
+                        toastr.success(response.message);
+                        location.reload();
+                    } else {
+                        toastr.error(response.message);
+                    }
+                });
+            });
+        });
+    </script>
+}

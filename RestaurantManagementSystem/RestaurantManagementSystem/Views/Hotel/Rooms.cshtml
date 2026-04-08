@@ -1,0 +1,211 @@
+@model List<RestaurantManagementSystem.Models.HotelRoom>
+@{
+    ViewData["Title"] = "Hotel Rooms";
+    var roomTypes = ViewBag.RoomTypes as List<RestaurantManagementSystem.Models.RoomType>;
+    var floors = ViewBag.Floors as List<int>;
+}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-door-open me-2"></i>Hotel Rooms</h2>
+        <div>
+            <a asp-action="Dashboard" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i> Dashboard
+            </a>
+            <a asp-action="CreateRoom" class="btn btn-primary">
+                <i class="fas fa-plus me-1"></i> Add Room
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Floor</label>
+                    <select name="floor" class="form-select">
+                        <option value="">All Floors</option>
+                        @if (floors != null)
+                        {
+                            @foreach (var floor in floors)
+                            {
+                                <option value="@floor" selected="@(ViewBag.SelectedFloor == floor)">Floor @floor</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Room Type</label>
+                    <select name="roomTypeId" class="form-select">
+                        <option value="">All Room Types</option>
+                        @if (roomTypes != null)
+                        {
+                            @foreach (var type in roomTypes)
+                            {
+                                <option value="@type.Id" selected="@(ViewBag.SelectedRoomTypeId == type.Id)">@type.Name</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="fas fa-filter me-1"></i> Filter
+                    </button>
+                    <a asp-action="Rooms" class="btn btn-outline-secondary">
+                        <i class="fas fa-times me-1"></i> Clear
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Room Grid View -->
+    <div class="row">
+        @foreach (var floor in Model.GroupBy(r => r.Floor).OrderBy(g => g.Key))
+        {
+            <div class="col-12 mb-4">
+                <h5 class="mb-3"><i class="fas fa-building me-2"></i>Floor @floor.Key</h5>
+                <div class="row">
+                    @foreach (var room in floor.OrderBy(r => r.RoomNumber))
+                    {
+                        var statusClass = room.Status switch
+                        {
+                            RoomStatus.Available => "success",
+                            RoomStatus.Occupied => "danger",
+                            RoomStatus.Reserved => "warning",
+                            RoomStatus.Maintenance => "secondary",
+                            RoomStatus.Cleaning => "info",
+                            _ => "dark"
+                        };
+                        var statusIcon = room.Status switch
+                        {
+                            RoomStatus.Available => "fa-door-open",
+                            RoomStatus.Occupied => "fa-bed",
+                            RoomStatus.Reserved => "fa-clock",
+                            RoomStatus.Maintenance => "fa-wrench",
+                            RoomStatus.Cleaning => "fa-broom",
+                            _ => "fa-ban"
+                        };
+                        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+                            <div class="card border-0 shadow-sm h-100 room-card" style="border-top: 4px solid var(--bs-@statusClass) !important;">
+                                <div class="card-body text-center">
+                                    <div class="mb-2">
+                                        <span class="badge bg-@statusClass">
+                                            <i class="fas @statusIcon me-1"></i>@room.Status
+                                        </span>
+                                    </div>
+                                    <h4 class="card-title mb-1">@room.RoomNumber</h4>
+                                    <p class="card-text text-muted small mb-2">@room.RoomType?.Name</p>
+                                    <div class="small text-muted mb-2">
+                                        <i class="fas fa-bed me-1"></i>@room.RoomType?.BedType
+                                        @if (room.HasView)
+                                        {
+                                            <text><br /><i class="fas fa-mountain me-1"></i>@(room.ViewType) View</text>
+                                        }
+                                    </div>
+                                    <h5 class="text-primary mb-3">₹@(room.RoomType?.BasePrice.ToString("N0") ?? "0")<small class="text-muted">/night</small></h5>
+                                    <div class="d-grid gap-2">
+                                        <a asp-action="RoomDetails" asp-route-id="@room.Id" class="btn btn-outline-primary btn-sm">
+                                            <i class="fas fa-eye me-1"></i> View
+                                        </a>
+                                        @if (room.Status == RoomStatus.Available)
+                                        {
+                                            <a asp-action="CreateBooking" asp-route-roomId="@room.Id" class="btn btn-success btn-sm">
+                                                <i class="fas fa-calendar-plus me-1"></i> Book
+                                            </a>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="card-footer bg-transparent text-center">
+                                    <div class="btn-group btn-group-sm">
+                                        <a asp-action="EditRoom" asp-route-id="@room.Id" class="btn btn-outline-secondary" title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split" 
+                                                data-bs-toggle="dropdown" title="Change Status">
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                            <li><h6 class="dropdown-header">Change Status</h6></li>
+                                            <li><a class="dropdown-item status-change" href="#" data-id="@room.Id" data-status="0">
+                                                <i class="fas fa-door-open text-success me-2"></i> Available
+                                            </a></li>
+                                            <li><a class="dropdown-item status-change" href="#" data-id="@room.Id" data-status="3">
+                                                <i class="fas fa-wrench text-secondary me-2"></i> Maintenance
+                                            </a></li>
+                                            <li><a class="dropdown-item status-change" href="#" data-id="@room.Id" data-status="4">
+                                                <i class="fas fa-broom text-info me-2"></i> Cleaning
+                                            </a></li>
+                                            <li><a class="dropdown-item status-change" href="#" data-id="@room.Id" data-status="5">
+                                                <i class="fas fa-ban text-dark me-2"></i> Out of Order
+                                            </a></li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    @if (!Model.Any())
+    {
+        <div class="text-center py-5">
+            <i class="fas fa-bed fa-4x text-muted mb-3"></i>
+            <h4>No rooms found</h4>
+            <p class="text-muted">Try adjusting your filters or add a new room.</p>
+            <a asp-action="CreateRoom" class="btn btn-primary">
+                <i class="fas fa-plus me-1"></i> Add Room
+            </a>
+        </div>
+    }
+
+    <!-- Legend -->
+    <div class="card border-0 shadow-sm mt-4">
+        <div class="card-body">
+            <h6 class="mb-3">Room Status Legend</h6>
+            <div class="d-flex flex-wrap gap-4">
+                <span><span class="badge bg-success"><i class="fas fa-door-open me-1"></i></span> Available - Ready for booking</span>
+                <span><span class="badge bg-danger"><i class="fas fa-bed me-1"></i></span> Occupied - Guest checked in</span>
+                <span><span class="badge bg-warning"><i class="fas fa-clock me-1"></i></span> Reserved - Booking confirmed</span>
+                <span><span class="badge bg-info"><i class="fas fa-broom me-1"></i></span> Cleaning - Being cleaned</span>
+                <span><span class="badge bg-secondary"><i class="fas fa-wrench me-1"></i></span> Maintenance - Under repair</span>
+                <span><span class="badge bg-dark"><i class="fas fa-ban me-1"></i></span> Out of Order - Not available</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .room-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .room-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15) !important;
+    }
+</style>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Handle status change
+            $('.status-change').click(function(e) {
+                e.preventDefault();
+                var roomId = $(this).data('id');
+                var status = $(this).data('status');
+                
+                $.post('@Url.Action("UpdateRoomStatus")', { id: roomId, status: status }, function(response) {
+                    if (response.success) {
+                        toastr.success(response.message);
+                        location.reload();
+                    } else {
+                        toastr.error(response.message);
+                    }
+                });
+            });
+        });
+    </script>
+}

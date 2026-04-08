@@ -1,0 +1,168 @@
+@model RestaurantManagementSystem.Models.HotelGuest
+@{
+    ViewData["Title"] = Model.Id > 0 ? "Edit Guest" : "Add New Guest";
+    var isEdit = Model.Id > 0;
+}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas @(isEdit ? "fa-user-edit" : "fa-user-plus") me-2"></i>@ViewData["Title"]</h2>
+        <a asp-action="Guests" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Back to Guests
+        </a>
+    </div>
+
+    <form asp-action="@(isEdit ? "EditGuest" : "CreateGuest")" method="post">
+        @if (isEdit)
+        {
+            <input type="hidden" name="Id" value="@Model.Id" />
+        }
+
+        <div class="row">
+            <!-- Personal Information -->
+            <div class="col-lg-6 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="fas fa-user me-2"></i>Personal Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">First Name <span class="text-danger">*</span></label>
+                                <input type="text" name="FirstName" class="form-control" value="@Model.FirstName" required />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Last Name <span class="text-danger">*</span></label>
+                                <input type="text" name="LastName" class="form-control" value="@Model.LastName" required />
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Email <span class="text-danger">*</span></label>
+                                <input type="email" name="Email" class="form-control" value="@Model.Email" required />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Phone <span class="text-danger">*</span></label>
+                                <input type="tel" name="Phone" class="form-control" value="@Model.Phone" required />
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Date of Birth</label>
+                                <input type="date" name="DateOfBirth" class="form-control" value="@Model.DateOfBirth?.ToString("yyyy-MM-dd")" />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Nationality</label>
+                                <input type="text" name="Nationality" class="form-control" value="@(Model.Nationality ?? "Indian")" />
+                            </div>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="IsVip" id="isVip" value="true" checked="@Model.IsVip">
+                            <label class="form-check-label" for="isVip">
+                                <strong><i class="fas fa-star text-warning me-1"></i>VIP Guest</strong>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contact & Address -->
+            <div class="col-lg-6 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="fas fa-map-marker-alt me-2"></i>Address Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Address</label>
+                            <textarea name="Address" class="form-control" rows="2">@Model.Address</textarea>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">City</label>
+                                <input type="text" name="City" class="form-control" value="@Model.City" />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">State</label>
+                                <input type="text" name="State" class="form-control" value="@Model.State" />
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Country</label>
+                                <input type="text" name="Country" class="form-control" value="@(Model.Country ?? "India")" />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Postal Code</label>
+                                <input type="text" name="PostalCode" class="form-control" value="@Model.PostalCode" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- ID Information -->
+            <div class="col-lg-6 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-warning">
+                        <h5 class="mb-0"><i class="fas fa-id-card me-2"></i>Identity Document</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">ID Type</label>
+                                <select name="IdType" class="form-select">
+                                    <option value="">Select ID Type</option>
+                                    <option value="Aadhar" selected="@(Model.IdType == "Aadhar")">Aadhar Card</option>
+                                    <option value="Passport" selected="@(Model.IdType == "Passport")">Passport</option>
+                                    <option value="DrivingLicense" selected="@(Model.IdType == "DrivingLicense")">Driving License</option>
+                                    <option value="VoterId" selected="@(Model.IdType == "VoterId")">Voter ID</option>
+                                    <option value="PAN" selected="@(Model.IdType == "PAN")">PAN Card</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">ID Number</label>
+                                <input type="text" name="IdNumber" class="form-control" value="@Model.IdNumber" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notes -->
+            <div class="col-lg-6 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0"><i class="fas fa-sticky-note me-2"></i>Notes</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Guest Notes</label>
+                            <textarea name="Notes" class="form-control" rows="4" placeholder="Any special notes about this guest...">@Model.Notes</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="row">
+            <div class="col-12 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <a asp-action="Guests" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-1"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-save me-1"></i> @(isEdit ? "Update Guest" : "Add Guest")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>

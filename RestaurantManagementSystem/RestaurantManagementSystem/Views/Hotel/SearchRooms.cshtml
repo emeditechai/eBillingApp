@@ -1,0 +1,184 @@
+@model RestaurantManagementSystem.Models.RoomSearchViewModel
+@{
+    ViewData["Title"] = "Search Available Rooms";
+}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-search me-2"></i>Search Available Rooms</h2>
+        <a asp-action="Dashboard" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Dashboard
+        </a>
+    </div>
+
+    <!-- Search Form -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label">Check-in Date</label>
+                    <input type="date" name="checkIn" class="form-control" value="@Model.CheckInDate.ToString("yyyy-MM-dd")" min="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Check-out Date</label>
+                    <input type="date" name="checkOut" class="form-control" value="@Model.CheckOutDate.ToString("yyyy-MM-dd")" min="@DateTime.Today.AddDays(1).ToString("yyyy-MM-dd")" required />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Adults</label>
+                    <select name="adults" class="form-select">
+                        @for (int i = 1; i <= 10; i++)
+                        {
+                            <option value="@i" selected="@(Model.Adults == i)">@i</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Children</label>
+                    <select name="children" class="form-select">
+                        @for (int i = 0; i <= 5; i++)
+                        {
+                            <option value="@i" selected="@(Model.Children == i)">@i</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Room Type</label>
+                    <select name="roomTypeId" class="form-select">
+                        <option value="">All Types</option>
+                        @foreach (var type in Model.RoomTypes)
+                        {
+                            <option value="@type.Id" selected="@(Model.RoomTypeId == type.Id)">@type.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search me-1"></i> Search
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Search Results -->
+    @if (Model.AvailableRooms.Any())
+    {
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i>
+                    Found <strong>@Model.AvailableRooms.Count</strong> available rooms for 
+                    <strong>@((Model.CheckOutDate - Model.CheckInDate).Days)</strong> night(s) 
+                    (@Model.CheckInDate.ToString("dd MMM yyyy") - @Model.CheckOutDate.ToString("dd MMM yyyy"))
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            @foreach (var result in Model.AvailableRooms)
+            {
+                <div class="col-lg-4 col-md-6 mb-4">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-header bg-primary text-white">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">@result.RoomType?.Name</h5>
+                                <span class="badge bg-light text-primary">Room @result.Room?.RoomNumber</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted">@result.RoomType?.Description</p>
+                            
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Bed Type</small>
+                                    <strong><i class="fas fa-bed me-1"></i>@result.RoomType?.BedType</strong>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Max Occupancy</small>
+                                    <strong><i class="fas fa-users me-1"></i>@result.RoomType?.MaxOccupancy guests</strong>
+                                </div>
+                            </div>
+                            
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Floor</small>
+                                    <strong><i class="fas fa-building me-1"></i>Floor @result.Room?.Floor</strong>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Size</small>
+                                    <strong><i class="fas fa-ruler-combined me-1"></i>@(result.RoomType?.RoomSize ?? 0) sq ft</strong>
+                                </div>
+                            </div>
+
+                            @if (result.Room?.HasView == true)
+                            {
+                                <div class="mb-3">
+                                    <span class="badge bg-info">
+                                        <i class="fas fa-mountain me-1"></i>@result.Room?.ViewType View
+                                    </span>
+                                </div>
+                            }
+
+                            @if (result.Room?.IsAccessible == true)
+                            {
+                                <span class="badge bg-secondary me-1"><i class="fas fa-wheelchair me-1"></i>Accessible</span>
+                            }
+                        </div>
+                        <div class="card-footer bg-light">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <small class="text-muted d-block">Total for @((Model.CheckOutDate - Model.CheckInDate).Days) night(s)</small>
+                                    <h4 class="mb-0 text-primary">₹@result.TotalPrice.ToString("N0")</h4>
+                                    <small class="text-muted">₹@result.PricePerNight.ToString("N0")/night</small>
+                                </div>
+                                <a asp-action="CreateBooking" 
+                                   asp-route-roomId="@result.Room?.Id" 
+                                   asp-route-checkIn="@Model.CheckInDate.ToString("yyyy-MM-dd")"
+                                   asp-route-checkOut="@Model.CheckOutDate.ToString("yyyy-MM-dd")"
+                                   class="btn btn-success">
+                                    <i class="fas fa-calendar-plus me-1"></i> Book Now
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else if (Model.CheckInDate != DateTime.Today || Model.CheckOutDate != DateTime.Today.AddDays(1))
+    {
+        <div class="text-center py-5">
+            <i class="fas fa-bed fa-4x text-muted mb-3"></i>
+            <h4>No rooms available</h4>
+            <p class="text-muted">No rooms match your search criteria for the selected dates.</p>
+            <p class="text-muted">Try different dates or room type.</p>
+        </div>
+    }
+    else
+    {
+        <div class="text-center py-5">
+            <i class="fas fa-search fa-4x text-muted mb-3"></i>
+            <h4>Search for Available Rooms</h4>
+            <p class="text-muted">Enter your dates and preferences above to find available rooms.</p>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Update checkout min date when checkin changes
+            $('input[name="checkIn"]').change(function() {
+                var checkIn = new Date($(this).val());
+                checkIn.setDate(checkIn.getDate() + 1);
+                var minCheckout = checkIn.toISOString().split('T')[0];
+                $('input[name="checkOut"]').attr('min', minCheckout);
+                
+                // If current checkout is before new min, update it
+                if ($('input[name="checkOut"]').val() < minCheckout) {
+                    $('input[name="checkOut"]').val(minCheckout);
+                }
+            });
+        });
+    </script>
+}

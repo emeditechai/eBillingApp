@@ -1,0 +1,294 @@
+@model RestaurantManagementSystem.Models.HotelBooking
+@{
+    ViewData["Title"] = $"Booking {Model.BookingNumber}";
+    var statusClass = Model.Status switch
+    {
+        BookingStatus.Pending => "warning",
+        BookingStatus.Confirmed => "primary",
+        BookingStatus.CheckedIn => "success",
+        BookingStatus.CheckedOut => "secondary",
+        BookingStatus.Cancelled => "danger",
+        BookingStatus.NoShow => "dark",
+        _ => "secondary"
+    };
+    var paymentClass = Model.PaymentStatus switch
+    {
+        PaymentStatus.Pending => "warning",
+        PaymentStatus.PartiallyPaid => "info",
+        PaymentStatus.Paid => "success",
+        PaymentStatus.Refunded => "secondary",
+        _ => "secondary"
+    };
+}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-receipt me-2"></i>Booking #@Model.BookingNumber</h2>
+            <div class="mt-2">
+                <span class="badge bg-@statusClass fs-6 me-2">@Model.Status</span>
+                <span class="badge bg-@paymentClass fs-6">Payment: @Model.PaymentStatus</span>
+            </div>
+        </div>
+        <div>
+            <a asp-action="Bookings" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i> Back to Bookings
+            </a>
+            @if (Model.Status == BookingStatus.Confirmed)
+            {
+                <a asp-action="CheckIn" asp-route-id="@Model.Id" class="btn btn-success">
+                    <i class="fas fa-sign-in-alt me-1"></i> Check In
+                </a>
+            }
+            @if (Model.Status == BookingStatus.CheckedIn)
+            {
+                <a asp-action="CheckOut" asp-route-id="@Model.Id" class="btn btn-info">
+                    <i class="fas fa-sign-out-alt me-1"></i> Check Out
+                </a>
+            }
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Guest Information -->
+        <div class="col-lg-4 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-user me-2"></i>Guest Information</h5>
+                </div>
+                <div class="card-body">
+                    <h4 class="mb-3">@Model.Guest?.FullName</h4>
+                    <div class="mb-2">
+                        <i class="fas fa-envelope text-muted me-2"></i>
+                        <a href="mailto:@Model.Guest?.Email">@Model.Guest?.Email</a>
+                    </div>
+                    <div class="mb-2">
+                        <i class="fas fa-phone text-muted me-2"></i>
+                        <a href="tel:@Model.Guest?.Phone">@Model.Guest?.Phone</a>
+                    </div>
+                    @if (!string.IsNullOrEmpty(Model.Guest?.Address))
+                    {
+                        <div class="mb-2">
+                            <i class="fas fa-map-marker-alt text-muted me-2"></i>
+                            @Model.Guest?.Address, @Model.Guest?.City
+                        </div>
+                    }
+                    <hr>
+                    <div class="text-center">
+                        <a asp-action="GuestDetails" asp-route-id="@Model.GuestId" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-external-link-alt me-1"></i> View Guest Profile
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Room Information -->
+        <div class="col-lg-4 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-bed me-2"></i>Room Information</h5>
+                </div>
+                <div class="card-body">
+                    <h4 class="mb-3">Room @Model.Room?.RoomNumber</h4>
+                    <div class="mb-2">
+                        <i class="fas fa-hotel text-muted me-2"></i>
+                        @Model.Room?.RoomType?.Name
+                    </div>
+                    <div class="mb-2">
+                        <i class="fas fa-building text-muted me-2"></i>
+                        Floor @Model.Room?.Floor
+                    </div>
+                    <div class="mb-2">
+                        <i class="fas fa-rupee-sign text-muted me-2"></i>
+                        ₹@Model.RoomRate.ToString("N0") per night
+                    </div>
+                    <hr>
+                    <div class="text-center">
+                        <a asp-action="RoomDetails" asp-route-id="@Model.RoomId" class="btn btn-outline-success btn-sm">
+                            <i class="fas fa-external-link-alt me-1"></i> View Room Details
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stay Details -->
+        <div class="col-lg-4 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Stay Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Check-in</small>
+                            <strong>@Model.CheckInDate.ToString("dd MMM yyyy")</strong>
+                            @if (Model.ActualCheckIn.HasValue)
+                            {
+                                <br><small class="text-success">
+                                    <i class="fas fa-check"></i> @Model.ActualCheckIn.Value.ToString("dd MMM HH:mm")
+                                </small>
+                            }
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Check-out</small>
+                            <strong>@Model.CheckOutDate.ToString("dd MMM yyyy")</strong>
+                            @if (Model.ActualCheckOut.HasValue)
+                            {
+                                <br><small class="text-success">
+                                    <i class="fas fa-check"></i> @Model.ActualCheckOut.Value.ToString("dd MMM HH:mm")
+                                </small>
+                            }
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Duration</small>
+                            <strong>@Model.NumberOfNights nights</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Guests</small>
+                            <strong>@Model.NumberOfAdults adults, @Model.NumberOfChildren children</strong>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <small class="text-muted d-block">Booking Source</small>
+                        <strong>@Model.BookingSource</strong>
+                    </div>
+                    <div class="mb-2">
+                        <small class="text-muted d-block">Booked On</small>
+                        <strong>@Model.CreatedAt.ToString("dd MMM yyyy HH:mm")</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Financial Summary -->
+    <div class="row">
+        <div class="col-lg-6 mb-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0"><i class="fas fa-file-invoice-dollar me-2"></i>Financial Summary</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tbody>
+                            <tr>
+                                <td>Room Rate (@Model.NumberOfNights nights × ₹@Model.RoomRate.ToString("N0"))</td>
+                                <td class="text-end">₹@((Model.RoomRate * Model.NumberOfNights).ToString("N2"))</td>
+                            </tr>
+                            <tr>
+                                <td>GST (18%)</td>
+                                <td class="text-end">₹@Model.TaxAmount.ToString("N2")</td>
+                            </tr>
+                            @if (Model.ExtraCharges > 0)
+                            {
+                                <tr>
+                                    <td>Extra Charges</td>
+                                    <td class="text-end">₹@Model.ExtraCharges.ToString("N2")</td>
+                                </tr>
+                            }
+                            @if (Model.Discount > 0)
+                            {
+                                <tr class="text-success">
+                                    <td>Discount</td>
+                                    <td class="text-end">-₹@Model.Discount.ToString("N2")</td>
+                                </tr>
+                            }
+                            <tr class="table-light">
+                                <td><strong>Total Amount</strong></td>
+                                <td class="text-end"><strong>₹@Model.TotalAmount.ToString("N2")</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Advance Payment</td>
+                                <td class="text-end text-success">-₹@Model.AdvancePayment.ToString("N2")</td>
+                            </tr>
+                            <tr class="table-primary">
+                                <td><strong>Balance Due</strong></td>
+                                <td class="text-end"><strong class="text-danger">₹@Model.BalanceDue.ToString("N2")</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Special Requests & Notes -->
+        <div class="col-lg-6 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="fas fa-sticky-note me-2"></i>Requests & Notes</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <h6 class="text-muted">Special Requests</h6>
+                        <p>@(string.IsNullOrEmpty(Model.SpecialRequests) ? "No special requests" : Model.SpecialRequests)</p>
+                    </div>
+                    <div>
+                        <h6 class="text-muted">Internal Notes</h6>
+                        <p>@(string.IsNullOrEmpty(Model.Notes) ? "No notes" : Model.Notes)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <button type="button" class="btn btn-outline-primary me-2" onclick="window.print()">
+                                <i class="fas fa-print me-1"></i> Print
+                            </button>
+                            @if (Model.Status == BookingStatus.Pending || Model.Status == BookingStatus.Confirmed)
+                            {
+                                <button type="button" class="btn btn-outline-danger cancel-booking" data-id="@Model.Id">
+                                    <i class="fas fa-times me-1"></i> Cancel Booking
+                                </button>
+                            }
+                        </div>
+                        <div>
+                            @if (Model.Status == BookingStatus.Confirmed)
+                            {
+                                <a asp-action="CheckIn" asp-route-id="@Model.Id" class="btn btn-success btn-lg">
+                                    <i class="fas fa-sign-in-alt me-1"></i> Check In Guest
+                                </a>
+                            }
+                            @if (Model.Status == BookingStatus.CheckedIn)
+                            {
+                                <a asp-action="CheckOut" asp-route-id="@Model.Id" class="btn btn-info btn-lg">
+                                    <i class="fas fa-sign-out-alt me-1"></i> Check Out Guest
+                                </a>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('.cancel-booking').click(function() {
+                var bookingId = $(this).data('id');
+                if (confirm('Are you sure you want to cancel this booking?')) {
+                    $.post('@Url.Action("CancelBooking")', { id: bookingId }, function(response) {
+                        if (response.success) {
+                            toastr.success(response.message);
+                            location.reload();
+                        } else {
+                            toastr.error(response.message);
+                        }
+                    });
+                }
+            });
+        });
+    </script>
+}

@@ -1,0 +1,212 @@
+@model RestaurantManagementSystem.Models.HotelGuest
+@{
+    ViewData["Title"] = $"Guest - {Model.FullName}";
+    var bookings = ViewBag.BookingHistory as List<RestaurantManagementSystem.Models.HotelBooking>;
+}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-user me-2"></i>@Model.FullName</h2>
+            @if (Model.IsVip)
+            {
+                <span class="badge bg-warning fs-6"><i class="fas fa-star me-1"></i>VIP Guest</span>
+            }
+        </div>
+        <div>
+            <a asp-action="Guests" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i> Back to Guests
+            </a>
+            <a asp-action="EditGuest" asp-route-id="@Model.Id" class="btn btn-primary">
+                <i class="fas fa-edit me-1"></i> Edit
+            </a>
+            <a asp-action="CreateBooking" class="btn btn-success">
+                <i class="fas fa-calendar-plus me-1"></i> New Booking
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Guest Information -->
+        <div class="col-lg-4 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-id-card me-2"></i>Contact Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <i class="fas fa-envelope text-muted me-2"></i>
+                        <a href="mailto:@Model.Email">@Model.Email</a>
+                    </div>
+                    <div class="mb-3">
+                        <i class="fas fa-phone text-muted me-2"></i>
+                        <a href="tel:@Model.Phone">@Model.Phone</a>
+                    </div>
+                    @if (!string.IsNullOrEmpty(Model.Address))
+                    {
+                        <div class="mb-3">
+                            <i class="fas fa-map-marker-alt text-muted me-2"></i>
+                            @Model.Address<br>
+                            @if (!string.IsNullOrEmpty(Model.City))
+                            {
+                                <span class="ms-4">@Model.City, @Model.State @Model.PostalCode</span><br>
+                            }
+                            <span class="ms-4">@Model.Country</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- ID Information -->
+        <div class="col-lg-4 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-passport me-2"></i>Identity Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">ID Type</small>
+                            <strong>@(Model.IdType ?? "Not provided")</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">ID Number</small>
+                            <strong>@(Model.IdNumber ?? "Not provided")</strong>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Date of Birth</small>
+                            <strong>@(Model.DateOfBirth?.ToString("dd MMM yyyy") ?? "Not provided")</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Nationality</small>
+                            <strong>@Model.Nationality</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Guest Stats -->
+        <div class="col-lg-4 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Guest Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6 mb-3">
+                            <h3 class="mb-0 text-primary">@(bookings?.Count ?? 0)</h3>
+                            <small class="text-muted">Total Bookings</small>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <h3 class="mb-0 text-success">@(bookings?.Sum(b => b.NumberOfNights) ?? 0)</h3>
+                            <small class="text-muted">Total Nights</small>
+                        </div>
+                    </div>
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <h3 class="mb-0 text-info">₹@(bookings?.Sum(b => b.TotalAmount).ToString("N0") ?? "0")</h3>
+                            <small class="text-muted">Total Spent</small>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Member Since</small>
+                            <strong>@Model.CreatedAt.ToString("MMM yyyy")</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notes -->
+    @if (!string.IsNullOrEmpty(Model.Notes))
+    {
+        <div class="row">
+            <div class="col-12 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-warning">
+                        <h5 class="mb-0"><i class="fas fa-sticky-note me-2"></i>Guest Notes</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-0">@Model.Notes</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Booking History -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="fas fa-history me-2"></i>Booking History</h5>
+                </div>
+                <div class="card-body">
+                    @if (bookings?.Any() == true)
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Booking #</th>
+                                        <th>Room</th>
+                                        <th>Check-in</th>
+                                        <th>Check-out</th>
+                                        <th>Nights</th>
+                                        <th>Status</th>
+                                        <th>Amount</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var booking in bookings)
+                                    {
+                                        var statusClass = booking.Status switch
+                                        {
+                                            BookingStatus.Pending => "warning",
+                                            BookingStatus.Confirmed => "primary",
+                                            BookingStatus.CheckedIn => "success",
+                                            BookingStatus.CheckedOut => "secondary",
+                                            BookingStatus.Cancelled => "danger",
+                                            BookingStatus.NoShow => "dark",
+                                            _ => "secondary"
+                                        };
+                                        <tr>
+                                            <td>
+                                                <a asp-action="BookingDetails" asp-route-id="@booking.Id">
+                                                    @booking.BookingNumber
+                                                </a>
+                                            </td>
+                                            <td>@booking.Room?.RoomNumber (@booking.Room?.RoomType?.Name)</td>
+                                            <td>@booking.CheckInDate.ToString("dd MMM yyyy")</td>
+                                            <td>@booking.CheckOutDate.ToString("dd MMM yyyy")</td>
+                                            <td>@booking.NumberOfNights</td>
+                                            <td><span class="badge bg-@statusClass">@booking.Status</span></td>
+                                            <td>₹@booking.TotalAmount.ToString("N0")</td>
+                                            <td>
+                                                <a asp-action="BookingDetails" asp-route-id="@booking.Id" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4">
+                            <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
+                            <p>No booking history</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
