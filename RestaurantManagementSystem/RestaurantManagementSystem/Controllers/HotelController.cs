@@ -708,10 +708,14 @@ namespace RestaurantManagementSystem.Controllers
                             paymentCmd.ExecuteNonQuery();
                         }
 
+                        // Get RoomId within the transaction
+                        var getRoomCmd = new SqlCommand("SELECT RoomId FROM HotelBookings WHERE Id = @Id", conn, transaction);
+                        getRoomCmd.Parameters.AddWithValue("@Id", id);
+                        var roomId = (int)getRoomCmd.ExecuteScalar();
+
                         // Update room status to Occupied
-                        var booking = GetBookingById(id);
                         var roomCmd = new SqlCommand("UPDATE HotelRooms SET Status = 1 WHERE Id = @RoomId", conn, transaction);
-                        roomCmd.Parameters.AddWithValue("@RoomId", booking.RoomId);
+                        roomCmd.Parameters.AddWithValue("@RoomId", roomId);
                         roomCmd.ExecuteNonQuery();
 
                         transaction.Commit();
@@ -788,10 +792,14 @@ namespace RestaurantManagementSystem.Controllers
                         bookingCmd.Parameters.AddWithValue("@Notes", (object)viewModel.Notes ?? DBNull.Value);
                         bookingCmd.ExecuteNonQuery();
 
+                        // Get RoomId within the transaction
+                        var getRoomCmd = new SqlCommand("SELECT RoomId FROM HotelBookings WHERE Id = @Id", conn, transaction);
+                        getRoomCmd.Parameters.AddWithValue("@Id", id);
+                        var roomId = (int)getRoomCmd.ExecuteScalar();
+
                         // Update room status to Cleaning
-                        var booking = GetBookingById(id);
                         var roomCmd = new SqlCommand("UPDATE HotelRooms SET Status = 4 WHERE Id = @RoomId", conn, transaction);
-                        roomCmd.Parameters.AddWithValue("@RoomId", booking.RoomId);
+                        roomCmd.Parameters.AddWithValue("@RoomId", roomId);
                         roomCmd.ExecuteNonQuery();
 
                         transaction.Commit();

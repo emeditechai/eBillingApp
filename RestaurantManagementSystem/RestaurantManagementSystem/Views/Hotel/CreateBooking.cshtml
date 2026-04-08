@@ -228,6 +228,7 @@
 </div>
 
 @section Scripts {
+    <script src="~/js/hotel-utils.js"></script>
     <script>
         function toggleGuestForm(isNew) {
             if (isNew) {
@@ -242,44 +243,42 @@
         }
 
         function calculatePrice() {
-            var checkIn = new Date($('#checkInDate').val());
-            var checkOut = new Date($('#checkOutDate').val());
-            var roomPrice = parseFloat($('#roomSelect option:selected').data('price')) || 0;
+            var checkIn = HotelUtils.parseDate($('#checkInDate').val());
+            var checkOut = HotelUtils.parseDate($('#checkOutDate').val());
+            var roomPriceData = $('#roomSelect option:selected').data('price');
+            var roomPrice = parseFloat(roomPriceData) || 0;
             
-            if (checkIn && checkOut && checkOut > checkIn) {
-                var nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
-                var subtotal = roomPrice * nights;
-                var tax = subtotal * 0.18;
-                var total = subtotal + tax;
+            if (!checkIn || !checkOut || roomPrice <= 0) {
+                return;
+            }
+            
+            var nights = HotelUtils.calculateNights(checkIn, checkOut);
+            if (nights > 0) {
+                var pricing = HotelUtils.calculateBookingPrice(roomPrice, nights);
                 
-                $('#roomRate').text('₹' + roomPrice.toFixed(2));
+                $('#roomRate').text(HotelUtils.formatCurrency(roomPrice));
                 $('#numNights').text(nights);
-                $('#subtotal').text('₹' + subtotal.toFixed(2));
-                $('#taxAmount').text('₹' + tax.toFixed(2));
-                $('#totalAmount').text('₹' + total.toFixed(2));
+                $('#subtotal').text(HotelUtils.formatCurrency(pricing.subtotal));
+                $('#taxAmount').text(HotelUtils.formatCurrency(pricing.tax));
+                $('#totalAmount').text(HotelUtils.formatCurrency(pricing.total));
             }
         }
 
         $(document).ready(function() {
-            // Initial calculation
-            calculatePrice();
+            // Initialize guest form state based on current selection
+            var isNewGuestChecked = $('input[name="IsNewGuest"]:checked').val() === 'true';
+            toggleGuestForm(isNewGuestChecked);
+            
+            // Initial calculation (with a small delay to ensure DOM is ready)
+            setTimeout(calculatePrice, 100);
             
             // Recalculate on change
             $('#checkInDate, #checkOutDate, #roomSelect').change(function() {
                 calculatePrice();
             });
             
-            // Update checkout min date when checkin changes
-            $('#checkInDate').change(function() {
-                var checkIn = new Date($(this).val());
-                checkIn.setDate(checkIn.getDate() + 1);
-                var minCheckout = checkIn.toISOString().split('T')[0];
-                $('#checkOutDate').attr('min', minCheckout);
-                
-                if ($('#checkOutDate').val() < minCheckout) {
-                    $('#checkOutDate').val(minCheckout);
-                }
-            });
+            // Setup date validation using shared utility
+            HotelUtils.setupDateValidation('#checkInDate', '#checkOutDate');
             
             // Handle guest type toggle
             $('input[name="IsNewGuest"]').change(function() {

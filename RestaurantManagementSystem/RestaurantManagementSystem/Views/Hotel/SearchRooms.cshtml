@@ -165,20 +165,11 @@
 </div>
 
 @section Scripts {
+    <script src="~/js/hotel-utils.js"></script>
     <script>
         $(document).ready(function() {
-            // Update checkout min date when checkin changes
-            $('input[name="checkIn"]').change(function() {
-                var checkIn = new Date($(this).val());
-                checkIn.setDate(checkIn.getDate() + 1);
-                var minCheckout = checkIn.toISOString().split('T')[0];
-                $('input[name="checkOut"]').attr('min', minCheckout);
-                
-                // If current checkout is before new min, update it
-                if ($('input[name="checkOut"]').val() < minCheckout) {
-                    $('input[name="checkOut"]').val(minCheckout);
-                }
-            });
+            // Setup date validation using shared utility
+            HotelUtils.setupDateValidation('input[name="checkIn"]', 'input[name="checkOut"]');
         });
     </script>
 }
